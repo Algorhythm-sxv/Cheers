@@ -8,13 +8,6 @@ mod lookup_tables;
 use bitboard::*;
 use lookup_tables::*;
 
-struct Engine {
-    bitboards: BitBoards,
-    sliding_attack_table: Vec<u64>,
-    rook_magics: Vec<MagicSquare>,
-    bishop_magics: Vec<MagicSquare>,
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     for line_res in stdin().lock().lines() {
         let line = line_res?;
@@ -31,7 +24,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             "gen" => {
                 let luts = LookupTables::generate_all();
                 let bitboards = BitBoards::new(luts);
-                println!("moves: {}", bitboards.generate_pseudolegal_moves(White).len());
+                let moves =  bitboards.generate_pseudolegal_moves(White);
+                for i in moves.iter() {
+                    println!("{} -> {}", square_to_coord(i.0), square_to_coord(i.1));
+                }
             }
             _ => {
                 println!("unknown command: {}", line)

@@ -16,6 +16,34 @@ pub fn print_bitboard(board: u64) {
     print!("\n");
 }
 
+pub fn square_to_coord(square: u8) -> String {
+    let mut result = String::new();
+    result.push(match square % 8 {
+        0 => 'a',
+        1 => 'b',
+        2 => 'c',
+        3 => 'd',
+        4 => 'e',
+        5 => 'f',
+        6 => 'g',
+        7 => 'h',
+        _ => unreachable!(),
+    });
+    result.push(match square / 8 {
+        0 => '1',
+        1 => '2',
+        2 => '3',
+        3 => '4',
+        4 => '5',
+        5 => '6',
+        6 => '7',
+        7 => '8',
+        _ => unreachable!(),
+    });
+
+    result
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum PieceIndex {
     Pawn = 0,
@@ -222,7 +250,8 @@ impl BitBoards {
 
         while queens != 0 {
             let i = queens.trailing_zeros() as usize;
-            let mut result = self.lookup_tables.lookup_queen(i, blocking_mask) & !self.color_masks[color];
+            let mut result =
+                self.lookup_tables.lookup_queen(i, blocking_mask) & !self.color_masks[color];
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
@@ -277,7 +306,7 @@ impl BitBoards {
             }
         }
     }
-    
+
     pub fn white_pawn_moves(&self) -> Vec<(u8, u8)> {
         let mut moves = Vec::new();
         let mut pawns = self.piece_masks[Pawn] & self.color_masks[White];
