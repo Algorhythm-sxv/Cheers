@@ -31,6 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "gen" => {
                 let luts = LookupTables::generate_all();
                 let bitboards = BitBoards::new(luts);
+                println!("moves: {}", bitboards.generate_pseudolegal_moves(White).len());
             }
             _ => {
                 println!("unknown command: {}", line)

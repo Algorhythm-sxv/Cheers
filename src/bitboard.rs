@@ -17,8 +17,7 @@ pub fn print_bitboard(board: u64) {
 }
 
 #[derive(Copy, Clone, Debug)]
-#[repr(usize)]
-enum PieceIndex {
+pub enum PieceIndex {
     Pawn = 0,
     Bishop = 1,
     Knight = 2,
@@ -29,13 +28,13 @@ enum PieceIndex {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(usize)]
-enum ColorIndex {
+pub enum ColorIndex {
     White = 0,
     Black = 1,
 }
 
-use ColorIndex::*;
-use PieceIndex::*;
+pub use ColorIndex::*;
+pub use PieceIndex::*;
 
 struct ColorMasks([u64; 2]);
 
@@ -112,9 +111,28 @@ impl BitBoards {
         result
     }
 
+    pub fn knight_moves(&self, color: ColorIndex) -> Vec<(u8, u8)> {
+        let mut moves = Vec::new();
+
+        let mut knights = self.piece_masks[Knight] & self.color_masks[color];
+        while knights != 0 {
+            let i = knights.trailing_zeros() as usize;
+            let mut result = self.lookup_tables.lookup_knight(i) & !self.color_masks[color];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                moves.push((i as u8, target));
+
+                result ^= 1 << target;
+            }
+            knights ^= 1 << i;
+        }
+        moves
+    }
+
     pub fn bishop_attacks(&self, color: ColorIndex) -> u64 {
         let mut bishops = self.piece_masks[Bishop] & self.color_masks[color];
-        let blocking_mask = self.color_masks[White] & self.color_masks[Black];
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         let mut result = 0;
         while bishops != 0 {
@@ -125,9 +143,31 @@ impl BitBoards {
         result
     }
 
+    pub fn bishop_moves(&self, color: ColorIndex) -> Vec<(u8, u8)> {
+        let mut moves = Vec::new();
+
+        let mut bishops = self.piece_masks[Bishop] & self.color_masks[color];
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
+
+        while bishops != 0 {
+            let i = bishops.trailing_zeros() as usize;
+            let mut result =
+                self.lookup_tables.lookup_bishop(i, blocking_mask) & !self.color_masks[color];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                moves.push((i as u8, target));
+
+                result ^= 1 << target;
+            }
+            bishops ^= 1 << i;
+        }
+        moves
+    }
+
     pub fn rook_attacks(&self, color: ColorIndex) -> u64 {
         let mut rooks = self.piece_masks[Rook] & self.color_masks[color];
-        let blocking_mask = self.color_masks[White] & self.color_masks[Black];
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         let mut result = 0;
         while rooks != 0 {
@@ -138,9 +178,31 @@ impl BitBoards {
         result
     }
 
+    pub fn rook_moves(&self, color: ColorIndex) -> Vec<(u8, u8)> {
+        let mut moves = Vec::new();
+
+        let mut rooks = self.piece_masks[Rook] & self.color_masks[color];
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
+
+        while rooks != 0 {
+            let i = rooks.trailing_zeros() as usize;
+            let mut result =
+                self.lookup_tables.lookup_rook(i, blocking_mask) & !self.color_masks[color];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                moves.push((i as u8, target));
+
+                result ^= 1 << target;
+            }
+            rooks ^= 1 << i;
+        }
+        moves
+    }
+
     pub fn queen_attacks(&self, color: ColorIndex) -> u64 {
         let mut queens = self.piece_masks[Queen] & self.color_masks[color];
-        let blocking_mask = self.color_masks[White] & self.color_masks[Black];
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         let mut result = 0;
         while queens != 0 {
@@ -152,11 +214,49 @@ impl BitBoards {
         result
     }
 
+    pub fn queen_moves(&self, color: ColorIndex) -> Vec<(u8, u8)> {
+        let mut moves = Vec::new();
+
+        let mut queens = self.piece_masks[Queen] & self.color_masks[color];
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
+
+        while queens != 0 {
+            let i = queens.trailing_zeros() as usize;
+            let mut result = self.lookup_tables.lookup_queen(i, blocking_mask) & !self.color_masks[color];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                moves.push((i as u8, target));
+
+                result ^= 1 << target;
+            }
+            queens ^= 1 << i;
+        }
+        moves
+    }
+
     pub fn king_attacks(&self, color: ColorIndex) -> u64 {
         let king = self.piece_masks[King] & self.color_masks[color];
 
         self.lookup_tables
             .lookup_king(king.trailing_zeros() as usize)
+    }
+
+    pub fn king_moves(&self, color: ColorIndex) -> Vec<(u8, u8)> {
+        let mut moves = Vec::new();
+
+        let king = self.piece_masks[King] & self.color_masks[color];
+        let square = king.trailing_zeros() as usize;
+
+        let mut result = self.lookup_tables.lookup_king(square) & !self.color_masks[color];
+
+        while result != 0 {
+            let target = result.trailing_zeros() as u8;
+            moves.push((square as u8, target));
+
+            result ^= 1 << target;
+        }
+        moves
     }
 
     pub fn pawn_attacks(&self, color: ColorIndex) -> u64 {
@@ -176,6 +276,81 @@ impl BitBoards {
                 west_attacks | east_attacks
             }
         }
+    }
+    
+    pub fn white_pawn_moves(&self) -> Vec<(u8, u8)> {
+        let mut moves = Vec::new();
+        let mut pawns = self.piece_masks[Pawn] & self.color_masks[White];
+
+        while pawns != 0 {
+            let i = pawns.trailing_zeros() as usize;
+            let mut result = self.lookup_tables.lookup_pawn_push(i, White);
+
+            let empty = !(self.color_masks[White] | self.color_masks[Black]);
+
+            // add double pushes to relevant unblocked single pushes
+            result |= (result & THIRD_RANK & empty) << 8;
+
+            // remove blocked double pushes
+            result &= empty;
+
+            print_bitboard(result);
+
+            result |= self.lookup_tables.lookup_pawn_attack(i, White) & self.color_masks[Black];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                moves.push((i as u8, target));
+
+                result ^= 1 << target;
+            }
+            pawns ^= 1 << i;
+        }
+        moves
+    }
+
+    pub fn black_pawn_moves(&self) -> Vec<(u8, u8)> {
+        let mut moves = Vec::new();
+        let mut pawns = self.piece_masks[Pawn] & self.color_masks[Black];
+
+        while pawns != 0 {
+            let i = pawns.trailing_zeros() as usize;
+            let mut result = self.lookup_tables.lookup_pawn_push(i, Black);
+
+            let empty = !(self.color_masks[White] | self.color_masks[Black]);
+
+            // add double pushes to relevant unblocked single pushes
+            result |= (result & SIXTH_RANK & empty) >> 8;
+
+            // remove blocked double pushes
+            result &= empty;
+
+            result |= self.lookup_tables.lookup_pawn_attack(i, Black) & self.color_masks[White];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                moves.push((i as u8, target));
+
+                result ^= 1 << target;
+            }
+            pawns ^= 1 << i;
+        }
+        moves
+    }
+
+    pub fn generate_pseudolegal_moves(&self, color: ColorIndex) -> Vec<(u8, u8)> {
+        let mut moves = Vec::new();
+        moves.extend(self.knight_moves(color));
+        moves.extend(self.bishop_moves(color));
+        moves.extend(self.rook_moves(color));
+        moves.extend(self.queen_moves(color));
+        moves.extend(self.king_moves(color));
+        match color {
+            White => moves.extend(self.white_pawn_moves()),
+            Black => moves.extend(self.black_pawn_moves()),
+        }
+
+        moves
     }
 }
 

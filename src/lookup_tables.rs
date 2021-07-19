@@ -1,6 +1,11 @@
+use crate::bitboard::{ColorIndex, ColorIndex::*, print_bitboard};
+
+#[derive(Clone)]
 pub struct LookupTables {
     knight_table: Vec<u64>,
     king_table: Vec<u64>,
+    pawn_push_one_tables: [Vec<u64>; 2],
+    pawn_attack_tables: [Vec<u64>; 2],
     sliding_attack_table: Vec<u64>,
     rook_magics: Vec<MagicSquare>,
     bishop_magics: Vec<MagicSquare>,
@@ -16,6 +21,8 @@ impl LookupTables {
         Self {
             knight_table: generate_knight_table(),
             king_table: generate_king_table(),
+            pawn_push_one_tables: generate_pawn_push_tables(),
+            pawn_attack_tables: generate_pawn_attack_tables(),
             sliding_attack_table,
             rook_magics,
             bishop_magics,
@@ -25,13 +32,13 @@ impl LookupTables {
     #[inline(always)]
     fn bishop_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
         let magic_square = self.bishop_magics[square];
-        magic_square.index + magic_hash(blocking_mask, magic_square.magic, magic_square.shift)
+        magic_square.index + magic_hash(magic_square.mask & blocking_mask, magic_square.magic, magic_square.shift)
     }
 
     #[inline(always)]
     fn rook_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
         let magic_square = self.rook_magics[square];
-        magic_square.index + magic_hash(blocking_mask, magic_square.magic, magic_square.shift)
+        magic_square.index + magic_hash(magic_square.mask & blocking_mask, magic_square.magic, magic_square.shift)
     }
 
     pub fn lookup_knight(&self, square: usize) -> u64 {
@@ -40,6 +47,14 @@ impl LookupTables {
 
     pub fn lookup_king(&self, square: usize) -> u64 {
         self.king_table[square]
+    }
+
+    pub fn lookup_pawn_push(&self, square: usize, color: ColorIndex) -> u64 {
+        self.pawn_push_one_tables[color as usize][square]
+    }
+
+    pub fn lookup_pawn_attack(&self, square: usize, color: ColorIndex) -> u64 {
+        self.pawn_attack_tables[color as usize][square]
     }
 
     pub fn lookup_bishop(&self, square: usize, blocking_mask: u64) -> u64 {
@@ -60,6 +75,10 @@ pub const NOT_A_FILE: u64 = !0x0101010101010101;
 pub const NOT_A_B_FILES: u64 = !0x0303030303030303;
 pub const NOT_H_FILE: u64 = !0x8080808080808080;
 pub const NOT_G_H_FILES: u64 = !0xC0C0C0C0C0C0C0C0;
+
+// masks for pawn movement
+pub const THIRD_RANK: u64 = 0x0000000000FF0000;
+pub const SIXTH_RANK: u64 = 0x0000FF0000000000;
 
 /// Generates a table mapping an input square to a mask of all squares a knight attacks from there
 fn generate_knight_table() -> Vec<u64> {
@@ -101,6 +120,32 @@ fn generate_king_table() -> Vec<u64> {
     table
 }
 
+/// Generates a table mapping an input square to a mask of squares a pawn can push to from there
+fn generate_pawn_push_tables() -> [Vec<u64>; 2] {
+    let mut tables = [vec![0; 64], vec![0; 64]];
+
+    for square in 8..56 {
+        tables[White as usize][square as usize] = (1 << square) << 8;
+        tables[Black as usize][square as usize] = (1 << square) >> 8;
+    }
+
+    tables
+}
+
+fn generate_pawn_attack_tables() -> [Vec<u64>; 2] {
+    let mut tables = [vec![0; 64], vec![0; 64]];
+
+    for square in 0..64 {
+        tables[White as usize][square as usize] =
+            ((square << 7) & NOT_H_FILE) | ((square << 9) & NOT_A_FILE);
+        tables[Black as usize][square as usize] =
+            ((square >> 7) & NOT_A_FILE) | ((square >> 9) & NOT_H_FILE);
+    }
+
+    tables
+}
+
+#[derive(Copy, Clone)]
 pub struct MagicSquare {
     pub index: usize,
     pub mask: u64,
