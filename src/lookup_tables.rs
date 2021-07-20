@@ -1,4 +1,5 @@
-use crate::bitboard::{ColorIndex, ColorIndex::*, print_bitboard};
+use crate::bitboard::{ColorIndex, ColorIndex::*};
+use rand::prelude::*;
 
 #[derive(Clone)]
 pub struct LookupTables {
@@ -202,8 +203,8 @@ fn find_magic(
 
     let mut used = vec![0; 1 << n];
 
-    for i in 0..100000000 {
-        let magic = random_sparse_u64(i);
+    for _ in 0..100000000 {
+        let magic = random_sparse_u64();
 
         // reset the vec for the next attempt
         for x in used.iter_mut() {
@@ -240,10 +241,8 @@ fn find_magic(
     ))
 }
 
-fn random_sparse_u64(seed: u64) -> u64 {
-    use rand::prelude::*;
-    let mut rng = StdRng::seed_from_u64(seed);
-
+fn random_sparse_u64() -> u64 {
+    let mut rng = thread_rng();
     rng.gen::<u64>() & rng.gen::<u64>() & rng.gen::<u64>()
 }
 

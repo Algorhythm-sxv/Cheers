@@ -1,3 +1,5 @@
+use itertools::repeat_n;
+
 use crate::lookup_tables::*;
 
 pub fn print_bitboard(board: u64) {
@@ -44,6 +46,32 @@ pub fn square_to_coord(square: u8) -> String {
     result
 }
 
+pub fn coord_to_square(coord: &str) -> u8 {
+    let mut result = match coord.chars().nth(0).unwrap() {
+        'a' => 0,
+        'b' => 1,
+        'c' => 2,
+        'd' => 3,
+        'e' => 4,
+        'f' => 5,
+        'g' => 6,
+        'h' => 7,
+        _ => unreachable!(),
+    };
+    result += match coord.chars().nth(1).unwrap() {
+        '1' => 0 * 8,
+        '2' => 1 * 8,
+        '3' => 2 * 8,
+        '4' => 3 * 8,
+        '5' => 4 * 8,
+        '6' => 5 * 8,
+        '7' => 6 * 8,
+        '8' => 7 * 8,
+        _ => unreachable!(),
+    };
+    result
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum PieceIndex {
     Pawn = 0,
@@ -59,6 +87,16 @@ pub enum PieceIndex {
 pub enum ColorIndex {
     White = 0,
     Black = 1,
+}
+
+impl std::ops::Not for ColorIndex {
+    type Output = ColorIndex;
+    fn not(self) -> Self::Output {
+        match self {
+            White => Black,
+            Black => White,
+        }
+    }
 }
 
 pub use ColorIndex::*;
@@ -97,11 +135,45 @@ pub struct BitBoards {
     color_masks: ColorMasks,
     piece_masks: PieceMasks,
     lookup_tables: LookupTables,
+    piece_list: Vec<Option<(PieceIndex, ColorIndex)>>,
 }
 
 impl BitBoards {
     /// Creates a new set of bitboards in the starting position
     pub fn new(lookup_tables: LookupTables) -> Self {
+        let mut piece_list = vec![None; 64];
+
+        piece_list.splice(
+            0..8,
+            [
+                Some((Rook, White)),
+                Some((Knight, White)),
+                Some((Bishop, White)),
+                Some((Queen, White)),
+                Some((King, White)),
+                Some((Bishop, White)),
+                Some((Knight, White)),
+                Some((Rook, White)),
+            ],
+        );
+
+        piece_list.splice(8..16, repeat_n(Some((Pawn, White)), 8));
+        piece_list.splice(48..56, repeat_n(Some((Pawn, Black)), 8));
+
+        piece_list.splice(
+            56..64,
+            [
+                Some((Rook, Black)),
+                Some((Knight, Black)),
+                Some((Bishop, Black)),
+                Some((Queen, Black)),
+                Some((King, Black)),
+                Some((Bishop, Black)),
+                Some((Knight, Black)),
+                Some((Rook, Black)),
+            ],
+        );
+
         let black_mask = 0xFFFF000000000000;
         let white_mask = 0x000000000000FFFF;
 
@@ -124,6 +196,7 @@ impl BitBoards {
                 king_mask,
             ]),
             lookup_tables,
+            piece_list,
         }
     }
 
@@ -380,6 +453,26 @@ impl BitBoards {
         }
 
         moves
+    }
+
+    pub fn make_move(&mut self, start: usize, target: usize) {
+        // TODO: special case castling and en passent
+
+        // assume we only get legal moves from the UI
+        let (piece, color) = self.piece_list[start].unwrap();
+
+        // move the piece to the target square
+        self.piece_masks[piece] |= 1 << target;
+        self.piece_masks[piece] ^= 1 << start;
+
+        // update the masks for both colors
+        self.color_masks[color] |= 1 << target;
+        self.color_masks[color] ^= 1 << start;
+
+        // taking a piece
+        self.color_masks[!color] &= !(1 << target);
+
+        print_bitboard(self.color_masks[White] | self.color_masks[Black]);
     }
 }
 

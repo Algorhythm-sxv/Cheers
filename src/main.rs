@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::io::{prelude::*, stdin};
 
+use rand::prelude::*;
+
 
 mod bitboard;
 mod lookup_tables;
@@ -23,10 +25,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             "gen" => {
                 let luts = LookupTables::generate_all();
-                let bitboards = BitBoards::new(luts);
+                let mut bitboards = BitBoards::new(luts);
                 let moves =  bitboards.generate_pseudolegal_moves(White);
                 for i in moves.iter() {
                     println!("{} -> {}", square_to_coord(i.0), square_to_coord(i.1));
+                }
+                if let Some(choice) = moves.choose(&mut thread_rng()) {
+                    println!("chose {} -> {}", square_to_coord(choice.0), square_to_coord(choice.1));                    
+                    bitboards.make_move(choice.0 as usize, choice.1 as usize);
                 }
             }
             _ => {
