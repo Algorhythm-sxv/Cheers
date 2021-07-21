@@ -153,11 +153,11 @@ fn generate_pawn_push_tables() -> [Vec<u64>; 2] {
 fn generate_pawn_attack_tables() -> [Vec<u64>; 2] {
     let mut tables = [vec![0; 64], vec![0; 64]];
 
-    for square in 0..64 {
+    for square in 8..56 {
         tables[White as usize][square as usize] =
-            ((square << 7) & NOT_H_FILE) | ((square << 9) & NOT_A_FILE);
+            ((1 << square << 7) & NOT_H_FILE) | ((1 << square << 9) & NOT_A_FILE);
         tables[Black as usize][square as usize] =
-            ((square >> 7) & NOT_A_FILE) | ((square >> 9) & NOT_H_FILE);
+            ((1 << square >> 7) & NOT_A_FILE) | ((1 << square >> 9) & NOT_H_FILE);
     }
 
     tables
@@ -290,14 +290,14 @@ fn rook_mask(square: usize) -> u64 {
     for y in (rank + 1)..7 {
         result |= 1 << (file + y * 8);
     }
-    for y in 0..rank {
+    for y in 1..rank {
         result |= 1 << (file + y * 8);
     }
 
     for x in (file + 1)..7 {
         result |= 1 << (x + rank * 8)
     }
-    for x in 0..file {
+    for x in 1..file {
         result |= 1 << (x + rank * 8)
     }
 
@@ -385,7 +385,7 @@ fn bishop_attacks(square: usize, blocking_mask: u64) -> u64 {
 
     let mut x = file + 1;
     let mut y = rank + 1;
-    while x < 7 && y < 7 {
+    while x <= 7 && y <= 7 {
         result |= 1 << (x + y * 8);
         if blocking_mask & (1 << (x + y * 8)) != 0 {
             break;
@@ -396,7 +396,7 @@ fn bishop_attacks(square: usize, blocking_mask: u64) -> u64 {
 
     x = file - 1;
     y = rank + 1;
-    while x > 0 && y < 7 {
+    while x >= 0 && y <=7 {
         result |= 1 << (x + y * 8);
         if blocking_mask & (1 << (x + y * 8)) != 0 {
             break;
@@ -407,7 +407,7 @@ fn bishop_attacks(square: usize, blocking_mask: u64) -> u64 {
 
     x = file - 1;
     y = rank - 1;
-    while x > 0 && y > 0 {
+    while x >= 0 && y >= 0 {
         result |= 1 << (x + y * 8);
         if blocking_mask & (1 << (x + y * 8)) != 0 {
             break;
@@ -418,7 +418,7 @@ fn bishop_attacks(square: usize, blocking_mask: u64) -> u64 {
 
     x = file + 1;
     y = rank - 1;
-    while x < 7 && y > 0 {
+    while x <= 7 && y >= 0 {
         result |= 1 << (x + y * 8);
         if blocking_mask & (1 << (x + y * 8)) != 0 {
             break;

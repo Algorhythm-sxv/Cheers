@@ -79,12 +79,12 @@ pub fn parse_move_pair(pair: &str) -> Move {
     let mut p = None;
 
     let y = if yp.len() == 3 {
-        p = match &yp[3..] {
+        p = match &yp[2..] {
             "q" => Some(Queen),
             "r" => Some(Rook),
-            "k" => Some(Knight),
+            "n" => Some(Knight),
             "b" => Some(Bishop),
-            _ => unreachable!(),
+            _ => unreachable!()
         };
         &yp[0..2]
     } else {
@@ -163,7 +163,7 @@ impl Move {
 }
 
 #[derive(Copy, Clone, Default)]
-struct ColorMasks([u64; 2]);
+pub struct ColorMasks([u64; 2]);
 
 impl std::ops::Index<ColorIndex> for ColorMasks {
     type Output = u64;
@@ -180,7 +180,7 @@ impl std::ops::IndexMut<ColorIndex> for ColorMasks {
 }
 
 #[derive(Copy, Clone, Default)]
-struct PieceMasks([u64; 6]);
+pub struct PieceMasks([u64; 6]);
 impl std::ops::Index<PieceIndex> for PieceMasks {
     type Output = u64;
 
@@ -194,10 +194,10 @@ impl std::ops::IndexMut<PieceIndex> for PieceMasks {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct BitBoards {
     color_masks: ColorMasks,
-    piece_masks: PieceMasks,
+    pub piece_masks: PieceMasks,
     piece_list: Vec<Option<(PieceIndex, ColorIndex)>>,
     current_player: ColorIndex,
 }
@@ -458,8 +458,7 @@ impl BitBoards {
         let mut result = 0;
         while queens != 0 {
             let i = queens.trailing_zeros() as usize;
-            result |= lookup_tables().lookup_bishop(i, blocking_mask)
-                | lookup_tables().lookup_rook(i, blocking_mask);
+            result |= lookup_tables().lookup_queen(i, blocking_mask);
             queens ^= 1 << i;
         }
         result
@@ -490,8 +489,7 @@ impl BitBoards {
     pub fn king_attacks(&self, color: ColorIndex) -> u64 {
         let king = self.piece_masks[King] & self.color_masks[color];
 
-        lookup_tables()
-            .lookup_king(king.trailing_zeros() as usize)
+        lookup_tables().lookup_king(king.trailing_zeros() as usize)
     }
 
     pub fn king_moves(&self, color: ColorIndex) -> Vec<Move> {
@@ -607,6 +605,29 @@ impl BitBoards {
         moves
     }
 
+    pub fn generate_legal_moves(&self) -> Vec<Move> {
+        let moves = self.generate_pseudolegal_moves();
+
+        moves
+            .into_iter()
+            .filter(|move_| {
+                let mut new_boards = self.clone();
+                new_boards.make_move(move_);
+                let all_attacks = new_boards.pawn_attacks(new_boards.current_player)
+                    | new_boards.knight_attacks(new_boards.current_player)
+                    | new_boards.king_attacks(new_boards.current_player)
+                    | new_boards.bishop_attacks(new_boards.current_player)
+                    | new_boards.rook_attacks(new_boards.current_player)
+                    | new_boards.queen_attacks(new_boards.current_player);
+
+                all_attacks
+                    & new_boards.piece_masks[King]
+                    & new_boards.color_masks[!new_boards.current_player]
+                    == 0
+            })
+            .collect()
+    }
+
     pub fn generate_pseudolegal_moves(&self) -> Vec<Move> {
         self._generate_pseudolegal_moves(self.current_player)
     }
@@ -630,7 +651,7 @@ impl BitBoards {
         // TODO: special case castling and en passent
 
         // assume we only get legal moves from the UI
-        let (piece, color) = self.piece_list[move_.start as usize].unwrap();
+        let (mut piece, color) = self.piece_list[move_.start as usize].unwrap();
 
         // take a piece off the target square
         if let Some((taken_piece, taken_color)) = self.piece_list[move_.target as usize] {
@@ -647,9 +668,10 @@ impl BitBoards {
         self.color_masks[color] ^= 1 << move_.start;
 
         // promotion
-        if let Some(piece) = move_.promotion {
+        if let Some(target_piece) = move_.promotion {
             self.piece_masks[Pawn] ^= 1 << move_.target;
-            self.piece_masks[piece] |= 1 << move_.target;
+            self.piece_masks[target_piece] |= 1 << move_.target;
+            piece = target_piece;
         }
 
         // update piece list

@@ -28,7 +28,7 @@ fn engine_thread(
 ) -> Result<(), Box<dyn Error>> {
     use EngineMessage::*;
 
-    let luts = LookupTables::generate_all();
+    let _luts = LookupTables::generate_all();
     let mut bitboards = BitBoards::new();
 
     while let Ok(msg) = rx.recv() {
@@ -37,7 +37,8 @@ fn engine_thread(
                 bitboards.make_move(&next_move);
             }
             Start => {
-                let moves = bitboards.generate_pseudolegal_moves();
+                let moves = bitboards.generate_legal_moves();
+
                 if let Some(choice) = moves.choose(&mut thread_rng()) {
                     bitboards.make_move(choice);
                     tx.send(Move(*choice))?;
@@ -120,7 +121,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"gen") => {
                 let mut bitboards = BitBoards::new();
-                let moves = bitboards.generate_pseudolegal_moves();
+                let moves = bitboards.generate_legal_moves();
                 for i in moves.iter() {
                     println!(
                         "{} -> {}",
