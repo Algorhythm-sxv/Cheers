@@ -1,7 +1,14 @@
 use crate::bitboard::{ColorIndex, ColorIndex::*};
+use once_cell::sync::OnceCell;
 use rand::prelude::*;
 
-#[derive(Clone)]
+pub static LOOKUP_TABLES: OnceCell<LookupTables> = OnceCell::new();
+
+pub fn lookup_tables() -> &'static LookupTables {
+    LOOKUP_TABLES.get().expect("Lookup tables uninitialised")
+}
+
+#[derive(Clone, Default)]
 pub struct LookupTables {
     knight_table: Vec<u64>,
     king_table: Vec<u64>,
@@ -13,13 +20,13 @@ pub struct LookupTables {
 }
 
 impl LookupTables {
-    pub fn generate_all() -> Self {
+    pub fn generate_all() -> &'static Self {
         let mut sliding_attack_table = Vec::with_capacity(10000);
 
         let rook_magics = generate_rook_magics(&mut sliding_attack_table);
         let bishop_magics = generate_bishop_magics(&mut &mut sliding_attack_table);
 
-        Self {
+        LOOKUP_TABLES.get_or_init(|| Self {
             knight_table: generate_knight_table(),
             king_table: generate_king_table(),
             pawn_push_one_tables: generate_pawn_push_tables(),
@@ -27,19 +34,29 @@ impl LookupTables {
             sliding_attack_table,
             rook_magics,
             bishop_magics,
-        }
+        })
     }
 
     #[inline(always)]
     fn bishop_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
         let magic_square = self.bishop_magics[square];
-        magic_square.index + magic_hash(magic_square.mask & blocking_mask, magic_square.magic, magic_square.shift)
+        magic_square.index
+            + magic_hash(
+                magic_square.mask & blocking_mask,
+                magic_square.magic,
+                magic_square.shift,
+            )
     }
 
     #[inline(always)]
     fn rook_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
         let magic_square = self.rook_magics[square];
-        magic_square.index + magic_hash(magic_square.mask & blocking_mask, magic_square.magic, magic_square.shift)
+        magic_square.index
+            + magic_hash(
+                magic_square.mask & blocking_mask,
+                magic_square.magic,
+                magic_square.shift,
+            )
     }
 
     pub fn lookup_knight(&self, square: usize) -> u64 {
@@ -273,14 +290,14 @@ fn rook_mask(square: usize) -> u64 {
     for y in (rank + 1)..7 {
         result |= 1 << (file + y * 8);
     }
-    for y in 0..(rank - 1) {
+    for y in 0..rank {
         result |= 1 << (file + y * 8);
     }
 
     for x in (file + 1)..7 {
         result |= 1 << (x + rank * 8)
     }
-    for x in 0..(file - 1) {
+    for x in 0..file {
         result |= 1 << (x + rank * 8)
     }
 
@@ -338,7 +355,7 @@ fn rook_attacks(square: usize, blocking_mask: u64) -> u64 {
             break;
         }
     }
-    for y in (0..(rank - 1)).rev() {
+    for y in (0..rank).rev() {
         result |= 1 << (file + y * 8);
         if blocking_mask & (1 << (file + y * 8)) != 0 {
             break;
@@ -350,7 +367,7 @@ fn rook_attacks(square: usize, blocking_mask: u64) -> u64 {
             break;
         }
     }
-    for x in (0..(file - 1)).rev() {
+    for x in (0..file).rev() {
         result |= 1 << (x + rank * 8);
         if blocking_mask & (1 << (x + rank * 8)) != 0 {
             break;
