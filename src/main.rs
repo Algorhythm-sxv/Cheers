@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (thread_tx, rx) = channel();
 
     thread::spawn(|| {
-        let _ = engine_thread(thread_tx, thread_rx);
+        engine_thread(thread_tx, thread_rx).unwrap();
     });
 
     for line_res in stdin().lock().lines() {
@@ -93,6 +93,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                     Some(&"startpos") => {
                         tx.send(EngineMessage::Reset)?;
+                        if let Some(word) = words.get(2) {
+                            if word != &"moves" {
+                                println!("Malformed UCI command: no \'moves\' in position command");
+                                continue
+                            };
+                        }
                         moves_index = 3
                     }
                     _ => unreachable!(),
@@ -121,32 +127,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"gen") => {
                 let mut bitboards = BitBoards::new();
-                let moves = bitboards.generate_legal_moves();
-                for i in moves.iter() {
-                    println!(
-                        "{} -> {}",
-                        square_to_coord(i.start),
-                        square_to_coord(i.target)
-                    );
-                }
-                println!("number: {}", moves.len());
-                if let Some(choice) = moves.choose(&mut thread_rng()) {
-                    println!(
-                        "chose {} -> {}",
-                        square_to_coord(choice.start),
-                        square_to_coord(choice.target)
-                    );
-                    bitboards.make_move(choice);
-                }
-                let moves = bitboards.generate_pseudolegal_moves();
-                for i in moves.iter() {
-                    println!(
-                        "{} -> {}",
-                        square_to_coord(i.start),
-                        square_to_coord(i.target)
-                    );
-                }
-                println!("number: {}", moves.len());
+                let _ = LookupTables::generate_all();
+
+                bitboards.make_move(&Move::new(12, 28, None));
+                bitboards.make_move(&Move::new(52, 36, None));
+                bitboards.make_move(&Move::new(5, 24, None));
+                bitboards.make_move(&Move::new(51, 35, None));
+                bitboards.make_move(&Move::new(6, 21, None));
+                bitboards.make_move(&Move::new(50, 34, None));
+                bitboards.make_move(&Move::new(4, 6, None));
             }
             _ => {
                 eprintln!("unknown command: {}", line)

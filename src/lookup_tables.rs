@@ -94,9 +94,24 @@ pub const NOT_A_B_FILES: u64 = !0x0303030303030303;
 pub const NOT_H_FILE: u64 = !0x8080808080808080;
 pub const NOT_G_H_FILES: u64 = !0xC0C0C0C0C0C0C0C0;
 
-// masks for pawn movement
+// masks for ranks/files
+pub const A_FILE: u64 = 0x0101010101010101;
+pub const B_FILE: u64 = 0x0202020202020202;
+pub const C_FILE: u64 = 0x0404040404040404;
+pub const D_FILE: u64 = 0x0808080808080808;
+pub const E_FILE: u64 = 0x1010101010101010;
+pub const F_FILE: u64 = 0x2020202020202020;
+pub const G_FILE: u64 = 0x4040404040404040;
+pub const H_FILE: u64 = 0x8080808080808080;
+
+pub const FIRST_RANK: u64 = 0x00000000000000FF;
+pub const SECOND_RANK: u64 = 0x000000000000FF00;
 pub const THIRD_RANK: u64 = 0x0000000000FF0000;
+pub const FOURTH_RANK: u64 = 0x00000000FF000000;
+pub const FIFTH_RANK: u64 = 0x000000FF00000000;
 pub const SIXTH_RANK: u64 = 0x0000FF0000000000;
+pub const SEVENTH_RANK: u64 = 0x00FF000000000000;
+pub const EIGHTH_RANK: u64 = 0xFF00000000000000;
 
 /// Generates a table mapping an input square to a mask of all squares a knight attacks from there
 fn generate_knight_table() -> Vec<u64> {
@@ -396,7 +411,7 @@ fn bishop_attacks(square: usize, blocking_mask: u64) -> u64 {
 
     x = file - 1;
     y = rank + 1;
-    while x >= 0 && y <=7 {
+    while x >= 0 && y <= 7 {
         result |= 1 << (x + y * 8);
         if blocking_mask & (1 << (x + y * 8)) != 0 {
             break;

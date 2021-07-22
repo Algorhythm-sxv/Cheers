@@ -84,7 +84,7 @@ pub fn parse_move_pair(pair: &str) -> Move {
             "r" => Some(Rook),
             "n" => Some(Knight),
             "b" => Some(Bishop),
-            _ => unreachable!()
+            _ => unreachable!(),
         };
         &yp[0..2]
     } else {
@@ -94,7 +94,7 @@ pub fn parse_move_pair(pair: &str) -> Move {
     Move::new(coord_to_square(x), coord_to_square(y), p)
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum PieceIndex {
     Pawn = 0,
     Bishop = 1,
@@ -104,7 +104,7 @@ pub enum PieceIndex {
     King = 5,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(usize)]
 pub enum ColorIndex {
     White = 0,
@@ -127,6 +127,12 @@ impl std::ops::Not for ColorIndex {
     }
 }
 
+pub enum CastlingIndex {
+    Queenside = 0,
+    Kingside = 1,
+}
+
+pub use CastlingIndex::*;
 pub use ColorIndex::*;
 pub use PieceIndex::*;
 
@@ -194,12 +200,40 @@ impl std::ops::IndexMut<PieceIndex> for PieceMasks {
     }
 }
 
+#[derive(Copy, Clone, Default)]
+pub struct CastlingRights([[bool; 2]; 2]);
+impl std::ops::Index<(ColorIndex, CastlingIndex)> for CastlingRights {
+    type Output = bool;
+
+    fn index(&self, index: (ColorIndex, CastlingIndex)) -> &Self::Output {
+        &self.0[index.0 as usize][index.1 as usize]
+    }
+}
+impl std::ops::IndexMut<(ColorIndex, CastlingIndex)> for CastlingRights {
+    fn index_mut(&mut self, index: (ColorIndex, CastlingIndex)) -> &mut Self::Output {
+        &mut self.0[index.0 as usize][index.1 as usize]
+    }
+}
+impl std::ops::Index<ColorIndex> for CastlingRights {
+    type Output = [bool; 2];
+
+    fn index(&self, index: ColorIndex) -> &Self::Output {
+        &self.0[index as usize]
+    }
+}
+impl std::ops::IndexMut<ColorIndex> for CastlingRights {
+    fn index_mut(&mut self, index: ColorIndex) -> &mut Self::Output {
+        &mut self.0[index as usize]
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct BitBoards {
     color_masks: ColorMasks,
-    pub piece_masks: PieceMasks,
+    piece_masks: PieceMasks,
     piece_list: Vec<Option<(PieceIndex, ColorIndex)>>,
     current_player: ColorIndex,
+    castling_rights: CastlingRights,
 }
 
 impl BitBoards {
@@ -268,6 +302,7 @@ impl BitBoards {
             king_mask,
         ]);
         self.current_player = White;
+        self.castling_rights = CastlingRights([[true, true], [true, true]]);
     }
 
     pub fn set_from_fen(&mut self, fen: String) {
@@ -498,11 +533,6 @@ impl BitBoards {
         let king = self.piece_masks[King] & self.color_masks[color];
         let square = king.trailing_zeros() as usize;
 
-        if square == 64 {
-            print_bitboard(self.piece_masks[King]);
-            print_bitboard(self.color_masks[color]);
-        }
-
         let mut result = lookup_tables().lookup_king(square) & !self.color_masks[color];
 
         while result != 0 {
@@ -531,6 +561,15 @@ impl BitBoards {
                 west_attacks | east_attacks
             }
         }
+    }
+
+    pub fn all_attacks(&self, color: ColorIndex) -> u64 {
+        self.pawn_attacks(color)
+            | self.knight_attacks(color)
+            | self.king_attacks(color)
+            | self.bishop_attacks(color)
+            | self.rook_attacks(color)
+            | self.queen_attacks(color)
     }
 
     pub fn white_pawn_moves(&self) -> Vec<Move> {
@@ -605,10 +644,48 @@ impl BitBoards {
         moves
     }
 
+    /// generate legal castling moves, check for castling into, out of and through check
+    fn legal_castles(&self, color: ColorIndex) -> Vec<Move> {
+        let mut moves = Vec::new();
+
+        let all_attacks = self.all_attacks(!color);
+        let king = self.piece_masks[King] & self.color_masks[color];
+
+        // can't castle out of check
+        if all_attacks & king != 0 {
+            return moves;
+        }
+
+        let square = king.trailing_zeros() as u8;
+
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
+
+        // kingside
+        if self.castling_rights[(color, Kingside)]
+            // file is clear to the rook
+            && lookup_tables().lookup_rook(square as usize, blocking_mask) & H_FILE != 0
+            // can't castle through or into check
+            && all_attacks & ((king << 1) | (king << 2)) == 0
+        {
+            moves.push(Move::new(square, square + 2, None))
+        }
+        // queenside
+        if self.castling_rights[(color, Queenside)]
+            // file is clear to the rook
+            && lookup_tables().lookup_rook(square as usize, blocking_mask) & A_FILE != 0
+            // can't castle through or into check
+            && all_attacks & ((king >> 1) | (king >> 2)) == 0
+        {
+            moves.push(Move::new(square, square - 2, None))
+        }
+
+        moves
+    }
+
     pub fn generate_legal_moves(&self) -> Vec<Move> {
         let moves = self.generate_pseudolegal_moves();
 
-        moves
+        let mut moves: Vec<_> = moves
             .into_iter()
             .filter(|move_| {
                 let mut new_boards = self.clone();
@@ -625,9 +702,12 @@ impl BitBoards {
                     & new_boards.color_masks[!new_boards.current_player]
                     == 0
             })
-            .collect()
+            .collect();
+        moves.extend(self.legal_castles(self.current_player));
+        moves
     }
 
+    /// Generate legal moves except castling
     pub fn generate_pseudolegal_moves(&self) -> Vec<Move> {
         self._generate_pseudolegal_moves(self.current_player)
     }
@@ -648,7 +728,7 @@ impl BitBoards {
     }
 
     pub fn make_move(&mut self, move_: &Move) {
-        // TODO: special case castling and en passent
+        // TODO: special case en passent
 
         // assume we only get legal moves from the UI
         let (mut piece, color) = self.piece_list[move_.start as usize].unwrap();
@@ -667,6 +747,39 @@ impl BitBoards {
         self.color_masks[color] |= 1 << move_.target;
         self.color_masks[color] ^= 1 << move_.start;
 
+        // update castling rights and move the castling rook
+        if piece == King {
+            self.castling_rights[color] = [false, false];
+            if (move_.target as i8 - move_.start as i8).abs() == 2 {
+                if move_.target % 8 == 6 {
+                    // kingside
+                    let rook = self.piece_masks[Rook] & self.color_masks[color] & H_FILE;
+                    self.piece_masks[Rook] ^= rook | (rook >> 2);
+                    self.color_masks[color] ^= rook | (rook >> 2);
+                    self.piece_list[move_.target as usize + 1] = None;
+                    self.piece_list[move_.target as usize - 1] = Some((Rook, color));
+                } else {
+                    // queenside
+                    let rook = self.piece_masks[Rook] & self.color_masks[color] & A_FILE;
+                    self.piece_masks[Rook] ^= rook | (rook << 3);
+                    self.color_masks[color] ^= rook | (rook << 3);
+                    self.piece_list[move_.target as usize - 2] = None;
+                    self.piece_list[move_.target as usize + 1] = Some((Rook, color));
+                }
+            }
+        }
+
+        // update castling rights
+        if piece == Rook {
+            if move_.start % 8 == 0 {
+                // queenside
+                self.castling_rights[(color, Queenside)] = false;
+            } else if move_.start % 8 == 7 {
+                // kingside
+                self.castling_rights[(color, Kingside)] = false;
+            }
+        }
+
         // promotion
         if let Some(target_piece) = move_.promotion {
             self.piece_masks[Pawn] ^= 1 << move_.target;
@@ -681,10 +794,4 @@ impl BitBoards {
         // switch current player
         self.current_player = !self.current_player;
     }
-}
-
-#[inline(always)]
-/// Returns an integer with only the lowest '1' bit of the input set
-fn lowest_set_bit(n: u64) -> u64 {
-    n & (1 << n.trailing_zeros())
 }
