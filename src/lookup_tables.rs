@@ -1,4 +1,4 @@
-use crate::bitboard::{ColorIndex, ColorIndex::*};
+use crate::types::{ColorIndex, ColorIndex::*};
 use once_cell::sync::OnceCell;
 use rand::prelude::*;
 

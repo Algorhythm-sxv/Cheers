@@ -1,231 +1,7 @@
 use itertools::repeat_n;
 
 use crate::lookup_tables::*;
-
-pub fn print_bitboard(board: u64) {
-    let bits = format!("{:064b}", board);
-    for row in 0..8 {
-        let line = &bits[8 * row..(8 * row + 8)];
-        for square in line.chars().rev() {
-            match square {
-                '0' => print!(". "),
-                '1' => print!("1 "),
-                _ => unreachable!(),
-            }
-        }
-        print!("\n");
-    }
-    print!("\n");
-}
-
-pub fn square_to_coord(square: u8) -> String {
-    let mut result = String::new();
-    result.push(match square % 8 {
-        0 => 'a',
-        1 => 'b',
-        2 => 'c',
-        3 => 'd',
-        4 => 'e',
-        5 => 'f',
-        6 => 'g',
-        7 => 'h',
-        _ => unreachable!(),
-    });
-    result.push(match square / 8 {
-        0 => '1',
-        1 => '2',
-        2 => '3',
-        3 => '4',
-        4 => '5',
-        5 => '6',
-        6 => '7',
-        7 => '8',
-        _ => unreachable!(),
-    });
-
-    result
-}
-
-pub fn coord_to_square(coord: &str) -> u8 {
-    let mut result = match coord.chars().nth(0).unwrap() {
-        'a' => 0,
-        'b' => 1,
-        'c' => 2,
-        'd' => 3,
-        'e' => 4,
-        'f' => 5,
-        'g' => 6,
-        'h' => 7,
-        _ => unreachable!(),
-    };
-    result += match coord.chars().nth(1).unwrap() {
-        '1' => 0 * 8,
-        '2' => 1 * 8,
-        '3' => 2 * 8,
-        '4' => 3 * 8,
-        '5' => 4 * 8,
-        '6' => 5 * 8,
-        '7' => 6 * 8,
-        '8' => 7 * 8,
-        _ => unreachable!(),
-    };
-    result
-}
-
-/// Parses a pair of squares representing a move, returning the result of a promotion if it happened
-pub fn parse_move_pair(pair: &str) -> Move {
-    // TODO: null move handling
-    let (x, yp) = pair.trim().split_at(2);
-    let mut p = None;
-
-    let y = if yp.len() == 3 {
-        p = match &yp[2..] {
-            "q" => Some(Queen),
-            "r" => Some(Rook),
-            "n" => Some(Knight),
-            "b" => Some(Bishop),
-            _ => unreachable!(),
-        };
-        &yp[0..2]
-    } else {
-        yp
-    };
-
-    Move::new(coord_to_square(x), coord_to_square(y), p)
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum PieceIndex {
-    Pawn = 0,
-    Bishop = 1,
-    Knight = 2,
-    Rook = 3,
-    Queen = 4,
-    King = 5,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(usize)]
-pub enum ColorIndex {
-    White = 0,
-    Black = 1,
-}
-
-impl Default for ColorIndex {
-    fn default() -> Self {
-        White
-    }
-}
-
-impl std::ops::Not for ColorIndex {
-    type Output = ColorIndex;
-    fn not(self) -> Self::Output {
-        match self {
-            White => Black,
-            Black => White,
-        }
-    }
-}
-
-pub enum CastlingIndex {
-    Queenside = 0,
-    Kingside = 1,
-}
-
-pub use CastlingIndex::*;
-pub use ColorIndex::*;
-pub use PieceIndex::*;
-
-#[derive(Copy, Clone, Debug)]
-pub struct Move {
-    pub start: u8,
-    pub target: u8,
-    pub promotion: Option<PieceIndex>,
-}
-
-impl Move {
-    pub fn new(start: u8, target: u8, promotion: Option<PieceIndex>) -> Self {
-        Self {
-            start,
-            target,
-            promotion,
-        }
-    }
-
-    pub fn to_algebraic_notation(&self) -> String {
-        let mut result = String::new();
-        result.push_str(&square_to_coord(self.start));
-        result.push_str(&square_to_coord(self.target));
-        result.push_str(match self.promotion {
-            None => "",
-            Some(Queen) => "q",
-            Some(Rook) => "r",
-            Some(Knight) => "n",
-            Some(Bishop) => "b",
-            _ => unreachable!(),
-        });
-        result
-    }
-}
-
-#[derive(Copy, Clone, Default, Debug)]
-pub struct ColorMasks([u64; 2]);
-
-impl std::ops::Index<ColorIndex> for ColorMasks {
-    type Output = u64;
-
-    fn index(&self, index: ColorIndex) -> &Self::Output {
-        &self.0[index as usize]
-    }
-}
-
-impl std::ops::IndexMut<ColorIndex> for ColorMasks {
-    fn index_mut(&mut self, index: ColorIndex) -> &mut Self::Output {
-        &mut self.0[index as usize]
-    }
-}
-
-#[derive(Copy, Clone, Default, Debug)]
-pub struct PieceMasks([u64; 6]);
-impl std::ops::Index<PieceIndex> for PieceMasks {
-    type Output = u64;
-
-    fn index(&self, index: PieceIndex) -> &Self::Output {
-        &self.0[index as usize]
-    }
-}
-impl std::ops::IndexMut<PieceIndex> for PieceMasks {
-    fn index_mut(&mut self, index: PieceIndex) -> &mut Self::Output {
-        &mut self.0[index as usize]
-    }
-}
-
-#[derive(Copy, Clone, Default, Debug)]
-pub struct CastlingRights([[bool; 2]; 2]);
-impl std::ops::Index<(ColorIndex, CastlingIndex)> for CastlingRights {
-    type Output = bool;
-
-    fn index(&self, index: (ColorIndex, CastlingIndex)) -> &Self::Output {
-        &self.0[index.0 as usize][index.1 as usize]
-    }
-}
-impl std::ops::IndexMut<(ColorIndex, CastlingIndex)> for CastlingRights {
-    fn index_mut(&mut self, index: (ColorIndex, CastlingIndex)) -> &mut Self::Output {
-        &mut self.0[index.0 as usize][index.1 as usize]
-    }
-}
-impl std::ops::Index<ColorIndex> for CastlingRights {
-    type Output = [bool; 2];
-
-    fn index(&self, index: ColorIndex) -> &Self::Output {
-        &self.0[index as usize]
-    }
-}
-impl std::ops::IndexMut<ColorIndex> for CastlingRights {
-    fn index_mut(&mut self, index: ColorIndex) -> &mut Self::Output {
-        &mut self.0[index as usize]
-    }
-}
+use crate::types::*;
 
 #[derive(Clone, Default, Debug)]
 pub struct BitBoards {
@@ -235,6 +11,7 @@ pub struct BitBoards {
     current_player: ColorIndex,
     castling_rights: CastlingRights,
     en_passent_mask: Option<u64>,
+    halfmove_clock: u8,
 }
 
 impl BitBoards {
@@ -742,10 +519,16 @@ impl BitBoards {
         // assume we only get legal moves from the UI
         let (mut piece, color) = self.piece_list[move_.start as usize].unwrap();
 
+        // increment the halfmove clock (resets are handled elsewhere)
+        self.halfmove_clock += 1;
+
         // take a piece off the target square
         if let Some((taken_piece, taken_color)) = self.piece_list[move_.target as usize] {
             self.piece_masks[taken_piece] ^= 1 << move_.target;
             self.color_masks[taken_color] ^= 1 << move_.target;
+
+            // reset the halfmove clock on capture
+            self.halfmove_clock = 0;
         }
 
         // move the piece to the target square
@@ -789,27 +572,39 @@ impl BitBoards {
             }
         }
 
-        // en passent capture
-        if let Some(en_passent_mask) = self.en_passent_mask {
-            if piece == Pawn && move_.target == en_passent_mask.trailing_zeros() as u8 {
-                self.piece_masks[Pawn] &= !((en_passent_mask << 8) | (en_passent_mask >> 8));
-                self.color_masks[!color] &= !((en_passent_mask << 8) | (en_passent_mask >> 8));
-                self.piece_list[move_.target as usize + 8 - 16 * color as usize] = None;
+        // pawn move specialties
+        if piece == Pawn {
+            // reset halfmove clock
+            self.halfmove_clock = 0;
+
+            // en passent capture
+            if let Some(en_passent_mask) = self.en_passent_mask {
+                if move_.target == en_passent_mask.trailing_zeros() as u8 {
+                    self.piece_masks[Pawn] &= !((en_passent_mask << 8) | (en_passent_mask >> 8));
+                    self.color_masks[!color] &= !((en_passent_mask << 8) | (en_passent_mask >> 8));
+                    self.piece_list[move_.target as usize + 8 - 16 * color as usize] = None;
+                }
             }
-        }
 
-        // update en passent state
-        if piece == Pawn && (move_.target as i8 - move_.start as i8).abs() == 16 {
-            self.en_passent_mask = Some(1 << (move_.target - 8) << (16 * color as u8));
+            // update en passent state
+            if (move_.target as i8 - move_.start as i8).abs() == 16 {
+                // double push
+                self.en_passent_mask = Some(1 << (move_.target - 8) << (16 * color as u8));
+            } else {
+                // single push/capture
+                self.en_passent_mask = None;
+            }
+
+            // promotion
+            if let Some(target_piece) = move_.promotion {
+                self.piece_masks[Pawn] ^= 1 << move_.target;
+                self.piece_masks[target_piece] |= 1 << move_.target;
+                piece = target_piece;
+            }
         } else {
-            self.en_passent_mask = None;
-        }
+            // moving other pieces clears en passent state
 
-        // promotion
-        if let Some(target_piece) = move_.promotion {
-            self.piece_masks[Pawn] ^= 1 << move_.target;
-            self.piece_masks[target_piece] |= 1 << move_.target;
-            piece = target_piece;
+            self.en_passent_mask = None;
         }
 
         // update piece list

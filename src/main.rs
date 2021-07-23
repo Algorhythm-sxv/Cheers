@@ -9,9 +9,12 @@ use rand::prelude::*;
 
 mod bitboard;
 mod lookup_tables;
+mod types;
+mod utils;
 
 use bitboard::*;
 use lookup_tables::*;
+use types::*;
 
 enum EngineMessage {
     Move(Move),
