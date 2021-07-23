@@ -168,7 +168,7 @@ impl Move {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct ColorMasks([u64; 2]);
 
 impl std::ops::Index<ColorIndex> for ColorMasks {
@@ -185,7 +185,7 @@ impl std::ops::IndexMut<ColorIndex> for ColorMasks {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct PieceMasks([u64; 6]);
 impl std::ops::Index<PieceIndex> for PieceMasks {
     type Output = u64;
@@ -200,7 +200,7 @@ impl std::ops::IndexMut<PieceIndex> for PieceMasks {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct CastlingRights([[bool; 2]; 2]);
 impl std::ops::Index<(ColorIndex, CastlingIndex)> for CastlingRights {
     type Output = bool;
@@ -227,13 +227,14 @@ impl std::ops::IndexMut<ColorIndex> for CastlingRights {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct BitBoards {
     color_masks: ColorMasks,
     piece_masks: PieceMasks,
     piece_list: Vec<Option<(PieceIndex, ColorIndex)>>,
     current_player: ColorIndex,
     castling_rights: CastlingRights,
+    en_passent_mask: Option<u64>,
 }
 
 impl BitBoards {
@@ -588,7 +589,12 @@ impl BitBoards {
             // remove blocked double pushes
             result &= empty;
 
-            result |= lookup_tables().lookup_pawn_attack(i, White) & self.color_masks[Black];
+            let attacks = lookup_tables().lookup_pawn_attack(i, White);
+            result |= attacks & self.color_masks[Black];
+            // taking en passent
+            if let Some(en_passent_mask) = self.en_passent_mask {
+                result |= attacks & en_passent_mask;
+            }
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
@@ -624,7 +630,12 @@ impl BitBoards {
             // remove blocked double pushes
             result &= empty;
 
-            result |= lookup_tables().lookup_pawn_attack(i, Black) & self.color_masks[White];
+            let attacks = lookup_tables().lookup_pawn_attack(i, Black);
+            result |= attacks & self.color_masks[White];
+            // taking en passent
+            if let Some(en_passent_mask) = self.en_passent_mask {
+                result |= attacks & en_passent_mask;
+            }
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
@@ -728,8 +739,6 @@ impl BitBoards {
     }
 
     pub fn make_move(&mut self, move_: &Move) {
-        // TODO: special case en passent
-
         // assume we only get legal moves from the UI
         let (mut piece, color) = self.piece_list[move_.start as usize].unwrap();
 
@@ -780,6 +789,22 @@ impl BitBoards {
             }
         }
 
+        // en passent capture
+        if let Some(en_passent_mask) = self.en_passent_mask {
+            if piece == Pawn && move_.target == en_passent_mask.trailing_zeros() as u8 {
+                self.piece_masks[Pawn] &= !((en_passent_mask << 8) | (en_passent_mask >> 8));
+                self.color_masks[!color] &= !((en_passent_mask << 8) | (en_passent_mask >> 8));
+                self.piece_list[move_.target as usize + 8 - 16 * color as usize] = None;
+            }
+        }
+
+        // update en passent state
+        if piece == Pawn && (move_.target as i8 - move_.start as i8).abs() == 16 {
+            self.en_passent_mask = Some(1 << (move_.target - 8) << (16 * color as u8));
+        } else {
+            self.en_passent_mask = None;
+        }
+
         // promotion
         if let Some(target_piece) = move_.promotion {
             self.piece_masks[Pawn] ^= 1 << move_.target;
@@ -793,5 +818,10 @@ impl BitBoards {
 
         // switch current player
         self.current_player = !self.current_player;
+    }
+
+    /// Get a reference to the bit boards's piece masks.
+    pub fn piece_masks(&self) -> &PieceMasks {
+        &self.piece_masks
     }
 }
