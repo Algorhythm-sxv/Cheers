@@ -572,6 +572,7 @@ impl BitBoards {
 
             // en passent capture
             if move_.target == self.en_passent_mask.trailing_zeros() as u8 {
+                unmove.en_passent = true;
                 self.piece_masks[Pawn] &=
                     !((self.en_passent_mask << 8) | (self.en_passent_mask >> 8));
                 self.color_masks[!color] &=
@@ -621,17 +622,17 @@ impl BitBoards {
         if unmove.castling {
             // move the castling rook back
             // kingside
-            if unmove.target % 8 == 7 {
+            if unmove.target % 8 == 6 {
                 self.piece_list[unmove.target as usize - 1] = None;
                 self.piece_list[unmove.target as usize + 1] = Some((Rook, color));
-                let mask = (1 << (unmove.target - 1)) | (1 << unmove.target + 1);
+                let mask = (1 << (unmove.target - 1)) | (1 << (unmove.target + 1));
                 self.piece_masks[Rook] ^= mask;
                 self.color_masks[color] ^= mask;
             // queenside
             } else {
                 self.piece_list[unmove.target as usize + 1] = None;
                 self.piece_list[unmove.target as usize - 2] = Some((Rook, color));
-                let mask = (1 << (unmove.target - 2)) | (1 << unmove.target + 1);
+                let mask = (1 << (unmove.target - 2)) | (1 << (unmove.target + 1));
                 self.piece_masks[Rook] ^= mask;
                 self.color_masks[color] ^= mask;
             }
@@ -642,9 +643,12 @@ impl BitBoards {
             let (promoted, _) = self.piece_list[unmove.target as usize].unwrap();
             self.piece_list[unmove.target as usize] = None;
             self.piece_masks[promoted] ^= 1 << unmove.target;
-            self.color_masks[color] ^= 1 << unmove.target;
+            // color gets updated later when the pawn gets moved back
+            // self.color_masks[color] ^= 1 << unmove.target;
 
             piece = Pawn;
+            // place the pawn back on the promotion square, will be moved later
+            self.piece_masks[piece] |= 1 << unmove.target
         }
 
         // update piece list (target square gets updated with captures)
