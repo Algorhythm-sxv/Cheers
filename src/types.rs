@@ -96,6 +96,19 @@ impl Move {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default)]
+pub struct UnmakeMove {
+    pub start: u8,
+    pub target: u8,
+    pub taken: Option<PieceIndex>,
+    pub en_passent: bool,
+    pub en_passent_mask: u64,
+    pub castling: bool,
+    pub castling_rights: CastlingRights,
+    pub promotion: bool,
+    pub halfmove_clock: u8,
+}
+
 #[derive(Copy, Clone, Default, Debug)]
 pub struct ColorMasks(pub [u64; 2]);
 

@@ -132,13 +132,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let mut bitboards = BitBoards::new();
                 let _ = LookupTables::generate_all();
 
+                let moves = bitboards.generate_legal_moves();
+                println!("moves: {}", moves.len());
                 bitboards.make_move(&Move::new(12, 28, None));
-                bitboards.make_move(&Move::new(52, 36, None));
-                bitboards.make_move(&Move::new(5, 24, None));
-                bitboards.make_move(&Move::new(51, 35, None));
-                bitboards.make_move(&Move::new(6, 21, None));
-                bitboards.make_move(&Move::new(50, 34, None));
-                bitboards.make_move(&Move::new(4, 6, None));
+                let moves = bitboards.generate_legal_moves();
+                println!("moves: {}", moves.len());
+                
             }
             _ => {
                 eprintln!("unknown command: {}", line)
