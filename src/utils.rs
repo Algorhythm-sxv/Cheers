@@ -68,3 +68,8 @@ pub fn coord_to_square(coord: &str) -> u8 {
     };
     result
 }
+
+/// flips a square index to the other side of the board
+pub fn flip_square(square: usize) -> usize {
+    square ^ 56
+}

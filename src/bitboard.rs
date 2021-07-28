@@ -5,14 +5,14 @@ use crate::types::*;
 
 #[derive(Clone, Default, Debug)]
 pub struct BitBoards {
-    color_masks: ColorMasks,
-    piece_masks: PieceMasks,
-    piece_list: Vec<Option<(PieceIndex, ColorIndex)>>,
-    current_player: ColorIndex,
-    castling_rights: CastlingRights,
-    en_passent_mask: u64,
-    halfmove_clock: u8,
-    move_history: Vec<UnmakeMove>,
+    pub color_masks: ColorMasks,
+    pub piece_masks: PieceMasks,
+    pub piece_list: Vec<Option<(PieceIndex, ColorIndex)>>,
+    pub current_player: ColorIndex,
+    pub castling_rights: CastlingRights,
+    pub en_passent_mask: u64,
+    pub halfmove_clock: u8,
+    pub move_history: Vec<UnmakeMove>,
 }
 
 impl BitBoards {
@@ -413,15 +413,13 @@ impl BitBoards {
     }
 
     /// generate legal castling moves, check for castling into, out of and through check
-    fn legal_castles(&self, color: ColorIndex) -> Vec<Move> {
-        let mut moves = Vec::new();
-
+    fn legal_castles(&self, color: ColorIndex, moves: &mut Vec<Move>){
         let all_attacks = self.all_attacks(!color);
         let king = self.piece_masks[King] & self.color_masks[color];
 
         // can't castle out of check
         if all_attacks & king != 0 {
-            return moves;
+            return;
         }
 
         let square = king.trailing_zeros() as u8;
@@ -446,8 +444,19 @@ impl BitBoards {
         {
             moves.push(Move::new(square, square - 2, None))
         }
+    }
 
-        moves
+    pub fn king_not_in_check(&self, color: ColorIndex) -> bool {
+        let other = !color;
+        let all_attacks = self.pawn_attacks(other)
+        | self.knight_attacks(other)
+        | self.king_attacks(other)
+        | self.bishop_attacks(other)
+        | self.rook_attacks(other)
+        | self.queen_attacks(other);
+
+        all_attacks & self.piece_masks[King] & self.color_masks[color]
+            == 0
     }
 
     pub fn generate_legal_moves(&mut self) -> Vec<Move> {
@@ -457,20 +466,12 @@ impl BitBoards {
             .into_iter()
             .filter(|move_| {
                 self.make_move(move_);
-                let all_attacks = self.pawn_attacks(self.current_player)
-                    | self.knight_attacks(self.current_player)
-                    | self.king_attacks(self.current_player)
-                    | self.bishop_attacks(self.current_player)
-                    | self.rook_attacks(self.current_player)
-                    | self.queen_attacks(self.current_player);
-                let result =
-                    all_attacks & self.piece_masks[King] & self.color_masks[!self.current_player]
-                        == 0;
+                let result = self.king_not_in_check(!self.current_player);
                 self.unmake_move();
                 result
             })
             .collect();
-        moves.extend(self.legal_castles(self.current_player));
+        self.legal_castles(self.current_player, &mut moves);
         moves
     }
 

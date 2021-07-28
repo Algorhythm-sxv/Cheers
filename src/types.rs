@@ -80,8 +80,18 @@ impl Move {
         }
     }
 
+    pub fn null() -> Self {
+        Self::new(0, 0, None)
+    }
+
     pub fn to_algebraic_notation(&self) -> String {
         let mut result = String::new();
+        
+        // null move
+        if self.start == 0 && self.target == 0 {
+            result.push_str("0000");
+            return result;
+        }
         result.push_str(&square_to_coord(self.start));
         result.push_str(&square_to_coord(self.target));
         result.push_str(match self.promotion {

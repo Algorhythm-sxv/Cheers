@@ -11,10 +11,14 @@ mod bitboard;
 mod lookup_tables;
 mod types;
 mod utils;
+mod evaluate;
+mod search;
+mod piece_tables;
 
 use bitboard::*;
 use lookup_tables::*;
 use types::*;
+use utils::print_bitboard;
 
 enum EngineMessage {
     Move(Move),
@@ -40,12 +44,14 @@ fn engine_thread(
                 bitboards.make_move(&next_move);
             }
             Start => {
-                let moves = bitboards.generate_legal_moves();
+                // let moves = bitboards.generate_legal_moves();
 
-                if let Some(choice) = moves.choose(&mut thread_rng()) {
-                    bitboards.make_move(choice);
-                    tx.send(Move(*choice))?;
-                }
+                // if let Some(choice) = moves.choose(&mut thread_rng()) {
+                //     bitboards.make_move(choice);
+                //     tx.send(Move(*choice))?;
+                // }
+                let (_score, best_move) = bitboards.search(2);
+                tx.send(EngineMessage::Move(best_move))?;
             }
             Stop => break,
             Reset => {
@@ -132,12 +138,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let mut bitboards = BitBoards::new();
                 let _ = LookupTables::generate_all();
 
-                let moves = bitboards.generate_legal_moves();
-                println!("moves: {}", moves.len());
-                bitboards.make_move(&Move::new(12, 28, None));
-                let moves = bitboards.generate_legal_moves();
-                println!("moves: {}", moves.len());
-                
+                bitboards.make_move(&parse_move_pair("e2e4"));
+                bitboards.make_move(&parse_move_pair("e7e5"));
+                bitboards.make_move(&parse_move_pair("c1f4"));
+                println!("score: {}", bitboards.evaluate(!bitboards.current_player));
+                bitboards.unmake_move();
+                bitboards.make_move(&parse_move_pair("c1h6"));
+                println!("score: {}", bitboards.evaluate(!bitboards.current_player));
+
             }
             _ => {
                 eprintln!("unknown command: {}", line)
