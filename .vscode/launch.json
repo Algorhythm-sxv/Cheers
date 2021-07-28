@@ -11,7 +11,6 @@
             "cargo": {
                 "args": [
                     "build",
-                    "--release",
                     "--bin=chess-engine",
                     "--package=chess-engine"
                 ],
