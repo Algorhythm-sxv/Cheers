@@ -94,15 +94,15 @@ impl BitBoards {
         self.halfmove_clock = 0;
     }
 
-    pub fn set_from_fen(&mut self, fen: String) {
+    pub fn set_from_fen(&mut self, fen: String) -> Result<(), Box<dyn std::error::Error>> {
         self.piece_masks = PieceMasks([0; 6]);
         self.color_masks = ColorMasks([0; 2]);
 
         self.piece_list.fill(None);
 
-        let lines = fen.split(&['/', ' '][..]);
+        let mut lines = fen.split(&['/', ' '][..]);
 
-        for (i, line) in lines.take(8).enumerate() {
+        for (i, line) in lines.clone().take(8).enumerate() {
             let mut index = 56 - i * 8;
             for chr in line.chars() {
                 match chr {
@@ -172,7 +172,69 @@ impl BitBoards {
                 index += 1;
             }
         }
-        // TODO: stuff with the rest of the FEN
+
+        match lines.nth(8).ok_or(String::from("No metadata!"))? {
+            "w" => self.current_player = White,
+            "b" => self.current_player = Black,
+            other @ _ => Err(format!("Invalid player character: {}", other))?,
+        }
+
+        match lines.next()
+            .ok_or(String::from("Insufficient metadata for castling rights!"))?
+        {
+            "-" => self.castling_rights = CastlingRights([[false, false], [false, false]]),
+            other @ _ => other.chars().try_for_each(|chr| match chr {
+                'K' => {
+                    self.castling_rights[(White, Kingside)] = true;
+                    Ok(())
+                }
+                'k' => {
+                    self.castling_rights[(Black, Kingside)] = true;
+                    Ok(())
+                }
+                'Q' => {
+                    self.castling_rights[(White, Queenside)] = true;
+                    Ok(())
+                }
+                'q' => {
+                    self.castling_rights[(Black, Queenside)] = true;
+                    Ok(())
+                }
+                _ => Err(format!("Invalid player character: {}", other)),
+            })?,
+        }
+
+        match lines.next()
+            .ok_or(String::from("Insufficient metadata for en passent square!"))?
+        {
+            "-" => self.en_passent_mask = 0,
+            other @ _ => {
+                let mut square = 0;
+                match other
+                    .bytes()
+                    .nth(0)
+                    .ok_or(format!("Empty en passent string!"))?
+                {
+                    file @ b'a'..=b'h' => square += file - b'a',
+                    other @ _ => Err(format!("Invalid en passent file: {}", other))?,
+                }
+                match other
+                    .bytes()
+                    .nth(1)
+                    .ok_or(format!("En passent string too short"))?
+                {
+                    rank @ b'1'..=b'8' => square += 8 * (rank - b'1'),
+                    other @ _ => Err(format!("Invalid en passent rank: {}", other))?,
+                }
+                self.en_passent_mask = 1 << square;
+            }
+        }
+
+        self.halfmove_clock = lines.next()
+            .ok_or(String::from("No halfmove clock!"))?
+            .parse::<u8>()?;
+
+        Ok(())
     }
 
     pub fn knight_attacks(&self, color: ColorIndex) -> u64 {
