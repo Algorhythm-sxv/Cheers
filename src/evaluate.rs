@@ -1,13 +1,14 @@
 use crate::{
     bitboard::BitBoards,
-    piece_tables::tables::*,
+    lookup_tables::*,
+    piece_tables::*,
     types::{ColorIndex, PieceIndex},
     utils::flip_square,
 };
 use ColorIndex::*;
 use PieceIndex::*;
 
-struct PieceValues([i32; 5]);
+pub struct PieceValues([i32; 5]);
 impl std::ops::Index<PieceIndex> for PieceValues {
     type Output = i32;
 
@@ -15,14 +16,24 @@ impl std::ops::Index<PieceIndex> for PieceValues {
         &self.0[index as usize]
     }
 }
-// piece values shamelessly stolen from stockfish midgame numbers
-const PIECE_VALUES: PieceValues = PieceValues([
-    198,  // pawn
-    817,  // knight
-    836,  // bishop
-    1270, // rook
-    2521, // queen
-]);
+
+pub mod consts {
+    use crate::evaluate::PieceValues;
+
+    // piece values shamelessly stolen from stockfish midgame numbers
+    pub const PIECE_VALUES: PieceValues = PieceValues([
+        198,  // pawn
+        817,  // knight
+        836,  // bishop
+        1270, // rook
+        2521, // queen
+    ]);
+
+    pub const CHECKMATE_SCORE: i32 = -10000;
+    pub const ILLEGAL_MOVE_SCORE: i32 = 100000;
+    pub const DRAW_SCORE: i32 = 0;
+}
+use consts::*;
 
 impl BitBoards {
     /// Static evaluation of the board position, positive value for player advantage, negative for opponent advantage
@@ -31,9 +42,14 @@ impl BitBoards {
 
         result += self.material_count(color) - self.material_count(!color);
 
+        if self.insufficient_mating_material(result) {
+            return DRAW_SCORE;
+        }
         let placement = self.piece_placement();
 
         result += placement[color as usize] - placement[!color as usize];
+
+        result += self.pawn_shield_score(color) - self.pawn_shield_score(!color);
 
         result
     }
@@ -70,6 +86,46 @@ impl BitBoards {
                 }
             });
 
+        result
+    }
+
+    /// Assumes if a side has no pawns and <4 material advantage that it is drawn
+    fn insufficient_mating_material(&self, material_balance: i32) -> bool {
+        (self.piece_masks[Pawn] & self.color_masks[self.current_player] == 0
+            && material_balance < 4 * PIECE_VALUES[Pawn])
+            || (self.piece_masks[Pawn] & self.color_masks[!self.current_player] == 0
+                && material_balance > -4 * PIECE_VALUES[Pawn])
+    }
+
+    /// if the king moves away from the center, add score for having pawns nearby
+    fn pawn_shield_score(&self, color: ColorIndex) -> i32 {
+        let mut result = 0;
+        let file = (self.piece_masks[King] & self.color_masks[color]).trailing_zeros() % 8;
+        if file > 4 {
+            // kingside
+            result += ((self.piece_masks[Pawn] & self.color_masks[color])
+                & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1-color as u64))
+                & (F_FILE | G_FILE | H_FILE))
+                .count_ones() as i32
+                * (PIECE_VALUES[Pawn] / 2);
+                result += ((self.piece_masks[Pawn] & self.color_masks[color])
+                & (SIXTH_RANK * color as u64 | THIRD_RANK * (1-color as u64))
+                & (F_FILE | G_FILE | H_FILE))
+                .count_ones() as i32
+                * (PIECE_VALUES[Pawn] / 3);
+            } else if file < 3 {
+                // queenside
+                result += ((self.piece_masks[Pawn] & self.color_masks[color])
+                & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1-color as u64))
+                & (A_FILE | B_FILE | C_FILE))
+                .count_ones() as i32
+                * (PIECE_VALUES[Pawn] / 2);
+                result += ((self.piece_masks[Pawn] & self.color_masks[color])
+                & (SIXTH_RANK * color as u64 | THIRD_RANK * (1-color as u64))
+                & (A_FILE | B_FILE | C_FILE))
+                .count_ones() as i32
+                * (PIECE_VALUES[Pawn] / 3);
+        }
         result
     }
 }

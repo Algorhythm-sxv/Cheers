@@ -1,8 +1,4 @@
-use crate::{bitboard::BitBoards, types::*};
-
-const CHECKMATE_SCORE: i32 = 10000;
-const ILLEGAL_MOVE_SCORE: i32 = 100000;
-const DRAW_SCORE: i32 = 0;
+use crate::{bitboard::BitBoards, types::*, evaluate::consts::*};
 
 impl BitBoards {
     pub fn search(&mut self, depth: usize) -> (i32, Move) {
@@ -58,7 +54,7 @@ impl BitBoards {
                 return (DRAW_SCORE, Move::null());
             } else {
                 // checkmate
-                return (-CHECKMATE_SCORE, Move::null());
+                return (CHECKMATE_SCORE, Move::null());
             }
         }
 
@@ -83,7 +79,7 @@ impl BitBoards {
 
         let moves = self.generate_legal_moves();
         let mut nodes = 0;
-        
+
         for move_ in moves{
             self.make_move(&move_);
             nodes += self._perft(depth-1);

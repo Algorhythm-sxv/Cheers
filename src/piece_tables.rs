@@ -80,3 +80,5 @@ pub mod tables {
 
     pub const PIECE_TABLES: PieceTables = PieceTables([PAWN_TABLE, BISHOP_TABLE, KNIGHT_TABLE, ROOK_TABLE, QUEEN_TABLE, KING_TABLE]);
 }
+
+pub use tables::*;
