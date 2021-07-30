@@ -5,19 +5,20 @@ use std::io::{prelude::*, stdin};
 use std::sync::mpsc::*;
 use std::thread;
 
-
 mod bitboard;
+mod evaluate;
 mod lookup_tables;
+mod piece_tables;
+mod search;
 mod types;
 mod utils;
-mod evaluate;
-mod search;
-mod piece_tables;
 mod zobrist;
 
 use bitboard::*;
 use lookup_tables::*;
 use types::*;
+
+use crate::zobrist::zobrist_numbers;
 
 enum EngineMessage {
     Move(Move),
@@ -57,7 +58,7 @@ fn engine_thread(
             Reset => {
                 bitboards.reset();
             }
-            Fen(fen) => bitboards.set_from_fen(fen),
+            Fen(fen) => bitboards.set_from_fen(fen).unwrap(),
             Moves(moves) => {
                 for move_ in &moves {
                     bitboards.make_move(move_);
@@ -91,21 +92,27 @@ fn main() -> Result<(), Box<dyn Error>> {
                 break;
             }
             Some(&"isready") => {
+                // generate lookup tables and zobrist numbers
+                let _ = LookupTables::generate_all();
+                let _ = zobrist_numbers();
                 println!("readyok");
             }
             Some(&"position") => {
                 let moves_index;
                 match words.get(1) {
                     Some(&"fen") => {
-                        tx.send(EngineMessage::Fen(words[2].to_string()))?;
-                        moves_index = 4
+                        let mut test_boards = BitBoards::new();
+                        test_boards.set_from_fen(words[2..=7].join(" "))?;
+
+                        tx.send(EngineMessage::Fen(words[2..=7].join(" ")))?;
+                        moves_index = 9
                     }
                     Some(&"startpos") => {
                         tx.send(EngineMessage::Reset)?;
                         if let Some(word) = words.get(2) {
                             if word != &"moves" {
                                 println!("Malformed UCI command: no \'moves\' in position command");
-                                continue
+                               continue;
                             };
                         }
                         moves_index = 3
@@ -134,17 +141,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Some(&"gen") => {
-                let mut bitboards = BitBoards::new();
-                let _ = LookupTables::generate_all();
-
-                bitboards.make_move(&parse_move_pair("f2f3"));
-                bitboards.make_move(&parse_move_pair("e7e5"));
-                bitboards.make_move(&parse_move_pair("g2g4"));
-                
-                let (score,move_)= bitboards.search(3);
-                dbg!((score, move_.to_algebraic_notation()));
-
+            Some(&"perft") => {
+                let depth = words
+                    .get(1)
+                    .ok_or("No depth specified for perft!")?
+                    .parse::<usize>()?;
+                let nodes = BitBoards::perft(
+                    "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
+                        .to_string(),
+                    depth,
+                )?;
+                println!("Depth {}, {} nodes", depth, nodes);
             }
             _ => {
                 eprintln!("unknown command: {}", line)

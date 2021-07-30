@@ -68,4 +68,27 @@ impl BitBoards {
 
         (best_score, best_move)
     }
+
+    pub fn perft(fen: String, depth: usize) -> Result<usize, Box<dyn std::error::Error>> {
+        let mut boards = Self::new();
+        boards.set_from_fen(fen)?;
+
+        Ok(boards._perft(depth))
+    }
+
+    fn _perft(&mut self, depth: usize) -> usize {
+        if depth == 0 {
+            return 1;
+        }
+
+        let moves = self.generate_legal_moves();
+        let mut nodes = 0;
+        
+        for move_ in moves{
+            self.make_move(&move_);
+            nodes += self._perft(depth-1);
+            self.unmake_move();
+        }
+        nodes
+    }
 }
