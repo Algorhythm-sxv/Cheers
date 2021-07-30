@@ -462,20 +462,6 @@ impl BitBoards {
     #[inline(never)]
     pub fn generate_legal_moves(&mut self) -> Vec<Move> {
         let moves = self.generate_pseudolegal_moves();
-        // let mut legal_moves = Vec::new();
-        // for i in 0..moves.len() {
-        //     self.make_move(&moves[i]);
-        //     if self.piece_masks[King].count_ones() != 2 {
-        //         // dbg!(&self.move_history);
-        //     }
-        //     if self.king_not_in_check(!self.current_player) {
-        //         legal_moves.push(moves[i]);
-        //     }
-        //     self.unmake_move();
-        //     if *self != copy {
-        //         println!("no match after testing move {}", moves[i].to_algebraic_notation());
-        //     }
-        // }
         let mut moves: Vec<_> = moves
             .into_iter()
             .filter(|move_| {
@@ -489,11 +475,14 @@ impl BitBoards {
         moves
     }
 
-    /// Generate legal moves except castling
+    /// Generate pseudolegal moves that can be tested by king check only
     pub fn generate_pseudolegal_moves(&self) -> Vec<Move> {
-        self._generate_pseudolegal_moves(self.current_player)
+        let mut moves = self._generate_pseudolegal_moves(self.current_player);
+        self.legal_castles(self.current_player, &mut moves);
+        moves
     }
 
+    /// Generates all psudolegal moves for a color other than castling
     fn _generate_pseudolegal_moves(&self, color: ColorIndex) -> Vec<Move> {
         // try to avoid re-allocation
         let mut moves = Vec::with_capacity(50);
