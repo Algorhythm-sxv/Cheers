@@ -64,7 +64,7 @@ pub use CastlingIndex::*;
 pub use ColorIndex::*;
 pub use PieceIndex::*;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Move {
     pub start: u8,
     pub target: u8,
@@ -106,7 +106,7 @@ impl Move {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct UnmakeMove {
     pub start: u8,
     pub target: u8,
@@ -119,7 +119,7 @@ pub struct UnmakeMove {
     pub halfmove_clock: u8,
 }
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct ColorMasks(pub [u64; 2]);
 
 impl std::ops::Index<ColorIndex> for ColorMasks {
@@ -136,7 +136,7 @@ impl std::ops::IndexMut<ColorIndex> for ColorMasks {
     }
 }
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PieceMasks(pub [u64; 6]);
 impl std::ops::Index<PieceIndex> for PieceMasks {
     type Output = u64;
@@ -151,7 +151,7 @@ impl std::ops::IndexMut<PieceIndex> for PieceMasks {
     }
 }
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct CastlingRights(pub [[bool; 2]; 2]);
 impl std::ops::Index<(ColorIndex, CastlingIndex)> for CastlingRights {
     type Output = bool;

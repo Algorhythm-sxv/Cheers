@@ -5,7 +5,22 @@ use rand::prelude::*;
 pub static LOOKUP_TABLES: OnceCell<LookupTables> = OnceCell::new();
 
 pub fn lookup_tables() -> &'static LookupTables {
-    LOOKUP_TABLES.get().expect("Lookup tables uninitialised")
+    LOOKUP_TABLES.get_or_init(|| {
+        let mut sliding_attack_table = Vec::with_capacity(10000);
+
+        let rook_magics = generate_rook_magics(&mut sliding_attack_table);
+        let bishop_magics = generate_bishop_magics(&mut &mut sliding_attack_table);
+        
+        LookupTables {
+            knight_table: generate_knight_table(),
+            king_table: generate_king_table(),
+            pawn_push_one_tables: generate_pawn_push_tables(),
+            pawn_attack_tables: generate_pawn_attack_tables(),
+            sliding_attack_table,
+            rook_magics,
+            bishop_magics,
+        }
+    })
 }
 
 #[derive(Clone, Default)]
@@ -21,20 +36,7 @@ pub struct LookupTables {
 
 impl LookupTables {
     pub fn generate_all() -> &'static Self {
-        let mut sliding_attack_table = Vec::with_capacity(10000);
-
-        let rook_magics = generate_rook_magics(&mut sliding_attack_table);
-        let bishop_magics = generate_bishop_magics(&mut &mut sliding_attack_table);
-
-        LOOKUP_TABLES.get_or_init(|| Self {
-            knight_table: generate_knight_table(),
-            king_table: generate_king_table(),
-            pawn_push_one_tables: generate_pawn_push_tables(),
-            pawn_attack_tables: generate_pawn_attack_tables(),
-            sliding_attack_table,
-            rook_magics,
-            bishop_magics,
-        })
+        lookup_tables()
     }
 
     #[inline(always)]

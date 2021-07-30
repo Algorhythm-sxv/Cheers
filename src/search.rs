@@ -1,14 +1,25 @@
-use crate::{bitboard::BitBoards, types::Move};
+use crate::{bitboard::BitBoards, types::*};
 
 impl BitBoards {
     pub fn search(&mut self, depth: usize) -> (i32, Move) {
-        if depth == 0 {
-            return (self.evaluate(self.current_player), Move::null());
+        // weird draws
+        if self.halfmove_clock > 2 {
+            // 50-move rule
+            if self.halfmove_clock >= 100
+            // threefold repetition
+            || self
+            .position_history
+            .iter()
+            .filter(|&&pos| pos == self.position_hash)
+            .count()
+            == 2
+            {
+                return (0, Move::null());
+            }
         }
 
-        // 50-move rule
-        if self.halfmove_clock == 50 {
-            return (0, Move::null());
+        if depth == 0 {
+            return (self.evaluate(self.current_player), Move::null());
         }
 
         let moves = self.generate_legal_moves();
@@ -19,16 +30,18 @@ impl BitBoards {
                 return (0, Move::null());
             } else {
                 // checkmate
-                return (i32::MIN, Move::null());
+                return (-10000, Move::null());
             }
         }
 
         let mut best_score = i32::MIN;
         let mut best_move = Move::null();
         for move_ in &moves {
+
             self.make_move(move_);
-            let (opp_score, _move) = self.search(depth-1);
+            let (opp_score, _move) = self.search(depth - 1);
             self.unmake_move();
+
             if -opp_score > best_score {
                 best_score = -opp_score;
                 best_move = *move_;

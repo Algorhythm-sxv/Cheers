@@ -5,7 +5,6 @@ use std::io::{prelude::*, stdin};
 use std::sync::mpsc::*;
 use std::thread;
 
-use rand::prelude::*;
 
 mod bitboard;
 mod lookup_tables;
@@ -14,11 +13,11 @@ mod utils;
 mod evaluate;
 mod search;
 mod piece_tables;
+mod zobrist;
 
 use bitboard::*;
 use lookup_tables::*;
 use types::*;
-use utils::print_bitboard;
 
 enum EngineMessage {
     Move(Move),
@@ -50,7 +49,8 @@ fn engine_thread(
                 //     bitboards.make_move(choice);
                 //     tx.send(Move(*choice))?;
                 // }
-                let (_score, best_move) = bitboards.search(2);
+                let (_score, best_move) = bitboards.search(4);
+
                 tx.send(EngineMessage::Move(best_move))?;
             }
             Stop => break,
@@ -138,13 +138,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let mut bitboards = BitBoards::new();
                 let _ = LookupTables::generate_all();
 
-                bitboards.make_move(&parse_move_pair("e2e4"));
+                bitboards.make_move(&parse_move_pair("f2f3"));
                 bitboards.make_move(&parse_move_pair("e7e5"));
-                bitboards.make_move(&parse_move_pair("c1f4"));
-                println!("score: {}", bitboards.evaluate(!bitboards.current_player));
-                bitboards.unmake_move();
-                bitboards.make_move(&parse_move_pair("c1h6"));
-                println!("score: {}", bitboards.evaluate(!bitboards.current_player));
+                bitboards.make_move(&parse_move_pair("g2g4"));
+                
+                let (score,move_)= bitboards.search(3);
+                dbg!((score, move_.to_algebraic_notation()));
 
             }
             _ => {
