@@ -50,7 +50,7 @@ fn engine_thread(
                 //     bitboards.make_move(choice);
                 //     tx.send(Move(*choice))?;
                 // }
-                let (_score, best_move) = bitboards.search(i32::MIN + 1, i32::MAX - 1, 4);
+                let (_score, best_move) = bitboards.search(i32::MIN + 1, i32::MAX - 1, 5);
 
                 tx.send(EngineMessage::Move(best_move))?;
             }

@@ -38,6 +38,13 @@ use consts::*;
 impl BitBoards {
     /// Static evaluation of the board position, positive value for player advantage, negative for opponent advantage
     pub fn evaluate(&self, color: ColorIndex) -> i32 {
+        let phase = self.game_phase();
+        ((self.phase_eval(color, GamePhase::MidGame) * (256 - phase))
+            + (self.phase_eval(color, GamePhase::EndGame) * phase))
+            / 256
+    }
+    
+    fn phase_eval(&self, color: ColorIndex, phase: GamePhase) -> i32 {
         let mut result = 0;
 
         result += self.material_count(color) - self.material_count(!color);
@@ -45,15 +52,35 @@ impl BitBoards {
         if self.insufficient_mating_material(result) {
             return DRAW_SCORE;
         }
-        let placement = self.piece_placement();
+        let placement = self.piece_placement(phase);
 
         result += placement[color as usize] - placement[!color as usize];
 
-        result += self.pawn_shield_score(color) - self.pawn_shield_score(!color);
+        result += self.pawn_shield_score(color, phase) - self.pawn_shield_score(!color, phase);
 
         result
     }
 
+    /// returns the phase of the game between midgame and endgame for tapered eval
+    fn game_phase(&self) -> i32 {
+        let knight_phase = 1;
+        let bishop_phase = 1;
+        let rook_phase = 2;
+        let queen_phase = 4;
+
+        let total_phase = 4 * knight_phase + 4 * bishop_phase + 4 * rook_phase + 4 * queen_phase;
+
+        let mut phase = total_phase;
+
+        phase -= knight_phase * (self.piece_masks[Knight].count_ones() as i32);
+        phase -= bishop_phase * (self.piece_masks[Bishop].count_ones() as i32);
+        phase -= rook_phase * (self.piece_masks[Rook].count_ones() as i32);
+        phase -= queen_phase * (self.piece_masks[Queen].count_ones() as i32);
+
+        (phase * 256 + (total_phase / 2)) / total_phase
+    }
+
+    //TODO: endgame piece values
     fn material_count(&self, color: ColorIndex) -> i32 {
         let mut result = 0;
 
@@ -71,14 +98,14 @@ impl BitBoards {
         result
     }
 
-    fn piece_placement(&self) -> [i32; 2] {
+    fn piece_placement(&self, phase: GamePhase) -> [i32; 2] {
         let mut result = [0, 0];
         self.piece_list
             .iter()
             .enumerate()
             .for_each(|(square, piece_opt)| {
                 if let Some((piece, color)) = piece_opt {
-                    result[*color as usize] += PIECE_TABLES[*piece][if *color == White {
+                    result[*color as usize] += PIECE_TABLES[(phase, *piece)][if *color == White {
                         square
                     } else {
                         flip_square(square)
@@ -98,7 +125,11 @@ impl BitBoards {
     }
 
     /// if the king moves away from the center on the back rank (castling), add score for having pawns nearby
-    fn pawn_shield_score(&self, color: ColorIndex) -> i32 {
+    fn pawn_shield_score(&self, color: ColorIndex, phase: GamePhase) -> i32 {
+        if phase == GamePhase::EndGame {
+            return 0;
+        }
+
         let mut result = 0;
         let file = (self.piece_masks[King] & self.color_masks[color]).trailing_zeros() % 8;
         let rank = (self.piece_masks[King] & self.color_masks[color]).trailing_zeros() / 8;
