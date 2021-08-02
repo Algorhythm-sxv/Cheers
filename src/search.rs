@@ -84,4 +84,35 @@ impl BitBoards {
         }
         nodes
     }
+
+    fn quiesce(&mut self, mut alpha: i32, beta: i32) -> i32 {
+        // avoid illegal moves
+        if !self.king_not_in_check(!self.current_player) {
+            return ILLEGAL_MOVE_SCORE;
+        }
+
+        let stand_pat_score = self.evaluate(self.current_player);
+        if stand_pat_score >= beta {
+            return beta;
+        }
+        if stand_pat_score > alpha {
+            alpha = stand_pat_score;
+        }
+
+        let captures = self.generate_captures();
+
+        for capture in &captures {
+            self.make_move(capture);
+            let score = -self.quiesce(-beta, -alpha);
+            self.unmake_move();
+
+            if score >= beta {
+                return beta;
+            }
+            if score > alpha {
+                alpha = score;
+            }
+        }
+        alpha
+    }
 }

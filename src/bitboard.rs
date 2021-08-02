@@ -179,7 +179,8 @@ impl BitBoards {
             other @ _ => Err(format!("Invalid player character: {}", other))?,
         }
 
-        match lines.next()
+        match lines
+            .next()
             .ok_or(String::from("Insufficient metadata for castling rights!"))?
         {
             "-" => self.castling_rights = CastlingRights([[false, false], [false, false]]),
@@ -204,7 +205,8 @@ impl BitBoards {
             })?,
         }
 
-        match lines.next()
+        match lines
+            .next()
             .ok_or(String::from("Insufficient metadata for en passent square!"))?
         {
             "-" => self.en_passent_mask = 0,
@@ -230,7 +232,8 @@ impl BitBoards {
             }
         }
 
-        self.halfmove_clock = lines.next()
+        self.halfmove_clock = lines
+            .next()
             .ok_or(String::from("No halfmove clock!"))?
             .parse::<u8>()?;
 
@@ -258,6 +261,23 @@ impl BitBoards {
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
                 moves.push(Move::new(i as u8, target, None));
+
+                result ^= 1 << target;
+            }
+            knights ^= 1 << i;
+        }
+    }
+
+    pub fn knight_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+        let mut knights = self.piece_masks[Knight] & self.color_masks[color];
+
+        while knights != 0 {
+            let i = knights.trailing_zeros() as usize;
+            let mut result = lookup_tables().lookup_knight(i) & self.color_masks[!color];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                captures.push(Move::new(i as u8, target, None));
 
                 result ^= 1 << target;
             }
@@ -297,6 +317,25 @@ impl BitBoards {
         }
     }
 
+    pub fn bishop_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+        let mut bishops = self.piece_masks[Bishop] & self.color_masks[color];
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
+
+        while bishops != 0 {
+            let i = bishops.trailing_zeros() as usize;
+            let mut result =
+                lookup_tables().lookup_bishop(i, blocking_mask) & self.color_masks[!color];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                captures.push(Move::new(i as u8, target, None));
+
+                result ^= 1 << target;
+            }
+            bishops ^= 1 << i;
+        }
+    }
+
     pub fn rook_attacks(&self, color: ColorIndex) -> u64 {
         let mut rooks = self.piece_masks[Rook] & self.color_masks[color];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
@@ -322,6 +361,25 @@ impl BitBoards {
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
                 moves.push(Move::new(i as u8, target, None));
+
+                result ^= 1 << target;
+            }
+            rooks ^= 1 << i;
+        }
+    }
+
+    pub fn rook_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+        let mut rooks = self.piece_masks[Rook] & self.color_masks[color];
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
+
+        while rooks != 0 {
+            let i = rooks.trailing_zeros() as usize;
+            let mut result =
+                lookup_tables().lookup_rook(i, blocking_mask) & self.color_masks[!color];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                captures.push(Move::new(i as u8, target, None));
 
                 result ^= 1 << target;
             }
@@ -361,6 +419,25 @@ impl BitBoards {
         }
     }
 
+    pub fn queen_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+        let mut queens = self.piece_masks[Queen] & self.color_masks[color];
+        let blocking_mask = self.color_masks[White] | self.color_masks[Black];
+
+        while queens != 0 {
+            let i = queens.trailing_zeros() as usize;
+            let mut result =
+                lookup_tables().lookup_queen(i, blocking_mask) & self.color_masks[!color];
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                captures.push(Move::new(i as u8, target, None));
+
+                result ^= 1 << target;
+            }
+            queens ^= 1 << i;
+        }
+    }
+
     pub fn king_attacks(&self, color: ColorIndex) -> u64 {
         let king = self.piece_masks[King] & self.color_masks[color];
         lookup_tables().lookup_king(king.trailing_zeros() as usize)
@@ -375,6 +452,20 @@ impl BitBoards {
         while result != 0 {
             let target = result.trailing_zeros() as u8;
             moves.push(Move::new(square as u8, target, None));
+
+            result ^= 1 << target;
+        }
+    }
+
+    pub fn king_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+        let king = self.piece_masks[King] & self.color_masks[color];
+        let square = king.trailing_zeros() as usize;
+
+        let mut result = lookup_tables().lookup_king(square) & self.color_masks[!color];
+
+        while result != 0 {
+            let target = result.trailing_zeros() as u8;
+            captures.push(Move::new(square as u8, target, None));
 
             result ^= 1 << target;
         }
@@ -446,6 +537,35 @@ impl BitBoards {
         }
     }
 
+    pub fn white_pawn_captures(&self, captures: &mut Vec<Move>) {
+        let mut pawns = self.piece_masks[Pawn] & self.color_masks[White];
+
+        while pawns != 0 {
+            let i = pawns.trailing_zeros() as usize;
+            let mut result = 0;
+            let attacks = lookup_tables().lookup_pawn_attack(i, White);
+            result |= attacks & self.color_masks[Black];
+
+            // taking en passent
+            result |= attacks & self.en_passent_mask;
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                if target / 8 == 7 {
+                    captures.push(Move::new(i as u8, target, Some(Queen)));
+                    captures.push(Move::new(i as u8, target, Some(Rook)));
+                    captures.push(Move::new(i as u8, target, Some(Knight)));
+                    captures.push(Move::new(i as u8, target, Some(Bishop)));
+                } else {
+                    captures.push(Move::new(i as u8, target, None));
+                }
+
+                result ^= 1 << target;
+            }
+            pawns ^= 1 << i;
+        }
+    }
+
     pub fn black_pawn_moves(&self, moves: &mut Vec<Move>) {
         let mut pawns = self.piece_masks[Pawn] & self.color_masks[Black];
 
@@ -476,6 +596,35 @@ impl BitBoards {
                     moves.push(Move::new(i as u8, target, Some(Bishop)));
                 } else {
                     moves.push(Move::new(i as u8, target, None));
+                }
+
+                result ^= 1 << target;
+            }
+            pawns ^= 1 << i;
+        }
+    }
+
+    pub fn black_pawn_captures(&self, captures: &mut Vec<Move>) {
+        let mut pawns = self.piece_masks[Pawn] & self.color_masks[Black];
+
+        while pawns != 0 {
+            let i = pawns.trailing_zeros() as usize;
+            let mut result = 0;
+            let attacks = lookup_tables().lookup_pawn_attack(i, Black);
+            result |= attacks & self.color_masks[White];
+
+            // taking en passent
+            result |= attacks & self.en_passent_mask;
+
+            while result != 0 {
+                let target = result.trailing_zeros() as u8;
+                if target / 8 == 0 {
+                    captures.push(Move::new(i as u8, target, Some(Queen)));
+                    captures.push(Move::new(i as u8, target, Some(Rook)));
+                    captures.push(Move::new(i as u8, target, Some(Knight)));
+                    captures.push(Move::new(i as u8, target, Some(Bishop)));
+                } else {
+                    captures.push(Move::new(i as u8, target, None));
                 }
 
                 result ^= 1 << target;
@@ -521,7 +670,7 @@ impl BitBoards {
     pub fn king_not_in_check(&self, color: ColorIndex) -> bool {
         self.all_attacks(!color) & self.piece_masks[King] & self.color_masks[color] == 0
     }
-    #[inline(never)]
+
     pub fn generate_legal_moves(&mut self) -> Vec<Move> {
         let moves = self.generate_pseudolegal_moves();
         let mut moves: Vec<_> = moves
@@ -558,8 +707,23 @@ impl BitBoards {
             White => self.white_pawn_moves(&mut moves),
             Black => self.black_pawn_moves(&mut moves),
         }
-
         moves
+    }
+
+    /// Generate pseudolegal captures that can be tested by king check only
+    pub fn generate_captures(&self) -> Vec<Move> {
+        let mut captures = Vec::with_capacity(50);
+
+        self.knight_captures(self.current_player, &mut captures);
+        self.bishop_captures(self.current_player, &mut captures);
+        self.rook_captures(self.current_player, &mut captures);
+        self.queen_captures(self.current_player, &mut captures);
+        self.king_captures(self.current_player, &mut captures);
+        match self.current_player {
+            White => self.white_pawn_captures(&mut captures),
+            Black => self.black_pawn_captures(&mut captures),
+        }
+        captures
     }
 
     pub fn make_move(&mut self, move_: &Move) {
