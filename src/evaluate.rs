@@ -97,31 +97,32 @@ impl BitBoards {
                 && material_balance > -4 * PIECE_VALUES[Pawn])
     }
 
-    /// if the king moves away from the center, add score for having pawns nearby
+    /// if the king moves away from the center on the back rank (castling), add score for having pawns nearby
     fn pawn_shield_score(&self, color: ColorIndex) -> i32 {
         let mut result = 0;
         let file = (self.piece_masks[King] & self.color_masks[color]).trailing_zeros() % 8;
-        if file > 4 {
+        let rank = (self.piece_masks[King] & self.color_masks[color]).trailing_zeros() / 8;
+        if file > 4 && rank - (7 * color as u32) == 0 {
             // kingside
             result += ((self.piece_masks[Pawn] & self.color_masks[color])
-                & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1-color as u64))
+                & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1 - color as u64))
                 & (F_FILE | G_FILE | H_FILE))
                 .count_ones() as i32
                 * (PIECE_VALUES[Pawn] / 2);
-                result += ((self.piece_masks[Pawn] & self.color_masks[color])
-                & (SIXTH_RANK * color as u64 | THIRD_RANK * (1-color as u64))
+            result += ((self.piece_masks[Pawn] & self.color_masks[color])
+                & (SIXTH_RANK * color as u64 | THIRD_RANK * (1 - color as u64))
                 & (F_FILE | G_FILE | H_FILE))
                 .count_ones() as i32
                 * (PIECE_VALUES[Pawn] / 3);
-            } else if file < 3 {
-                // queenside
-                result += ((self.piece_masks[Pawn] & self.color_masks[color])
-                & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1-color as u64))
+        } else if file < 3 && rank - (7 * color as u32) == 0 {
+            // queenside
+            result += ((self.piece_masks[Pawn] & self.color_masks[color])
+                & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1 - color as u64))
                 & (A_FILE | B_FILE | C_FILE))
                 .count_ones() as i32
                 * (PIECE_VALUES[Pawn] / 2);
-                result += ((self.piece_masks[Pawn] & self.color_masks[color])
-                & (SIXTH_RANK * color as u64 | THIRD_RANK * (1-color as u64))
+            result += ((self.piece_masks[Pawn] & self.color_masks[color])
+                & (SIXTH_RANK * color as u64 | THIRD_RANK * (1 - color as u64))
                 & (A_FILE | B_FILE | C_FILE))
                 .count_ones() as i32
                 * (PIECE_VALUES[Pawn] / 3);
