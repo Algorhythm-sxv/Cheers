@@ -50,7 +50,7 @@ fn engine_thread(
                 //     bitboards.make_move(choice);
                 //     tx.send(Move(*choice))?;
                 // }
-                let (_score, best_move) = bitboards.search(4);
+                let (_score, best_move) = bitboards.search(i32::MIN + 1, i32::MAX - 1, 4);
 
                 tx.send(EngineMessage::Move(best_move))?;
             }
@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         if let Some(word) = words.get(2) {
                             if word != &"moves" {
                                 println!("Malformed UCI command: no \'moves\' in position command");
-                               continue;
+                                continue;
                             };
                         }
                         moves_index = 3

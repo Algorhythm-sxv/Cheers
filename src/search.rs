@@ -1,7 +1,7 @@
 use crate::{bitboard::BitBoards, types::*, evaluate::consts::*};
 
 impl BitBoards {
-    pub fn search(&mut self, depth: usize) -> (i32, Move) {
+    pub fn search(&mut self, mut alpha: i32, beta: i32, depth: usize) -> (i32, Move) {
         // avoid illegal moves
         if !self.king_not_in_check(!self.current_player) {
             return (ILLEGAL_MOVE_SCORE, Move::null());
@@ -29,21 +29,23 @@ impl BitBoards {
 
         let moves = self.generate_pseudolegal_moves();
 
-        let mut best_score = i32::MIN;
         let mut best_move = Move::null();
         let mut any_legal_move = false;
         for move_ in &moves {
             self.make_move(move_);
-            let (opp_score, _move) = self.search(depth - 1);
+            let (opp_score, _move) = self.search(-beta, -alpha, depth - 1);
             self.unmake_move();
+
+            if -opp_score >= beta {
+                return (beta, *move_)
+            }
+            if -opp_score > alpha {
+                alpha = -opp_score;
+                best_move = *move_;
+            }
 
             if opp_score != ILLEGAL_MOVE_SCORE {
                 any_legal_move = true;
-            }
-
-            if -opp_score > best_score {
-                best_score = -opp_score;
-                best_move = *move_;
             }
         }
 
@@ -57,12 +59,7 @@ impl BitBoards {
                 return (CHECKMATE_SCORE, Move::null());
             }
         }
-
-        if best_score == i32::MIN {
-            best_move = moves[0]
-        }
-
-        (best_score, best_move)
+        (alpha, best_move)
     }
 
     pub fn perft(fen: String, depth: usize) -> Result<usize, Box<dyn std::error::Error>> {
