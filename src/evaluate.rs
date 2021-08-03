@@ -8,25 +8,28 @@ use crate::{
 use ColorIndex::*;
 use PieceIndex::*;
 
-pub struct PieceValues([i32; 5]);
-impl std::ops::Index<PieceIndex> for PieceValues {
+pub struct PieceValues([[i32; 5]; 2]);
+impl std::ops::Index<(GamePhase, PieceIndex)> for PieceValues {
     type Output = i32;
 
-    fn index(&self, index: PieceIndex) -> &Self::Output {
-        &self.0[index as usize]
+    fn index(&self, index: (GamePhase, PieceIndex)) -> &Self::Output {
+        &self.0[index.0 as usize][index.1 as usize]
     }
 }
 
 pub mod consts {
     use crate::evaluate::PieceValues;
 
-    // piece values shamelessly stolen from stockfish midgame numbers
+    // piece values shamelessly stolen from stockfish numbers
     pub const PIECE_VALUES: PieceValues = PieceValues([
-        198,  // pawn
-        817,  // knight
-        836,  // bishop
-        1270, // rook
-        2521, // queen
+        [
+            100, // pawn
+            320, // knight
+            330, // bishop
+            500, // rook
+            900, // queen
+        ],
+        [125, 330, 340, 500, 900],
     ]);
 
     pub const CHECKMATE_SCORE: i32 = -10000;
@@ -43,11 +46,11 @@ impl BitBoards {
             + (self.phase_eval(color, GamePhase::EndGame) * phase))
             / 256
     }
-    
+
     fn phase_eval(&self, color: ColorIndex, phase: GamePhase) -> i32 {
         let mut result = 0;
 
-        result += self.material_count(color) - self.material_count(!color);
+        result += self.material_count(color, phase) - self.material_count(!color, phase);
 
         if self.insufficient_mating_material(result) {
             return DRAW_SCORE;
@@ -62,13 +65,13 @@ impl BitBoards {
     }
 
     /// returns the phase of the game between midgame and endgame for tapered eval
-    fn game_phase(&self) -> i32 {
+    pub fn game_phase(&self) -> i32 {
         let knight_phase = 1;
         let bishop_phase = 1;
         let rook_phase = 2;
         let queen_phase = 4;
 
-        let total_phase = 4 * knight_phase + 4 * bishop_phase + 4 * rook_phase + 4 * queen_phase;
+        let total_phase = 4 * knight_phase + 4 * bishop_phase + 4 * rook_phase + 2 * queen_phase;
 
         let mut phase = total_phase;
 
@@ -80,20 +83,19 @@ impl BitBoards {
         (phase * 256 + (total_phase / 2)) / total_phase
     }
 
-    //TODO: endgame piece values
-    fn material_count(&self, color: ColorIndex) -> i32 {
+    pub fn material_count(&self, color: ColorIndex, phase: GamePhase) -> i32 {
         let mut result = 0;
 
         result += (self.piece_masks[Pawn] & self.color_masks[color]).count_ones() as i32
-            * PIECE_VALUES[Pawn];
+            * PIECE_VALUES[(phase, Pawn)];
         result += (self.piece_masks[Knight] & self.color_masks[color]).count_ones() as i32
-            * PIECE_VALUES[Knight];
+            * PIECE_VALUES[(phase, Knight)];
         result += (self.piece_masks[Bishop] & self.color_masks[color]).count_ones() as i32
-            * PIECE_VALUES[Bishop];
+            * PIECE_VALUES[(phase, Bishop)];
         result += (self.piece_masks[Rook] & self.color_masks[color]).count_ones() as i32
-            * PIECE_VALUES[Rook];
+            * PIECE_VALUES[(phase, Rook)];
         result += (self.piece_masks[Queen] & self.color_masks[color]).count_ones() as i32
-            * PIECE_VALUES[Queen];
+            * PIECE_VALUES[(phase, Queen)];
 
         result
     }
@@ -119,9 +121,9 @@ impl BitBoards {
     /// Assumes if a side has no pawns and <4 material advantage that it is drawn
     fn insufficient_mating_material(&self, material_balance: i32) -> bool {
         (self.piece_masks[Pawn] & self.color_masks[self.current_player] == 0
-            && material_balance < 4 * PIECE_VALUES[Pawn])
+            && material_balance < 4 * PIECE_VALUES[(GamePhase::EndGame, Pawn)])
             || (self.piece_masks[Pawn] & self.color_masks[!self.current_player] == 0
-                && material_balance > -4 * PIECE_VALUES[Pawn])
+                && material_balance > -4 * PIECE_VALUES[(GamePhase::EndGame, Pawn)])
     }
 
     /// if the king moves away from the center on the back rank (castling), add score for having pawns nearby
@@ -133,30 +135,30 @@ impl BitBoards {
         let mut result = 0;
         let file = (self.piece_masks[King] & self.color_masks[color]).trailing_zeros() % 8;
         let rank = (self.piece_masks[King] & self.color_masks[color]).trailing_zeros() / 8;
-        if file > 4 && rank - (7 * color as u32) == 0 {
+        if file > 5 && rank - (7 * color as u32) == 0 {
             // kingside
             result += ((self.piece_masks[Pawn] & self.color_masks[color])
                 & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1 - color as u64))
                 & (F_FILE | G_FILE | H_FILE))
                 .count_ones() as i32
-                * (PIECE_VALUES[Pawn] / 2);
+                * (PIECE_VALUES[(phase, Pawn)] / 2);
             result += ((self.piece_masks[Pawn] & self.color_masks[color])
                 & (SIXTH_RANK * color as u64 | THIRD_RANK * (1 - color as u64))
                 & (F_FILE | G_FILE | H_FILE))
                 .count_ones() as i32
-                * (PIECE_VALUES[Pawn] / 3);
+                * (PIECE_VALUES[(phase, Pawn)] / 3);
         } else if file < 3 && rank - (7 * color as u32) == 0 {
             // queenside
             result += ((self.piece_masks[Pawn] & self.color_masks[color])
                 & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1 - color as u64))
                 & (A_FILE | B_FILE | C_FILE))
                 .count_ones() as i32
-                * (PIECE_VALUES[Pawn] / 2);
+                * (PIECE_VALUES[(phase, Pawn)] / 2);
             result += ((self.piece_masks[Pawn] & self.color_masks[color])
                 & (SIXTH_RANK * color as u64 | THIRD_RANK * (1 - color as u64))
                 & (A_FILE | B_FILE | C_FILE))
                 .count_ones() as i32
-                * (PIECE_VALUES[Pawn] / 3);
+                * (PIECE_VALUES[(phase, Pawn)] / 3);
         }
         result
     }
