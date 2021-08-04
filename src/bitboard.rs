@@ -1,10 +1,11 @@
 use itertools::repeat_n;
 
 use crate::lookup_tables::*;
+use crate::transposition_table::TranspositionTable;
 use crate::types::*;
 use crate::zobrist::*;
 
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
+#[derive(Clone, Default, Debug)]
 pub struct BitBoards {
     pub color_masks: ColorMasks,
     pub piece_masks: PieceMasks,
@@ -16,12 +17,14 @@ pub struct BitBoards {
     pub move_history: Vec<UnmakeMove>,
     pub position_hash: u64,
     pub position_history: Vec<u64>,
+    pub transposition_table: TranspositionTable,
 }
 
 impl BitBoards {
     /// Creates a new set of bitboards in the starting position
-    pub fn new() -> Self {
+    pub fn new(table_size: usize) -> Self {
         let mut boards = BitBoards {
+            transposition_table: TranspositionTable::new(table_size),
             ..Default::default()
         };
         boards.reset();
@@ -268,7 +271,7 @@ impl BitBoards {
         }
     }
 
-    pub fn knight_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+    pub fn knight_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
         let mut knights = self.piece_masks[Knight] & self.color_masks[color];
 
         while knights != 0 {
@@ -277,7 +280,8 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
-                captures.push(Move::new(i as u8, target, None));
+                let capture = self.piece_list[target as usize].unwrap().0;
+                captures.push(Capture::new(i as u8, target, Knight, capture, None));
 
                 result ^= 1 << target;
             }
@@ -317,7 +321,7 @@ impl BitBoards {
         }
     }
 
-    pub fn bishop_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+    pub fn bishop_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
         let mut bishops = self.piece_masks[Bishop] & self.color_masks[color];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
@@ -328,7 +332,8 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
-                captures.push(Move::new(i as u8, target, None));
+                let capture = self.piece_list[target as usize].unwrap().0;
+                captures.push(Capture::new(i as u8, target, Bishop, capture, None));
 
                 result ^= 1 << target;
             }
@@ -368,7 +373,7 @@ impl BitBoards {
         }
     }
 
-    pub fn rook_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+    pub fn rook_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
         let mut rooks = self.piece_masks[Rook] & self.color_masks[color];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
@@ -379,7 +384,8 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
-                captures.push(Move::new(i as u8, target, None));
+                let capture = self.piece_list[target as usize].unwrap().0;
+                captures.push(Capture::new(i as u8, target, Rook, capture, None));
 
                 result ^= 1 << target;
             }
@@ -419,7 +425,7 @@ impl BitBoards {
         }
     }
 
-    pub fn queen_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+    pub fn queen_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
         let mut queens = self.piece_masks[Queen] & self.color_masks[color];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
@@ -430,7 +436,8 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
-                captures.push(Move::new(i as u8, target, None));
+                let capture = self.piece_list[target as usize].unwrap().0;
+                captures.push(Capture::new(i as u8, target, Queen, capture, None));
 
                 result ^= 1 << target;
             }
@@ -457,7 +464,7 @@ impl BitBoards {
         }
     }
 
-    pub fn king_captures(&self, color: ColorIndex, captures: &mut Vec<Move>) {
+    pub fn king_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
         let king = self.piece_masks[King] & self.color_masks[color];
         let square = king.trailing_zeros() as usize;
 
@@ -465,7 +472,8 @@ impl BitBoards {
 
         while result != 0 {
             let target = result.trailing_zeros() as u8;
-            captures.push(Move::new(square as u8, target, None));
+            let capture = self.piece_list[target as usize].unwrap().0;
+            captures.push(Capture::new(square as u8, target, King, capture, None));
 
             result ^= 1 << target;
         }
@@ -537,7 +545,7 @@ impl BitBoards {
         }
     }
 
-    pub fn white_pawn_captures(&self, captures: &mut Vec<Move>) {
+    pub fn white_pawn_captures(&self, captures: &mut Vec<Capture>) {
         let mut pawns = self.piece_masks[Pawn] & self.color_masks[White];
 
         while pawns != 0 {
@@ -551,13 +559,14 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
+                let capture = self.piece_list[target as usize].unwrap_or((Pawn, Black)).0;
                 if target / 8 == 7 {
-                    captures.push(Move::new(i as u8, target, Some(Queen)));
-                    captures.push(Move::new(i as u8, target, Some(Rook)));
-                    captures.push(Move::new(i as u8, target, Some(Knight)));
-                    captures.push(Move::new(i as u8, target, Some(Bishop)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Queen)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Rook)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Knight)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Bishop)));
                 } else {
-                    captures.push(Move::new(i as u8, target, None));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, None));
                 }
 
                 result ^= 1 << target;
@@ -604,7 +613,7 @@ impl BitBoards {
         }
     }
 
-    pub fn black_pawn_captures(&self, captures: &mut Vec<Move>) {
+    pub fn black_pawn_captures(&self, captures: &mut Vec<Capture>) {
         let mut pawns = self.piece_masks[Pawn] & self.color_masks[Black];
 
         while pawns != 0 {
@@ -618,13 +627,15 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
+                // assume captures to empty square were en passent
+                let capture = self.piece_list[target as usize].unwrap_or((Pawn, White)).0;
                 if target / 8 == 0 {
-                    captures.push(Move::new(i as u8, target, Some(Queen)));
-                    captures.push(Move::new(i as u8, target, Some(Rook)));
-                    captures.push(Move::new(i as u8, target, Some(Knight)));
-                    captures.push(Move::new(i as u8, target, Some(Bishop)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Queen)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Rook)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Knight)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Bishop)));
                 } else {
-                    captures.push(Move::new(i as u8, target, None));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, None));
                 }
 
                 result ^= 1 << target;
@@ -711,7 +722,7 @@ impl BitBoards {
     }
 
     /// Generate pseudolegal captures that can be tested by king check only
-    pub fn generate_captures(&self) -> Vec<Move> {
+    pub fn generate_captures(&self) -> Vec<Capture> {
         let mut captures = Vec::with_capacity(50);
 
         self.knight_captures(self.current_player, &mut captures);

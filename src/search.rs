@@ -85,7 +85,7 @@ impl BitBoards {
         }
 
         if depth == 0 {
-            return self.evaluate(self.current_player);
+            return self.quiesce(alpha, beta);
         }
 
         let moves = self.generate_pseudolegal_moves();
@@ -121,7 +121,7 @@ impl BitBoards {
     }
 
     pub fn perft(fen: String, depth: usize) -> Result<usize, Box<dyn std::error::Error>> {
-        let mut boards = Self::new();
+        let mut boards = Self::new(0);
         boards.set_from_fen(fen)?;
 
         Ok(boards._perft(depth))
@@ -145,7 +145,7 @@ impl BitBoards {
 
     fn quiesce(&mut self, mut alpha: i32, beta: i32) -> i32 {
         use crate::piece_tables::GamePhase::*;
-        
+
         // avoid illegal moves
         if !self.king_not_in_check(!self.current_player) {
             return ILLEGAL_MOVE_SCORE;
@@ -159,23 +159,26 @@ impl BitBoards {
             alpha = stand_pat_score;
         }
 
-        let captures = self.generate_captures();
+        let mut captures = self.generate_captures();
+        // sort by descending material difference (i.e search PxQ first)
+        captures.sort_unstable_by(|a, b| a.material_difference().cmp(&b.material_difference()));
 
         for capture in &captures {
             // delta pruning, if the captured piece doesn't restore material balance enough then prune the tree
             // e.g. if a rook down, don't bother searching pawn captures
             // disable during late endgame to avoid bias away from captures for draws/wins
-            if self.game_phase() < 200
+            if self.game_phase() > 200
                 && self.material_count(self.current_player, EndGame)
                     - self.material_count(!self.current_player, EndGame)
-                    + PIECE_VALUES[(EndGame, self.piece_list[capture.target as usize].unwrap().0)]
+                    // if there is no piece on the target square it is (hopefully an en passent capture)
+                    + PIECE_VALUES[(EndGame, self.piece_list[capture.target as usize].unwrap_or((Pawn, White)).0)]
                     + 200
                     < 0
             {
                 continue;
             }
 
-            self.make_move(capture);
+            self.make_move(&capture.to_move());
             let score = -self.quiesce(-beta, -alpha);
             self.unmake_move();
 

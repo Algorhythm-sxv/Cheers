@@ -1,4 +1,4 @@
-use crate::utils::*;
+use crate::{evaluate::consts::PIECE_VALUES, piece_tables::GamePhase, utils::*};
 
 /// Parses a pair of squares representing a move, returning the result of a promotion if it happened
 pub fn parse_move_pair(pair: &str) -> Move {
@@ -103,6 +103,60 @@ impl Move {
             _ => unreachable!(),
         });
         result
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Capture {
+    pub start: u8,
+    pub target: u8,
+    pub captor: PieceIndex,
+    pub capture: PieceIndex,
+    pub promotion: Option<PieceIndex>,
+}
+
+impl Capture {
+    pub fn new(start: u8, target: u8, captor: PieceIndex, capture: PieceIndex, promotion: Option<PieceIndex>) -> Self {
+        Self {
+            start,
+            target,
+            captor,
+            capture,
+            promotion,
+        }
+    }
+
+    pub fn null() -> Self {
+        Self::new(0, 0, Pawn, Pawn, None)
+    }
+
+    pub fn to_algebraic_notation(&self) -> String {
+        let mut result = String::new();
+        
+        // null move
+        if self.start == 0 && self.target == 0 {
+            result.push_str("0000");
+            return result;
+        }
+        result.push_str(&square_to_coord(self.start));
+        result.push_str(&square_to_coord(self.target));
+        result.push_str(match self.promotion {
+            None => "",
+            Some(Queen) => "q",
+            Some(Rook) => "r",
+            Some(Knight) => "n",
+            Some(Bishop) => "b",
+            _ => unreachable!(),
+        });
+        result
+    }
+
+    pub fn to_move(&self) -> Move {
+        Move::new(self.start, self.target, self.promotion)
+    }
+
+    pub fn material_difference(&self) -> i32 {
+        PIECE_VALUES[(GamePhase::MidGame, self.captor)] - PIECE_VALUES[(GamePhase::MidGame, self.capture)]
     }
 }
 

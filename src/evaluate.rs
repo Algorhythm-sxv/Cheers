@@ -8,7 +8,7 @@ use crate::{
 use ColorIndex::*;
 use PieceIndex::*;
 
-pub struct PieceValues([[i32; 5]; 2]);
+pub struct PieceValues([[i32; 6]; 2]);
 impl std::ops::Index<(GamePhase, PieceIndex)> for PieceValues {
     type Output = i32;
 
@@ -28,8 +28,9 @@ pub mod consts {
             330, // bishop
             500, // rook
             900, // queen
+            10000, // king
         ],
-        [125, 330, 340, 500, 900],
+        [125, 330, 340, 500, 900, 10000],
     ]);
 
     pub const CHECKMATE_SCORE: i32 = -10000;
