@@ -3,6 +3,7 @@ use itertools::repeat_n;
 use crate::lookup_tables::*;
 use crate::transposition_table::TranspositionTable;
 use crate::types::*;
+use crate::utils::print_bitboard;
 use crate::zobrist::*;
 
 #[derive(Clone, Default, Debug)]
@@ -182,6 +183,7 @@ impl BitBoards {
             other @ _ => Err(format!("Invalid player character: {}", other))?,
         }
 
+        self.castling_rights = CastlingRights([[false, false], [false, false]]);
         match lines
             .next()
             .ok_or(String::from("Insufficient metadata for castling rights!"))?
@@ -240,6 +242,9 @@ impl BitBoards {
             .ok_or(String::from("No halfmove clock!"))?
             .parse::<u8>()?;
 
+        let hash = zobrist_hash(self);
+        self.position_hash = hash;
+
         Ok(())
     }
 
@@ -263,7 +268,7 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
-                moves.push(Move::new(i as u8, target, None));
+                moves.push(Move::new(i as u8, target, Pawn));
 
                 result ^= 1 << target;
             }
@@ -281,7 +286,7 @@ impl BitBoards {
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
                 let capture = self.piece_list[target as usize].unwrap().0;
-                captures.push(Capture::new(i as u8, target, Knight, capture, None));
+                captures.push(Capture::new(i as u8, target, Knight, capture, Pawn));
 
                 result ^= 1 << target;
             }
@@ -313,7 +318,7 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
-                moves.push(Move::new(i as u8, target, None));
+                moves.push(Move::new(i as u8, target, Pawn));
 
                 result ^= 1 << target;
             }
@@ -333,7 +338,7 @@ impl BitBoards {
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
                 let capture = self.piece_list[target as usize].unwrap().0;
-                captures.push(Capture::new(i as u8, target, Bishop, capture, None));
+                captures.push(Capture::new(i as u8, target, Bishop, capture, Pawn));
 
                 result ^= 1 << target;
             }
@@ -365,7 +370,7 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
-                moves.push(Move::new(i as u8, target, None));
+                moves.push(Move::new(i as u8, target, Pawn));
 
                 result ^= 1 << target;
             }
@@ -385,7 +390,7 @@ impl BitBoards {
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
                 let capture = self.piece_list[target as usize].unwrap().0;
-                captures.push(Capture::new(i as u8, target, Rook, capture, None));
+                captures.push(Capture::new(i as u8, target, Rook, capture, Pawn));
 
                 result ^= 1 << target;
             }
@@ -417,7 +422,7 @@ impl BitBoards {
 
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
-                moves.push(Move::new(i as u8, target, None));
+                moves.push(Move::new(i as u8, target, Pawn));
 
                 result ^= 1 << target;
             }
@@ -437,7 +442,7 @@ impl BitBoards {
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
                 let capture = self.piece_list[target as usize].unwrap().0;
-                captures.push(Capture::new(i as u8, target, Queen, capture, None));
+                captures.push(Capture::new(i as u8, target, Queen, capture, Pawn));
 
                 result ^= 1 << target;
             }
@@ -458,7 +463,7 @@ impl BitBoards {
 
         while result != 0 {
             let target = result.trailing_zeros() as u8;
-            moves.push(Move::new(square as u8, target, None));
+            moves.push(Move::new(square as u8, target, Pawn));
 
             result ^= 1 << target;
         }
@@ -473,7 +478,7 @@ impl BitBoards {
         while result != 0 {
             let target = result.trailing_zeros() as u8;
             let capture = self.piece_list[target as usize].unwrap().0;
-            captures.push(Capture::new(square as u8, target, King, capture, None));
+            captures.push(Capture::new(square as u8, target, King, capture, Pawn));
 
             result ^= 1 << target;
         }
@@ -531,12 +536,12 @@ impl BitBoards {
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
                 if target / 8 == 7 {
-                    moves.push(Move::new(i as u8, target, Some(Queen)));
-                    moves.push(Move::new(i as u8, target, Some(Rook)));
-                    moves.push(Move::new(i as u8, target, Some(Knight)));
-                    moves.push(Move::new(i as u8, target, Some(Bishop)));
+                    moves.push(Move::new(i as u8, target, Queen));
+                    moves.push(Move::new(i as u8, target, Rook));
+                    moves.push(Move::new(i as u8, target, Knight));
+                    moves.push(Move::new(i as u8, target, Bishop));
                 } else {
-                    moves.push(Move::new(i as u8, target, None));
+                    moves.push(Move::new(i as u8, target, Pawn));
                 }
 
                 result ^= 1 << target;
@@ -561,12 +566,12 @@ impl BitBoards {
                 let target = result.trailing_zeros() as u8;
                 let capture = self.piece_list[target as usize].unwrap_or((Pawn, Black)).0;
                 if target / 8 == 7 {
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Queen)));
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Rook)));
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Knight)));
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Bishop)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Queen));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Rook));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Knight));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Bishop));
                 } else {
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, None));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Pawn));
                 }
 
                 result ^= 1 << target;
@@ -599,12 +604,12 @@ impl BitBoards {
             while result != 0 {
                 let target = result.trailing_zeros() as u8;
                 if target / 8 == 0 {
-                    moves.push(Move::new(i as u8, target, Some(Queen)));
-                    moves.push(Move::new(i as u8, target, Some(Rook)));
-                    moves.push(Move::new(i as u8, target, Some(Knight)));
-                    moves.push(Move::new(i as u8, target, Some(Bishop)));
+                    moves.push(Move::new(i as u8, target, Queen));
+                    moves.push(Move::new(i as u8, target, Rook));
+                    moves.push(Move::new(i as u8, target, Knight));
+                    moves.push(Move::new(i as u8, target, Bishop));
                 } else {
-                    moves.push(Move::new(i as u8, target, None));
+                    moves.push(Move::new(i as u8, target, Pawn));
                 }
 
                 result ^= 1 << target;
@@ -630,12 +635,12 @@ impl BitBoards {
                 // assume captures to empty square were en passent
                 let capture = self.piece_list[target as usize].unwrap_or((Pawn, White)).0;
                 if target / 8 == 0 {
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Queen)));
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Rook)));
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Knight)));
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, Some(Bishop)));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Queen));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Rook));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Knight));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Bishop));
                 } else {
-                    captures.push(Capture::new(i as u8, target, Pawn, capture, None));
+                    captures.push(Capture::new(i as u8, target, Pawn, capture, Pawn));
                 }
 
                 result ^= 1 << target;
@@ -665,7 +670,7 @@ impl BitBoards {
             // can't castle through or into check
             && all_attacks & ((king << 1) | (king << 2)) == 0
         {
-            moves.push(Move::new(square, square + 2, None))
+            moves.push(Move::new(square, square + 2, Pawn))
         }
         // queenside
         if self.castling_rights[(color, Queenside)]
@@ -674,7 +679,7 @@ impl BitBoards {
             // can't castle through or into check
             && all_attacks & ((king >> 1) | (king >> 2)) == 0
         {
-            moves.push(Move::new(square, square - 2, None))
+            moves.push(Move::new(square, square - 2, Pawn))
         }
     }
 
@@ -683,8 +688,9 @@ impl BitBoards {
     }
 
     pub fn generate_legal_moves(&mut self) -> Vec<Move> {
-        let moves = self.generate_pseudolegal_moves();
-        let mut moves: Vec<_> = moves
+        let mut moves = Vec::with_capacity(50);
+        self.generate_pseudolegal_moves(&mut moves);
+        let moves: Vec<_> = moves
             .into_iter()
             .filter(|move_| {
                 self.make_move(move_);
@@ -693,32 +699,26 @@ impl BitBoards {
                 result
             })
             .collect();
-        self.legal_castles(self.current_player, &mut moves);
         moves
     }
 
     /// Generate pseudolegal moves that can be tested by king check only
-    pub fn generate_pseudolegal_moves(&self) -> Vec<Move> {
-        let mut moves = self._generate_pseudolegal_moves(self.current_player);
-        self.legal_castles(self.current_player, &mut moves);
-        moves
+    pub fn generate_pseudolegal_moves(&self, moves: &mut Vec<Move>) {
+        self._generate_pseudolegal_moves(self.current_player, moves);
+        self.legal_castles(self.current_player, moves);
     }
 
     /// Generates all psudolegal moves for a color other than castling
-    fn _generate_pseudolegal_moves(&self, color: ColorIndex) -> Vec<Move> {
-        // try to avoid re-allocation
-        let mut moves = Vec::with_capacity(50);
-
-        self.knight_moves(color, &mut moves);
-        self.bishop_moves(color, &mut moves);
-        self.rook_moves(color, &mut moves);
-        self.queen_moves(color, &mut moves);
-        self.king_moves(color, &mut moves);
+    fn _generate_pseudolegal_moves(&self, color: ColorIndex, moves: &mut Vec<Move>) {
+        self.knight_moves(color, moves);
+        self.bishop_moves(color, moves);
+        self.rook_moves(color, moves);
+        self.queen_moves(color, moves);
+        self.king_moves(color, moves);
         match color {
-            White => self.white_pawn_moves(&mut moves),
-            Black => self.black_pawn_moves(&mut moves),
+            White => self.white_pawn_moves(moves),
+            Black => self.black_pawn_moves(moves),
         }
-        moves
     }
 
     /// Generate pseudolegal captures that can be tested by king check only
@@ -737,7 +737,7 @@ impl BitBoards {
         captures
     }
 
-    pub fn make_move(&mut self, move_: &Move) {
+    pub fn make_move_old(&mut self, move_: &Move) {
         let mut unmove = UnmakeMove {
             start: move_.start,
             target: move_.target,
@@ -746,7 +746,6 @@ impl BitBoards {
             en_passent_mask: self.en_passent_mask,
             ..Default::default()
         };
-
         // add current position to history for repetition checking
         self.position_history.push(self.position_hash);
 
@@ -877,8 +876,11 @@ impl BitBoards {
             // update en passent state
             if (move_.target as i8 - move_.start as i8).abs() == 16 {
                 // double push
-                self.position_hash ^=
-                    zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
+                // clear previous en passent mask
+                if self.en_passent_mask != 0 {
+                    self.position_hash ^=
+                        zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
+                }
                 let en_passent_mask = 1 << (move_.target - 8) << (16 * color as u8);
                 // only update the en passent mask if a capture can happen next turn, otherwise clear it
                 if en_passent_mask & self.pawn_attacks(!color) != 0 {
@@ -888,27 +890,32 @@ impl BitBoards {
                 } else {
                     // a capture can't happen with the new mask, clear
                     self.en_passent_mask = 0;
-                    self.position_hash ^= zobrist_numbers()[zobrist_en_passent_index(0)];
+                    // self.position_hash ^= zobrist_numbers()[zobrist_en_passent_index(0)];
                 }
             } else {
                 // single push/capture
-                self.position_hash ^=
-                    zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
+                if self.en_passent_mask != 0 {
+                    self.position_hash ^=
+                        zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
+                }
                 self.en_passent_mask = 0;
             }
 
             // promotion
-            if let Some(target_piece) = move_.promotion {
+            if move_.promotion != Pawn {
                 unmove.promotion = true;
                 self.piece_masks[Pawn] ^= 1 << move_.target;
-                self.piece_masks[target_piece] |= 1 << move_.target;
+                self.piece_masks[move_.promotion] |= 1 << move_.target;
                 self.position_hash ^=
                     zobrist_numbers()[zobrist_piece_index(Pawn, color, move_.start as usize)];
-                piece = target_piece;
+                piece = move_.promotion;
             }
         } else {
             // moving other pieces clears en passent state
-            self.position_hash ^= zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
+            if self.en_passent_mask != 0 {
+                self.position_hash ^=
+                    zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
+            }
             self.en_passent_mask = 0;
         }
 
@@ -917,7 +924,7 @@ impl BitBoards {
         self.piece_list[move_.target as usize] = Some((piece, color));
 
         // update zobrist hash with moved piece
-        if let None = move_.promotion {
+        if move_.promotion == Pawn {
             // promotions updated the zobrist hash earlier because the piece type changes
             self.position_hash ^=
                 zobrist_numbers()[zobrist_piece_index(piece, color, move_.start as usize)];
@@ -931,6 +938,180 @@ impl BitBoards {
 
         // add move details to history
         self.move_history.push(unmove);
+
+        let hash = zobrist_hash(self);
+        self.position_hash = hash;
+    }
+
+    pub fn make_move(&mut self, move_: &Move) {
+        let mut next_hash = self.position_hash;
+
+        let mut unmove = UnmakeMove {
+            start: move_.start,
+            target: move_.target,
+            halfmove_clock: self.halfmove_clock,
+            castling_rights: self.castling_rights,
+            en_passent_mask: self.en_passent_mask,
+            ..Default::default()
+        };
+
+        self.position_history.push(self.position_hash);
+
+        // increment the 50-move draw counter
+        self.halfmove_clock += 1;
+
+        let (mut piece, color) = self.piece_list[move_.start as usize].unwrap();
+        if let Some((taken_piece, taken_color)) = self.piece_list[move_.target as usize] {
+            // remove the taken piece
+            unmove.taken = Some(taken_piece);
+            self.piece_masks[taken_piece] ^= 1 << move_.target;
+            self.color_masks[taken_color] ^= 1 << move_.target;
+            self.piece_list[move_.target as usize] = None;
+            next_hash.update_piece(taken_piece, taken_color, move_.target as usize);
+
+            // captures reset the halfmove clock
+            self.halfmove_clock = 0;
+
+            // taking a rook on its starting square updates castling rights
+            if taken_piece == Rook {
+                if move_.target % 8 == 7 && move_.target / 8 == 7 * (taken_color as u8) {
+                    self.castling_rights[(taken_color, Kingside)] = false;
+                } else if move_.target % 8 == 0 && move_.target / 8 == 7 * (taken_color as u8) {
+                    self.castling_rights[(taken_color, Queenside)] = false;
+                }
+            }
+        }
+
+        // castling: update rights and move the rook
+        if piece == King {
+            self.castling_rights[color] = [false, false];
+            if (move_.target as i8 - move_.start as i8).abs() == 2 {
+                unmove.castling = true;
+                if move_.target % 8 == 6 {
+                    // kingside
+                    let rook = (move_.target as u64) << 1;
+                    self.piece_masks[Rook] ^= rook | (rook >> 2);
+                    self.color_masks[color] ^= rook | (rook >> 2);
+                    self.piece_list[move_.target as usize + 1] = None;
+                    self.piece_list[move_.target as usize - 1] = Some((Rook, color));
+                    next_hash.update_piece(Rook, color, move_.target as usize + 1);
+                    next_hash.update_piece(Rook, color, move_.target as usize - 1);
+                } else {
+                    // queenside
+                    let rook = (move_.target as u64) >> 2;
+                    self.piece_masks[Rook] ^= rook | (rook << 3);
+                    self.color_masks[color] ^= rook | (rook << 3);
+                    self.piece_list[move_.target as usize - 2] = None;
+                    self.piece_list[move_.target as usize + 1] = Some((Rook, color));
+                    next_hash.update_piece(Rook, color, move_.target as usize - 2);
+                    next_hash.update_piece(Rook, color, move_.target as usize + 1);
+                }
+            }
+        }
+
+        if piece == Rook {
+            // update castling rights
+            if move_.start % 8 == 0 {
+                // queenside
+                self.castling_rights[(color, Queenside)] = false;
+            } else if move_.start % 8 == 7 {
+                // kingside
+                self.castling_rights[(color, Kingside)] = false;
+            }
+        }
+
+        // remove the moving piece
+        self.piece_masks[piece] ^= 1 << move_.start;
+        self.color_masks[color] ^= 1 << move_.start;
+        self.piece_list[move_.start as usize] = None;
+        next_hash.update_piece(piece, color, move_.start as usize);
+
+        // Pawn move specialties
+        if piece == Pawn {
+            // pawn moves reset the 50-move draw counter
+            self.halfmove_clock = 0;
+
+            // en passent capture
+            if move_.target == self.en_passent_mask.trailing_zeros() as u8 {
+                unmove.en_passent = true;
+                // clear the 2 squares above and below the en passent square (should only have the taken pawn)
+                self.piece_masks[Pawn] &=
+                    !((self.en_passent_mask << 8) | (self.en_passent_mask >> 8));
+                self.color_masks[!color] &=
+                    !((self.en_passent_mask << 8) | (self.en_passent_mask >> 8));
+                self.piece_list[move_.target as usize - 8] = None;
+                self.piece_list[move_.target as usize + 8] = None;
+                next_hash.update_piece(
+                    Pawn,
+                    !color,
+                    move_.target as usize - 8 + 16 * color as usize,
+                );
+            }
+
+            // update en passent state
+            if (move_.target as i8 - move_.start as i8).abs() == 16 {
+                // double push
+                let en_passent_mask = 1 << (move_.target - 8) << (16 * color as u8);
+                // only update the en passent mask if the capture can happen next turn
+                if en_passent_mask & self.pawn_attacks(!color) != 0 {
+                    self.en_passent_mask = en_passent_mask;
+                } else {
+                    // a capture can't happen with the new mask, clear it
+                    self.en_passent_mask = 0;
+                }
+            } else {
+                // single push/capture
+                self.en_passent_mask = 0;
+            }
+            // promotion
+            if move_.promotion != Pawn {
+                unmove.promotion = true;
+                piece = move_.promotion
+            }
+        } else {
+            // moving other pieces clears en passent state
+            self.en_passent_mask = 0;
+        }
+
+        // move the moving piece to the new square
+        self.piece_masks[piece] |= 1 << move_.target;
+        self.color_masks[color] |= 1 << move_.target;
+        self.piece_list[move_.target as usize] = Some((piece, color));
+        next_hash.update_piece(piece, color, move_.target as usize);
+
+        // update zobrist hash if en passent/castling rights changed
+        if self.castling_rights != unmove.castling_rights {
+            next_hash.update_castling(unmove.castling_rights);
+            next_hash.update_castling(self.castling_rights);
+        }
+        if unmove.en_passent_mask != 0 {
+            next_hash.update_en_passent(unmove.en_passent_mask);
+        }
+        if self.en_passent_mask != 0 {
+            next_hash.update_en_passent(self.en_passent_mask);
+        }
+
+        self.current_player = !self.current_player;
+        next_hash.update_player();
+
+        self.move_history.push(unmove);
+
+        if next_hash != zobrist_hash(self) {
+            for m in self.move_history.iter() {
+                println!(
+                    "{}",
+                    Move::new(m.start, m.target, Pawn).to_algebraic_notation()
+                );
+            }
+            panic!(
+                "hash mismatch after {}, color: {:?}, moving: {:?}, taken: {:?}",
+                &move_.to_algebraic_notation(),
+                color,
+                self.piece_list[unmove.target as usize],
+                unmove.taken
+            );
+        }
+        self.position_hash = next_hash;
     }
 
     pub fn unmake_move(&mut self) {

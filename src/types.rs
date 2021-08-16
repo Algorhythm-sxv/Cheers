@@ -4,14 +4,14 @@ use crate::{evaluate::consts::PIECE_VALUES, piece_tables::GamePhase, utils::*};
 pub fn parse_move_pair(pair: &str) -> Move {
     // TODO: null move handling
     let (x, yp) = pair.trim().split_at(2);
-    let mut p = None;
+    let mut p = Pawn;
 
     let y = if yp.len() == 3 {
         p = match &yp[2..] {
-            "q" => Some(Queen),
-            "r" => Some(Rook),
-            "n" => Some(Knight),
-            "b" => Some(Bishop),
+            "q" => Queen,
+            "r" => Rook,
+            "n" => Knight,
+            "b" => Bishop,
             _ => unreachable!(),
         };
         &yp[0..2]
@@ -30,6 +30,20 @@ pub enum PieceIndex {
     Rook = 3,
     Queen = 4,
     King = 5,
+}
+
+impl PieceIndex {
+    pub fn from_u8(from: u8) -> Self {
+        match from {
+            0 => Pawn,
+            1 => Bishop,
+            2 => Knight,
+            3 => Rook,
+            4 => Queen,
+            5 => King,
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -68,11 +82,11 @@ pub use PieceIndex::*;
 pub struct Move {
     pub start: u8,
     pub target: u8,
-    pub promotion: Option<PieceIndex>,
+    pub promotion: PieceIndex,
 }
 
 impl Move {
-    pub fn new(start: u8, target: u8, promotion: Option<PieceIndex>) -> Self {
+    pub fn new(start: u8, target: u8, promotion: PieceIndex) -> Self {
         Self {
             start,
             target,
@@ -81,12 +95,12 @@ impl Move {
     }
 
     pub fn null() -> Self {
-        Self::new(0, 0, None)
+        Self::new(0, 0, Pawn)
     }
 
     pub fn to_algebraic_notation(&self) -> String {
         let mut result = String::new();
-        
+
         // null move
         if self.start == 0 && self.target == 0 {
             result.push_str("0000");
@@ -95,11 +109,11 @@ impl Move {
         result.push_str(&square_to_coord(self.start));
         result.push_str(&square_to_coord(self.target));
         result.push_str(match self.promotion {
-            None => "",
-            Some(Queen) => "q",
-            Some(Rook) => "r",
-            Some(Knight) => "n",
-            Some(Bishop) => "b",
+            Pawn => "",
+            Queen => "q",
+            Rook => "r",
+            Knight => "n",
+            Bishop => "b",
             _ => unreachable!(),
         });
         result
@@ -112,11 +126,17 @@ pub struct Capture {
     pub target: u8,
     pub captor: PieceIndex,
     pub capture: PieceIndex,
-    pub promotion: Option<PieceIndex>,
+    pub promotion: PieceIndex,
 }
 
 impl Capture {
-    pub fn new(start: u8, target: u8, captor: PieceIndex, capture: PieceIndex, promotion: Option<PieceIndex>) -> Self {
+    pub fn new(
+        start: u8,
+        target: u8,
+        captor: PieceIndex,
+        capture: PieceIndex,
+        promotion: PieceIndex,
+    ) -> Self {
         Self {
             start,
             target,
@@ -127,12 +147,16 @@ impl Capture {
     }
 
     pub fn null() -> Self {
-        Self::new(0, 0, Pawn, Pawn, None)
+        Self::new(0, 0, Pawn, Pawn, Pawn)
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.start == 0 && self.target == 0
     }
 
     pub fn to_algebraic_notation(&self) -> String {
         let mut result = String::new();
-        
+
         // null move
         if self.start == 0 && self.target == 0 {
             result.push_str("0000");
@@ -141,11 +165,11 @@ impl Capture {
         result.push_str(&square_to_coord(self.start));
         result.push_str(&square_to_coord(self.target));
         result.push_str(match self.promotion {
-            None => "",
-            Some(Queen) => "q",
-            Some(Rook) => "r",
-            Some(Knight) => "n",
-            Some(Bishop) => "b",
+            Pawn => "",
+            Queen => "q",
+            Rook => "r",
+            Knight => "n",
+            Bishop => "b",
             _ => unreachable!(),
         });
         result
@@ -156,7 +180,8 @@ impl Capture {
     }
 
     pub fn material_difference(&self) -> i32 {
-        PIECE_VALUES[(GamePhase::MidGame, self.captor)] - PIECE_VALUES[(GamePhase::MidGame, self.capture)]
+        PIECE_VALUES[(GamePhase::MidGame, self.captor)]
+            - PIECE_VALUES[(GamePhase::MidGame, self.capture)]
     }
 }
 

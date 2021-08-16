@@ -12,11 +12,11 @@ pub fn zobrist_numbers() -> &'static Vec<u64> {
     ZOBRIST_NUMBERS.get_or_init(|| initialise_zobrist_numbers())
 }
 fn initialise_zobrist_numbers() -> Vec<u64> {
-    let mut rng = StdRng::seed_from_u64(0x11A5117AB1E);
+    let mut rng = StdRng::seed_from_u64(0x11A5117AB1E0);
     let mut numbers = vec![0; 64 * 6 * 2 + 1 + 16 + 8 + 1];
 
     rng.fill(&mut numbers[..]);
-    // for the case when the en passent mask is zero and not changine, x^0 = x
+    // for the case when the en passent mask is zero and not changing, x^0 = x
     let last = numbers.len() - 1;
     numbers[last] = 0;
 
@@ -39,8 +39,9 @@ pub fn zobrist_hash(bitboards: &BitBoards) -> u64 {
 
     hash ^= bitboards.current_player as u64 * zobrist_numbers()[zobrist_player_index()];
     hash ^= zobrist_numbers()[zobrist_castling_index(bitboards.castling_rights)];
-    hash ^= (bitboards.en_passent_mask != 0) as u64
-        * zobrist_numbers()[zobrist_en_passent_index(bitboards.en_passent_mask)];
+    if bitboards.en_passent_mask != 0 {
+        hash ^= zobrist_numbers()[zobrist_en_passent_index(bitboards.en_passent_mask)];
+    }
 
     hash
 }
@@ -63,9 +64,27 @@ pub fn zobrist_castling_index(castling_rights: CastlingRights) -> usize {
 }
 
 pub fn zobrist_en_passent_index(mask: u64) -> usize {
-    if mask == 0 {
-        64 * 6 * 2 + 1 + 16 + 8
-    } else {
-        64 * 6 * 2 + 1 + 16 + mask.trailing_zeros() as usize % 8
+    64 * 6 * 2 + 1 + 16 + mask.trailing_zeros() as usize % 8
+}
+
+pub trait ZobristHash {
+    fn update_piece(&mut self, piece: PieceIndex, color: ColorIndex, square: usize);
+    fn update_player(&mut self);
+    fn update_en_passent(&mut self, mask: u64);
+    fn update_castling(&mut self, castling_rights: CastlingRights);
+}
+
+impl ZobristHash for u64 {
+    fn update_piece(&mut self, piece: PieceIndex, color: ColorIndex, square: usize) {
+        *self ^= zobrist_numbers()[zobrist_piece_index(piece, color, square)];
+    }
+    fn update_player(&mut self) {
+        *self ^= zobrist_numbers()[zobrist_player_index()];
+    }
+    fn update_en_passent(&mut self, mask: u64) {
+        *self ^= zobrist_numbers()[zobrist_en_passent_index(mask)];
+    }
+    fn update_castling(&mut self, castling_rights: CastlingRights) {
+        *self ^= zobrist_numbers()[zobrist_castling_index(castling_rights)];
     }
 }

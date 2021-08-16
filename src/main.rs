@@ -10,15 +10,18 @@ mod evaluate;
 mod lookup_tables;
 mod piece_tables;
 mod search;
+mod transposition_table;
 mod types;
 mod utils;
 mod zobrist;
 
 use bitboard::*;
 use lookup_tables::*;
+use transposition_table::TranspositionTable;
 use types::*;
 
-use crate::zobrist::zobrist_numbers;
+use crate::utils::print_bitboard;
+use crate::zobrist::{zobrist_hash, zobrist_numbers};
 
 enum EngineMessage {
     Move(Move),
@@ -36,7 +39,9 @@ fn engine_thread(
     use EngineMessage::*;
 
     let _luts = LookupTables::generate_all();
-    let mut bitboards = BitBoards::new();
+    // TODO: configurable hash table size
+    // 1<<23 entries corresponds with ~140MB
+    let mut bitboards = BitBoards::new((1 << 23) + 9);
 
     while let Ok(msg) = rx.recv() {
         match msg {
@@ -101,7 +106,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let moves_index;
                 match words.get(1) {
                     Some(&"fen") => {
-                        let mut test_boards = BitBoards::new();
+                        let mut test_boards = BitBoards::new(0);
                         test_boards.set_from_fen(words[2..=7].join(" "))?;
 
                         tx.send(EngineMessage::Fen(words[2..=7].join(" ")))?;
@@ -136,7 +141,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let msg = rx.recv()?;
                 match msg {
                     EngineMessage::Move(move_) => {
-                        println!("bestmove {}", move_.to_algebraic_notation())
+                        println!("bestmove {}", move_.to_algebraic_notation());
                     }
                     _ => (),
                 }
@@ -147,11 +152,25 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .ok_or("No depth specified for perft!")?
                     .parse::<usize>()?;
                 let nodes = BitBoards::perft(
-                    "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
-                        .to_string(),
+                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 0".to_string(),
                     depth,
                 )?;
                 println!("Depth {}, {} nodes", depth, nodes);
+            }
+            Some(&"test") => {
+                let mut boards = BitBoards::new(0);
+                assert_eq!(boards.position_hash, zobrist_hash(&boards));
+                boards.make_move(&parse_move_pair("b1c3"));
+                boards.make_move(&parse_move_pair("b8c6"));
+                boards.make_move(&parse_move_pair("g1f3"));
+                boards.make_move(&parse_move_pair("g8f6"));
+                boards.make_move(&parse_move_pair("e2e3"));
+                boards.make_move(&parse_move_pair("c6b4"));
+                boards.make_move(&parse_move_pair("f1e2"));
+                boards.make_move(&parse_move_pair("b4c2"));
+                assert_eq!(boards.position_hash, zobrist_hash(&boards));
+                boards.make_move(&parse_move_pair("c3a4"));
+                assert_eq!(boards.position_hash, zobrist_hash(&boards));
             }
             _ => {
                 eprintln!("unknown command: {}", line)
