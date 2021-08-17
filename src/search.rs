@@ -1,5 +1,3 @@
-use std::hash;
-
 use crate::{bitboard::BitBoards, evaluate::consts::*, transposition_table::NodeType::*, types::*};
 
 impl BitBoards {
@@ -123,7 +121,7 @@ impl BitBoards {
                 // only use the move if it is pseudolegal, an illegal move from a transpostion table indicates a hash collision
                 let hash_move = Move::new(start, end, promotion);
                 if moves.contains(&hash_move) {
-                    moves.push(hash_move);
+                    moves.splice(1..1, [hash_move]);
                 }
             }
         }
@@ -135,7 +133,6 @@ impl BitBoards {
             return score;
         }
 
-        // self.generate_pseudolegal_moves(&mut moves);
         let mut any_legal_move = false;
         let mut best_move = Move::null();
         for move_ in &moves {

@@ -17,10 +17,8 @@ mod zobrist;
 
 use bitboard::*;
 use lookup_tables::*;
-use transposition_table::TranspositionTable;
 use types::*;
 
-use crate::utils::print_bitboard;
 use crate::zobrist::{zobrist_hash, zobrist_numbers};
 
 enum EngineMessage {

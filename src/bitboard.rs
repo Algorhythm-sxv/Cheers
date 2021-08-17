@@ -3,7 +3,6 @@ use itertools::repeat_n;
 use crate::lookup_tables::*;
 use crate::transposition_table::TranspositionTable;
 use crate::types::*;
-use crate::utils::print_bitboard;
 use crate::zobrist::*;
 
 #[derive(Clone, Default, Debug)]
@@ -737,212 +736,6 @@ impl BitBoards {
         captures
     }
 
-    pub fn make_move_old(&mut self, move_: &Move) {
-        let mut unmove = UnmakeMove {
-            start: move_.start,
-            target: move_.target,
-            halfmove_clock: self.halfmove_clock,
-            castling_rights: self.castling_rights,
-            en_passent_mask: self.en_passent_mask,
-            ..Default::default()
-        };
-        // add current position to history for repetition checking
-        self.position_history.push(self.position_hash);
-
-        // assume we only get legal moves from the UI
-        let (mut piece, color) = self.piece_list[move_.start as usize].unwrap();
-
-        // increment the halfmove clock (resets are handled elsewhere)
-        self.halfmove_clock += 1;
-
-        // take a piece off the target square
-        if let Some((taken_piece, taken_color)) = self.piece_list[move_.target as usize] {
-            unmove.taken = Some(taken_piece);
-
-            self.piece_masks[taken_piece] ^= 1 << move_.target;
-            self.color_masks[taken_color] ^= 1 << move_.target;
-
-            // reset the halfmove clock on capture
-            self.halfmove_clock = 0;
-
-            // update zobrist hash with taken piece
-            self.position_hash ^= zobrist_numbers()
-                [zobrist_piece_index(taken_piece, taken_color, move_.target as usize)];
-
-            // if a rook is taken update castling rights
-            if taken_piece == Rook {
-                if move_.target % 8 == 7
-                    && move_.target / 8 == 7 * (!color as u8)
-                    && self.castling_rights[(!color, Kingside)]
-                {
-                    // kingside
-                    self.position_hash ^=
-                        zobrist_numbers()[zobrist_castling_index(self.castling_rights)];
-                    self.castling_rights[(!color, Kingside)] = false;
-                    self.position_hash ^=
-                        zobrist_numbers()[zobrist_castling_index(self.castling_rights)];
-                } else if move_.target % 8 == 0
-                    && move_.target / 8 == 7 * (!color as u8)
-                    && self.castling_rights[(!color, Queenside)]
-                {
-                    // queenside
-                    self.position_hash ^=
-                        zobrist_numbers()[zobrist_castling_index(self.castling_rights)];
-                    self.castling_rights[(!color, Queenside)] = false;
-                    self.position_hash ^=
-                        zobrist_numbers()[zobrist_castling_index(self.castling_rights)];
-                }
-            }
-        }
-
-        // move the piece to the target square
-        self.piece_masks[piece] |= 1 << move_.target;
-        self.piece_masks[piece] ^= 1 << move_.start;
-
-        // update the color mask
-        self.color_masks[color] |= 1 << move_.target;
-        self.color_masks[color] ^= 1 << move_.start;
-
-        // update castling rights and move the castling rook
-        if piece == King {
-            if self.castling_rights[color] != [false, false] {
-                self.position_hash ^=
-                    zobrist_numbers()[zobrist_castling_index(self.castling_rights)];
-                self.castling_rights[color] = [false, false];
-                self.position_hash ^=
-                    zobrist_numbers()[zobrist_castling_index(self.castling_rights)];
-            }
-            if (move_.target as i8 - move_.start as i8).abs() == 2 {
-                unmove.castling = true;
-                if move_.target % 8 == 6 {
-                    // kingside
-                    let rook = (self.piece_masks[King] & self.color_masks[color]) << 1;
-                    self.piece_masks[Rook] ^= rook | (rook >> 2);
-                    self.color_masks[color] ^= rook | (rook >> 2);
-                    self.piece_list[move_.target as usize + 1] = None;
-                    self.piece_list[move_.target as usize - 1] = Some((Rook, color));
-                    self.position_hash ^= zobrist_numbers()
-                        [zobrist_piece_index(Rook, color, move_.target as usize + 1)];
-                    self.position_hash ^= zobrist_numbers()
-                        [zobrist_piece_index(Rook, color, move_.target as usize - 1)];
-                } else {
-                    // queenside
-                    let rook = (self.piece_masks[King] & self.color_masks[color]) >> 2;
-                    self.piece_masks[Rook] ^= rook | (rook << 3);
-                    self.color_masks[color] ^= rook | (rook << 3);
-                    self.piece_list[move_.target as usize - 2] = None;
-                    self.piece_list[move_.target as usize + 1] = Some((Rook, color));
-                    self.position_hash ^= zobrist_numbers()
-                        [zobrist_piece_index(Rook, color, move_.target as usize - 2)];
-                    self.position_hash ^= zobrist_numbers()
-                        [zobrist_piece_index(Rook, color, move_.target as usize + 1)];
-                }
-            }
-        }
-
-        if piece == Rook {
-            // update castling rights
-            self.position_hash ^= zobrist_numbers()[zobrist_castling_index(self.castling_rights)];
-            if move_.start % 8 == 0 {
-                // queenside
-                self.castling_rights[(color, Queenside)] = false;
-            } else if move_.start % 8 == 7 {
-                // kingside
-                self.castling_rights[(color, Kingside)] = false;
-            }
-            self.position_hash ^= zobrist_numbers()[zobrist_castling_index(self.castling_rights)];
-        }
-
-        // pawn move specialties
-        if piece == Pawn {
-            // reset halfmove clock
-            self.halfmove_clock = 0;
-
-            // en passent capture
-            if move_.target == self.en_passent_mask.trailing_zeros() as u8 {
-                unmove.en_passent = true;
-                self.piece_masks[Pawn] &=
-                    !((self.en_passent_mask << 8) | (self.en_passent_mask >> 8));
-                self.color_masks[!color] &=
-                    !((self.en_passent_mask << 8) | (self.en_passent_mask >> 8));
-                self.piece_list[move_.target as usize - 8 + 16 * color as usize] = None;
-                self.position_hash ^= zobrist_numbers()[zobrist_piece_index(
-                    Pawn,
-                    !color,
-                    move_.target as usize - 8 + 16 * color as usize,
-                )];
-            }
-
-            // update en passent state
-            if (move_.target as i8 - move_.start as i8).abs() == 16 {
-                // double push
-                // clear previous en passent mask
-                if self.en_passent_mask != 0 {
-                    self.position_hash ^=
-                        zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
-                }
-                let en_passent_mask = 1 << (move_.target - 8) << (16 * color as u8);
-                // only update the en passent mask if a capture can happen next turn, otherwise clear it
-                if en_passent_mask & self.pawn_attacks(!color) != 0 {
-                    self.en_passent_mask = en_passent_mask;
-                    self.position_hash ^=
-                        zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
-                } else {
-                    // a capture can't happen with the new mask, clear
-                    self.en_passent_mask = 0;
-                    // self.position_hash ^= zobrist_numbers()[zobrist_en_passent_index(0)];
-                }
-            } else {
-                // single push/capture
-                if self.en_passent_mask != 0 {
-                    self.position_hash ^=
-                        zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
-                }
-                self.en_passent_mask = 0;
-            }
-
-            // promotion
-            if move_.promotion != Pawn {
-                unmove.promotion = true;
-                self.piece_masks[Pawn] ^= 1 << move_.target;
-                self.piece_masks[move_.promotion] |= 1 << move_.target;
-                self.position_hash ^=
-                    zobrist_numbers()[zobrist_piece_index(Pawn, color, move_.start as usize)];
-                piece = move_.promotion;
-            }
-        } else {
-            // moving other pieces clears en passent state
-            if self.en_passent_mask != 0 {
-                self.position_hash ^=
-                    zobrist_numbers()[zobrist_en_passent_index(self.en_passent_mask)];
-            }
-            self.en_passent_mask = 0;
-        }
-
-        // update piece list
-        self.piece_list[move_.start as usize] = None;
-        self.piece_list[move_.target as usize] = Some((piece, color));
-
-        // update zobrist hash with moved piece
-        if move_.promotion == Pawn {
-            // promotions updated the zobrist hash earlier because the piece type changes
-            self.position_hash ^=
-                zobrist_numbers()[zobrist_piece_index(piece, color, move_.start as usize)];
-        }
-        self.position_hash ^=
-            zobrist_numbers()[zobrist_piece_index(piece, color, move_.target as usize)];
-
-        // switch current player
-        self.current_player = !self.current_player;
-        self.position_hash ^= zobrist_numbers()[zobrist_player_index()];
-
-        // add move details to history
-        self.move_history.push(unmove);
-
-        let hash = zobrist_hash(self);
-        self.position_hash = hash;
-    }
-
     pub fn make_move(&mut self, move_: &Move) {
         let mut next_hash = self.position_hash;
 
@@ -989,7 +782,7 @@ impl BitBoards {
                 unmove.castling = true;
                 if move_.target % 8 == 6 {
                     // kingside
-                    let rook = (move_.target as u64) << 1;
+                    let rook = (1 << move_.target as u64) << 1;
                     self.piece_masks[Rook] ^= rook | (rook >> 2);
                     self.color_masks[color] ^= rook | (rook >> 2);
                     self.piece_list[move_.target as usize + 1] = None;
@@ -998,7 +791,7 @@ impl BitBoards {
                     next_hash.update_piece(Rook, color, move_.target as usize - 1);
                 } else {
                     // queenside
-                    let rook = (move_.target as u64) >> 2;
+                    let rook = (1 << move_.target as u64) >> 2;
                     self.piece_masks[Rook] ^= rook | (rook << 3);
                     self.color_masks[color] ^= rook | (rook << 3);
                     self.piece_list[move_.target as usize - 2] = None;

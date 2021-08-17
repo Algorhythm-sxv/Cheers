@@ -1,6 +1,6 @@
 use std::sync::{atomic::*, Arc};
 
-use crate::{bitboard::BitBoards, types::*, zobrist::zobrist_hash};
+use crate::{bitboard::BitBoards, types::*};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
