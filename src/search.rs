@@ -1,7 +1,7 @@
 use crate::{bitboard::BitBoards, evaluate::consts::*, transposition_table::NodeType::*, types::*};
 
 impl BitBoards {
-    pub fn toplevel_search(&mut self, mut alpha: i32, beta: i32, depth: usize) -> (i32, Move) {
+    pub fn toplevel_search(&mut self, alpha: i32, beta: i32, depth: usize) -> (i32, Move) {
         // avoid illegal moves
         if !self.king_not_in_check(!self.current_player) {
             return (ILLEGAL_MOVE_SCORE, Move::null());
@@ -24,27 +24,99 @@ impl BitBoards {
         }
 
         if depth == 0 {
+            // a toplevel search with depth 0 just returns the static score
             let score = self.quiesce(alpha, beta);
             self.transposition_table
                 .set(&self, Move::null(), depth as u8, score, Exact);
             return (score, Move::null());
         }
 
+        let mut score = i32::MIN;
+        let mut best_move = Move::null();
+        // Iterative deepening loop
+        for i in 0..depth {
+            let (search_score, search_best_move) = self.search(alpha, beta, i);
+            if search_score == ILLEGAL_MOVE_SCORE {
+                // position is illegal, opponent didn't stop a check
+                return (-CHECKMATE_SCORE, Move::null());
+            }
+            // deeper iterations will always give better results
+            score = search_score;
+            best_move = search_best_move;
+            println!(
+                "Best move at depth {}: {}, score {}",
+                i,
+                best_move.to_algebraic_notation(),
+                score
+            );
+        }
+
+        return (score, best_move);
+    }
+
+    pub fn search(&mut self, mut alpha: i32, mut beta: i32, depth: usize) -> (i32, Move) {
+        let alpha_old = alpha;
+        // avoid illegal moves
+        if !self.king_not_in_check(!self.current_player) {
+            return (ILLEGAL_MOVE_SCORE, Move::null());
+        }
+
+        // weird draws
+        if self.halfmove_clock >= 8 {
+            // 50-move rule
+            if self.halfmove_clock >= 100
+            // threefold repetition
+            || self
+            .position_history
+            .iter()
+            .filter(|&&pos| pos == self.position_hash)
+            .count()
+            == 2
+            {
+                return (DRAW_SCORE, Move::null());
+            }
+        }
         let mut moves = Vec::with_capacity(50);
         self.generate_pseudolegal_moves(&mut moves);
+        if let Some(((start, end), hash_depth, promotion, score, node_type)) =
+            self.transposition_table.get(&self)
+        {
+            let hash_move = Move::new(start, end, promotion);
+            if hash_depth >= depth as u8 {
+                // the transposition table result came from an equal or better search!
+                match node_type {
+                    Exact => {
+                        return (score, hash_move);
+                    }
+                    LowerBound => alpha = alpha.max(score),
+                    UpperBound => beta = beta.min(score),
+                }
+                if alpha >= beta {
+                    return (score, hash_move);
+                }
+            }
+            // the transposition table result is not exact or came from a worse search, use for move ordering
+            // only use the move if it is pseudolegal, an illegal move from a transpostion table indicates a hash collision
+            if moves.contains(&hash_move) {
+                moves = moves.into_iter().chain([hash_move]).rev().collect();
+            }
+        }
 
-        let mut best_move = Move::null();
+        if depth == 0 {
+            let score = self.quiesce(alpha, beta);
+            self.transposition_table
+                .set(&self, Move::null(), depth as u8, score, Exact);
+            return (score, Move::null());
+        }
+
         let mut any_legal_move = false;
+        let mut best_move = Move::null();
+        let mut score = i32::MIN;
         for move_ in &moves {
             self.make_move(move_);
-            let score = -self.search(-beta, -alpha, depth - 1);
+            score = score.max(-self.search(-beta, -alpha, depth - 1).0);
             self.unmake_move();
 
-            if score >= beta {
-                self.transposition_table
-                    .set(&self, *move_, depth as u8, beta, LowerBound);
-                return (beta, *move_);
-            }
             if score > alpha {
                 alpha = score;
                 best_move = *move_;
@@ -52,6 +124,10 @@ impl BitBoards {
 
             if score != -ILLEGAL_MOVE_SCORE {
                 any_legal_move = true;
+            }
+
+            if alpha >= beta {
+                break;
             }
         }
 
@@ -74,109 +150,17 @@ impl BitBoards {
                 return (CHECKMATE_SCORE, Move::null());
             }
         }
-        self.transposition_table
-            .set(&self, best_move, depth as u8, alpha, UpperBound);
-        (alpha, best_move)
-    }
-
-    pub fn search(&mut self, mut alpha: i32, beta: i32, depth: usize) -> i32 {
-        // avoid illegal moves
-        if !self.king_not_in_check(!self.current_player) {
-            return ILLEGAL_MOVE_SCORE;
-        }
-
-        // weird draws
-        if self.halfmove_clock >= 8 {
-            // 50-move rule
-            if self.halfmove_clock >= 100
-            // threefold repetition
-            || self
-            .position_history
-            .iter()
-            .filter(|&&pos| pos == self.position_hash)
-            .count()
-            == 2
-            {
-                return DRAW_SCORE;
-            }
-        }
-        let mut moves = Vec::with_capacity(50);
-        self.generate_pseudolegal_moves(&mut moves);
-        if let Some(((start, end), hash_depth, promotion, score, node_type)) =
-            self.transposition_table.get(&self)
-        {
-            if hash_depth >= depth as u8 {
-                // the transposition table result came from an equal or better search!
-                if node_type != UpperBound {
-                    // exact or lower bound, return like a beta cutoff
-                    return score;
-                } else {
-                    if score > alpha {
-                        // improve the min score of this position before search
-                        alpha = score;
-                    }
-                }
-            } else {
-                // the transposition table result came from a worse search, use for move ordering
-                // only use the move if it is pseudolegal, an illegal move from a transpostion table indicates a hash collision
-                let hash_move = Move::new(start, end, promotion);
-                if moves.contains(&hash_move) {
-                    moves.splice(1..1, [hash_move]);
-                }
-            }
-        }
-
-        if depth == 0 {
-            let score = self.quiesce(alpha, beta);
+        if score <= alpha_old {
             self.transposition_table
-                .set(&self, Move::null(), depth as u8, score, Exact);
-            return score;
+                .set(&self, best_move, depth as u8, score, UpperBound);
+        } else if score >= beta {
+            self.transposition_table
+                .set(&self, best_move, depth as u8, score, LowerBound)
+        } else {
+            self.transposition_table
+                .set(&self, best_move, depth as u8, score, Exact)
         }
-
-        let mut any_legal_move = false;
-        let mut best_move = Move::null();
-        for move_ in &moves {
-            self.make_move(move_);
-            let score = -self.search(-beta, -alpha, depth - 1);
-            self.unmake_move();
-
-            if score >= beta {
-                self.transposition_table
-                    .set(&self, *move_, depth as u8, beta, LowerBound);
-                return beta;
-            }
-            if score > alpha {
-                alpha = score;
-                best_move = *move_;
-            }
-
-            if score != -ILLEGAL_MOVE_SCORE {
-                any_legal_move = true;
-            }
-        }
-
-        // no legal moves, check how the game ends
-        if !any_legal_move {
-            if self.king_not_in_check(self.current_player) {
-                // stalemate
-                self.transposition_table
-                    .set(&self, Move::null(), depth as u8, DRAW_SCORE, Exact);
-                return DRAW_SCORE;
-            } else {
-                // checkmate
-                self.transposition_table.set(
-                    &self,
-                    Move::null(),
-                    depth as u8,
-                    CHECKMATE_SCORE,
-                    Exact,
-                );
-                return CHECKMATE_SCORE;
-            }
-        }
-        self.transposition_table
-            .set(&self, best_move, depth as u8, alpha, UpperBound);
-        alpha
+        (score, best_move)
     }
 
     pub fn perft(fen: String, depth: usize) -> Result<usize, Box<dyn std::error::Error>> {
@@ -214,9 +198,7 @@ impl BitBoards {
         if stand_pat_score >= beta {
             return beta;
         }
-        if stand_pat_score > alpha {
-            alpha = stand_pat_score;
-        }
+        alpha = alpha.max(stand_pat_score);
 
         let mut captures = self.generate_captures();
         // sort by descending material difference (i.e search PxQ first)
@@ -229,8 +211,7 @@ impl BitBoards {
             if self.game_phase() > 200
                 && self.material_count(self.current_player, EndGame)
                     - self.material_count(!self.current_player, EndGame)
-                    // if there is no piece on the target square it is (hopefully) an en passent capture
-                    + PIECE_VALUES[(EndGame, self.piece_list[capture.target as usize].unwrap_or((Pawn, White)).0)]
+                    + PIECE_VALUES[(EndGame, capture.capture)]
                     + 200
                     < 0
             {
@@ -244,9 +225,7 @@ impl BitBoards {
             if score >= beta {
                 return beta;
             }
-            if score > alpha {
-                alpha = score;
-            }
+            alpha = alpha.max(score);
         }
         alpha
     }

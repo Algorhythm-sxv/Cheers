@@ -28,9 +28,9 @@ pub mod consts {
             330, // bishop
             500, // rook
             900, // queen
-            10000, // king
+            30000, // king
         ],
-        [125, 330, 340, 500, 900, 10000],
+        [125, 330, 340, 500, 900, 30000],
     ]);
 
     pub const CHECKMATE_SCORE: i32 = -10000;
@@ -136,7 +136,7 @@ impl BitBoards {
         let mut result = 0;
         let file = (self.piece_masks[King] & self.color_masks[color]).trailing_zeros() % 8;
         let rank = (self.piece_masks[King] & self.color_masks[color]).trailing_zeros() / 8;
-        if file > 5 && rank - (7 * color as u32) == 0 {
+        if file > 5 && rank.wrapping_sub(7 * color as u32) == 0 {
             // kingside
             result += ((self.piece_masks[Pawn] & self.color_masks[color])
                 & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1 - color as u64))
@@ -148,7 +148,7 @@ impl BitBoards {
                 & (F_FILE | G_FILE | H_FILE))
                 .count_ones() as i32
                 * (PIECE_VALUES[(phase, Pawn)] / 3);
-        } else if file < 3 && rank - (7 * color as u32) == 0 {
+        } else if file < 3 && rank.wrapping_sub(7 * color as u32) == 0 {
             // queenside
             result += ((self.piece_masks[Pawn] & self.color_masks[color])
                 & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1 - color as u64))
