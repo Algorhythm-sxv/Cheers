@@ -35,12 +35,14 @@ fn engine_thread(
     rx: Receiver<EngineMessage>,
 ) -> Result<(), Box<dyn Error>> {
     use EngineMessage::*;
+    use rayon::{prelude::*, ThreadPoolBuilder};
 
     let _luts = LookupTables::generate_all();
     // TODO: configurable hash table size
     // 1<<23 entries corresponds with ~140MB
     let mut bitboards = BitBoards::new((1 << 23) + 9);
 
+    let thread_pool = ThreadPoolBuilder::new().num_threads(0).build_global().unwrap();
     while let Ok(msg) = rx.recv() {
         match msg {
             Move(next_move) => {

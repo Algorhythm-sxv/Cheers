@@ -1,5 +1,7 @@
 use std::time::*;
 
+use rayon::prelude::*;
+
 use crate::{bitboard::BitBoards, evaluate::consts::*, transposition_table::NodeType::*, types::*};
 
 impl BitBoards {
@@ -32,26 +34,34 @@ impl BitBoards {
                 .set(&self, Move::null(), depth as u8, score, Exact);
             return (score, Move::null());
         }
-
-        let mut score = i32::MIN;
-        let mut best_move = Move::null();
+        
         let start_time = Instant::now();
-        // Iterative deepening loop
-        for i in 0..depth {
-            let (search_score, search_best_move) = self.search(alpha, beta, i);
-            if search_score == ILLEGAL_MOVE_SCORE {
-                // position is illegal, opponent didn't stop a check
-                return (-CHECKMATE_SCORE, Move::null());
+
+        // Iterative deepening with Lazy SMP
+        let (tx, rx) = std::sync::mpsc::sync_channel(depth);
+        let tx = tx.clone();
+        (0..depth).into_par_iter().for_each(|i| {
+            let (score, best_move) = self.clone().search(alpha, beta, i);
+            if score == ILLEGAL_MOVE_SCORE {
+                // position is illegal, opponent is checkmated
+                tx.send((-CHECKMATE_SCORE, Move::null(), i))
+                    .expect("Failed to send results to main thread!");
             }
-            // deeper iterations will always give better results
-            score = search_score;
-            best_move = search_best_move;
-            println!(
-                "Best move at depth {}: {}, score {}",
-                i,
-                best_move.to_algebraic_notation(),
-                score
-            );
+            // send move and score back
+            tx.send((score, best_move, i))
+                .expect("Failed to send result to main thread!")
+        });
+
+        let mut best_score = i32::MIN;
+        let mut best_move = Move::null();
+        let mut top_depth = 0;
+        while let Ok((score, move_, depth)) = rx.try_recv() {
+            println!("Best move at depth {}: {}, score {}", depth, move_.to_algebraic_notation(), score);
+            if depth >= top_depth {
+                best_score = score;
+                best_move = move_;
+                top_depth = depth;
+            }
         }
         let end_time = Instant::now();
         println!(
@@ -59,7 +69,7 @@ impl BitBoards {
             (end_time - start_time).as_millis() as f32 / 1000.0
         );
 
-        return (score, best_move);
+        return (best_score, best_move);
     }
 
     pub fn search(&mut self, mut alpha: i32, mut beta: i32, depth: usize) -> (i32, Move) {
