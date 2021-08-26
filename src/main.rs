@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::error::Error;
 use std::io::{prelude::*, stdin};
 use std::sync::mpsc::*;
@@ -34,15 +32,15 @@ fn engine_thread(
     tx: Sender<EngineMessage>,
     rx: Receiver<EngineMessage>,
 ) -> Result<(), Box<dyn Error>> {
+    use rayon::ThreadPoolBuilder;
     use EngineMessage::*;
-    use rayon::{prelude::*, ThreadPoolBuilder};
 
     let _luts = LookupTables::generate_all();
     // TODO: configurable hash table size
     // 1<<23 entries corresponds with ~140MB
     let mut bitboards = BitBoards::new((1 << 23) + 9);
 
-    let thread_pool = ThreadPoolBuilder::new().num_threads(0).build_global().unwrap();
+    ThreadPoolBuilder::new().num_threads(0).build_global()?;
     while let Ok(msg) = rx.recv() {
         match msg {
             Move(next_move) => {
@@ -152,7 +150,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .ok_or("No depth specified for perft!")?
                     .parse::<usize>()?;
                 let nodes = BitBoards::perft(
-                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 0".to_string(),
+                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 0"
+                        .to_string(),
                     depth,
                 )?;
                 println!("Depth {}, {} nodes", depth, nodes);
