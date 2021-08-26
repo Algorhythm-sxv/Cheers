@@ -1,3 +1,5 @@
+use std::time::*;
+
 use crate::{bitboard::BitBoards, evaluate::consts::*, transposition_table::NodeType::*, types::*};
 
 impl BitBoards {
@@ -33,6 +35,7 @@ impl BitBoards {
 
         let mut score = i32::MIN;
         let mut best_move = Move::null();
+        let start_time = Instant::now();
         // Iterative deepening loop
         for i in 0..depth {
             let (search_score, search_best_move) = self.search(alpha, beta, i);
@@ -50,6 +53,11 @@ impl BitBoards {
                 score
             );
         }
+        let end_time = Instant::now();
+        println!(
+            "Search completed in {}s",
+            (end_time - start_time).as_millis() as f32 / 1000.0
+        );
 
         return (score, best_move);
     }
@@ -76,6 +84,14 @@ impl BitBoards {
                 return (DRAW_SCORE, Move::null());
             }
         }
+
+        if depth == 0 {
+            let score = self.quiesce(alpha, beta);
+            self.transposition_table
+                .set(&self, Move::null(), depth as u8, score, Exact);
+            return (score, Move::null());
+        }
+
         let mut moves = Vec::with_capacity(50);
         self.generate_pseudolegal_moves(&mut moves);
         if let Some(((start, end), hash_depth, promotion, score, node_type)) =
@@ -100,13 +116,6 @@ impl BitBoards {
             if moves.contains(&hash_move) {
                 moves = moves.into_iter().chain([hash_move]).rev().collect();
             }
-        }
-
-        if depth == 0 {
-            let score = self.quiesce(alpha, beta);
-            self.transposition_table
-                .set(&self, Move::null(), depth as u8, score, Exact);
-            return (score, Move::null());
         }
 
         let mut any_legal_move = false;
@@ -186,8 +195,10 @@ impl BitBoards {
         nodes
     }
 
-    fn quiesce(&mut self, mut alpha: i32, beta: i32) -> i32 {
+    fn quiesce(&mut self, mut alpha: i32, mut beta: i32) -> i32 {
         use crate::piece_tables::GamePhase::*;
+
+        let alpha_old = alpha;
 
         // avoid illegal moves
         if !self.king_not_in_check(!self.current_player) {
@@ -203,7 +214,15 @@ impl BitBoards {
         let mut captures = self.generate_captures();
         // sort by descending material difference (i.e search PxQ first)
         captures.sort_unstable_by(|a, b| a.material_difference().cmp(&b.material_difference()));
+        if let Some(((_, _), _, _, score, node_type)) = self.transposition_table.get(&self) {
+            match node_type {
+                Exact => return score,
+                LowerBound => alpha = alpha.max(score),
+                UpperBound => beta = beta.min(score),
+            }
+        }
 
+        let mut score = i32::MIN;
         for capture in &captures {
             // delta pruning, if the captured piece doesn't restore material balance enough then prune the tree
             // e.g. if a rook down, don't bother searching pawn captures
@@ -219,14 +238,27 @@ impl BitBoards {
             }
 
             self.make_move(&capture.to_move());
-            let score = -self.quiesce(-beta, -alpha);
+            score = -self.quiesce(-beta, -alpha);
             self.unmake_move();
 
-            if score >= beta {
-                return beta;
-            }
             alpha = alpha.max(score);
+
+            if alpha >= beta {
+                break;
+            }
         }
+
+        if score <= alpha_old {
+            self.transposition_table
+                .set(&self, Move::null(), 0, score, UpperBound);
+        } else if score >= beta {
+            self.transposition_table
+                .set(&self, Move::null(), 0, score, LowerBound)
+        } else {
+            self.transposition_table
+                .set(&self, Move::null(), 0, score, Exact)
+        }
+
         alpha
     }
 }
