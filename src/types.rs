@@ -216,17 +216,17 @@ impl std::ops::IndexMut<ColorIndex> for ColorMasks {
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
-pub struct PieceMasks(pub [u64; 6]);
-impl std::ops::Index<PieceIndex> for PieceMasks {
+pub struct PieceMasks(pub [[u64; 6]; 2]);
+impl std::ops::Index<(ColorIndex, PieceIndex)> for PieceMasks {
     type Output = u64;
 
-    fn index(&self, index: PieceIndex) -> &Self::Output {
-        &self.0[index as usize]
+    fn index(&self, index: (ColorIndex, PieceIndex)) -> &Self::Output {
+        &self.0[index.0 as usize][index.1 as usize]
     }
 }
-impl std::ops::IndexMut<PieceIndex> for PieceMasks {
-    fn index_mut(&mut self, index: PieceIndex) -> &mut Self::Output {
-        &mut self.0[index as usize]
+impl std::ops::IndexMut<(ColorIndex, PieceIndex)> for PieceMasks {
+    fn index_mut(&mut self, index: (ColorIndex, PieceIndex)) -> &mut Self::Output {
+        &mut self.0[index.0 as usize][index.1 as usize]
     }
 }
 

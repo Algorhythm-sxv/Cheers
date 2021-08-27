@@ -79,12 +79,22 @@ impl BitBoards {
         self.piece_list = piece_list;
         self.color_masks = ColorMasks([white_mask, black_mask]);
         self.piece_masks = PieceMasks([
-            pawn_mask,
-            bishop_mask,
-            knight_mask,
-            rook_mask,
-            queen_mask,
-            king_mask,
+            [
+                white_mask & pawn_mask,
+                white_mask & bishop_mask,
+                white_mask & knight_mask,
+                white_mask & rook_mask,
+                white_mask & queen_mask,
+                white_mask & king_mask,
+            ],
+            [
+                black_mask & pawn_mask,
+                black_mask & bishop_mask,
+                black_mask & knight_mask,
+                black_mask & rook_mask,
+                black_mask & queen_mask,
+                black_mask & king_mask,
+            ],
         ]);
         self.current_player = White;
         self.castling_rights = CastlingRights([[true, true], [true, true]]);
@@ -98,7 +108,7 @@ impl BitBoards {
     }
 
     pub fn set_from_fen(&mut self, fen: String) -> Result<(), Box<dyn std::error::Error>> {
-        self.piece_masks = PieceMasks([0; 6]);
+        self.piece_masks = PieceMasks([[0; 6];2]);
         self.color_masks = ColorMasks([0; 2]);
 
         self.piece_list.fill(None);
@@ -111,62 +121,62 @@ impl BitBoards {
                 match chr {
                     'n' => {
                         self.piece_list[index] = Some((Knight, Black));
-                        self.piece_masks[Knight] |= 1 << index;
+                        self.piece_masks[(Black, Knight)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
                     }
                     'N' => {
                         self.piece_list[index] = Some((Knight, White));
-                        self.piece_masks[Knight] |= 1 << index;
+                        self.piece_masks[(White, Knight)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
                     }
                     'b' => {
                         self.piece_list[index] = Some((Bishop, Black));
-                        self.piece_masks[Bishop] |= 1 << index;
+                        self.piece_masks[(Black, Bishop)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
                     }
                     'B' => {
                         self.piece_list[index] = Some((Bishop, White));
-                        self.piece_masks[Bishop] |= 1 << index;
+                        self.piece_masks[(White, Bishop)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
                     }
                     'r' => {
                         self.piece_list[index] = Some((Rook, Black));
-                        self.piece_masks[Rook] |= 1 << index;
+                        self.piece_masks[(Black, Rook)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
                     }
                     'R' => {
                         self.piece_list[index] = Some((Rook, White));
-                        self.piece_masks[Rook] |= 1 << index;
+                        self.piece_masks[(White, Rook)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
                     }
                     'q' => {
                         self.piece_list[index] = Some((Queen, Black));
-                        self.piece_masks[Queen] |= 1 << index;
+                        self.piece_masks[(Black, Queen)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
                     }
                     'Q' => {
                         self.piece_list[index] = Some((Queen, White));
-                        self.piece_masks[Queen] |= 1 << index;
+                        self.piece_masks[(White, Queen)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
                     }
                     'k' => {
                         self.piece_list[index] = Some((King, Black));
-                        self.piece_masks[King] |= 1 << index;
+                        self.piece_masks[(Black, King)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
                     }
                     'K' => {
                         self.piece_list[index] = Some((King, White));
-                        self.piece_masks[King] |= 1 << index;
+                        self.piece_masks[(White, King)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
                     }
                     'p' => {
                         self.piece_list[index] = Some((Pawn, Black));
-                        self.piece_masks[Pawn] |= 1 << index;
+                        self.piece_masks[(Black, Pawn)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
                     }
                     'P' => {
                         self.piece_list[index] = Some((Pawn, White));
-                        self.piece_masks[Pawn] |= 1 << index;
+                        self.piece_masks[(White, Pawn)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
                     }
                     digit @ '1'..='8' => index += digit.to_digit(10).unwrap() as usize - 1,
@@ -248,7 +258,7 @@ impl BitBoards {
     }
 
     pub fn knight_attacks(&self, color: ColorIndex) -> u64 {
-        let mut knights = self.piece_masks[Knight] & self.color_masks[color];
+        let mut knights = self.piece_masks[(color, Knight)];
 
         let mut result = 0;
         while knights != 0 {
@@ -260,7 +270,7 @@ impl BitBoards {
     }
 
     pub fn knight_non_captures(&self, color: ColorIndex, moves: &mut Vec<Move>) {
-        let mut knights = self.piece_masks[Knight] & self.color_masks[color];
+        let mut knights = self.piece_masks[(color, Knight)];
         while knights != 0 {
             let i = knights.trailing_zeros() as usize;
             let mut result = lookup_tables().lookup_knight(i)
@@ -277,7 +287,7 @@ impl BitBoards {
     }
 
     pub fn knight_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
-        let mut knights = self.piece_masks[Knight] & self.color_masks[color];
+        let mut knights = self.piece_masks[(color, Knight)];
 
         while knights != 0 {
             let i = knights.trailing_zeros() as usize;
@@ -295,7 +305,7 @@ impl BitBoards {
     }
 
     pub fn bishop_attacks(&self, color: ColorIndex) -> u64 {
-        let mut bishops = self.piece_masks[Bishop] & self.color_masks[color];
+        let mut bishops = self.piece_masks[(color, Bishop)];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         let mut result = 0;
@@ -308,7 +318,7 @@ impl BitBoards {
     }
 
     pub fn bishop_non_captures(&self, color: ColorIndex, moves: &mut Vec<Move>) {
-        let mut bishops = self.piece_masks[Bishop] & self.color_masks[color];
+        let mut bishops = self.piece_masks[(color, Bishop)];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         while bishops != 0 {
@@ -327,7 +337,7 @@ impl BitBoards {
     }
 
     pub fn bishop_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
-        let mut bishops = self.piece_masks[Bishop] & self.color_masks[color];
+        let mut bishops = self.piece_masks[(color, Bishop)];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         while bishops != 0 {
@@ -347,7 +357,7 @@ impl BitBoards {
     }
 
     pub fn rook_attacks(&self, color: ColorIndex) -> u64 {
-        let mut rooks = self.piece_masks[Rook] & self.color_masks[color];
+        let mut rooks = self.piece_masks[(color, Rook)];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         let mut result = 0;
@@ -360,7 +370,7 @@ impl BitBoards {
     }
 
     pub fn rook_non_captures(&self, color: ColorIndex, moves: &mut Vec<Move>) {
-        let mut rooks = self.piece_masks[Rook] & self.color_masks[color];
+        let mut rooks = self.piece_masks[(color, Rook)];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         while rooks != 0 {
@@ -379,7 +389,7 @@ impl BitBoards {
     }
 
     pub fn rook_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
-        let mut rooks = self.piece_masks[Rook] & self.color_masks[color];
+        let mut rooks = self.piece_masks[(color, Rook)];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         while rooks != 0 {
@@ -399,7 +409,7 @@ impl BitBoards {
     }
 
     pub fn queen_attacks(&self, color: ColorIndex) -> u64 {
-        let mut queens = self.piece_masks[Queen] & self.color_masks[color];
+        let mut queens = self.piece_masks[(color, Queen)];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         let mut result = 0;
@@ -412,7 +422,7 @@ impl BitBoards {
     }
 
     pub fn queen_non_captures(&self, color: ColorIndex, moves: &mut Vec<Move>) {
-        let mut queens = self.piece_masks[Queen] & self.color_masks[color];
+        let mut queens = self.piece_masks[(color, Queen)];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         while queens != 0 {
@@ -431,7 +441,7 @@ impl BitBoards {
     }
 
     pub fn queen_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
-        let mut queens = self.piece_masks[Queen] & self.color_masks[color];
+        let mut queens = self.piece_masks[(color, Queen)];
         let blocking_mask = self.color_masks[White] | self.color_masks[Black];
 
         while queens != 0 {
@@ -451,12 +461,12 @@ impl BitBoards {
     }
 
     pub fn king_attacks(&self, color: ColorIndex) -> u64 {
-        let king = self.piece_masks[King] & self.color_masks[color];
+        let king = self.piece_masks[(color, King)];
         lookup_tables().lookup_king(king.trailing_zeros() as usize)
     }
 
     pub fn king_non_captures(&self, color: ColorIndex, moves: &mut Vec<Move>) {
-        let king = self.piece_masks[King] & self.color_masks[color];
+        let king = self.piece_masks[(color, King)];
         let square = king.trailing_zeros() as usize;
 
         let mut result = lookup_tables().lookup_king(square)
@@ -471,7 +481,7 @@ impl BitBoards {
     }
 
     pub fn king_captures(&self, color: ColorIndex, captures: &mut Vec<Capture>) {
-        let king = self.piece_masks[King] & self.color_masks[color];
+        let king = self.piece_masks[(color, King)];
         let square = king.trailing_zeros() as usize;
 
         let mut result = lookup_tables().lookup_king(square) & self.color_masks[!color];
@@ -488,14 +498,14 @@ impl BitBoards {
     pub fn pawn_attacks(&self, color: ColorIndex) -> u64 {
         match color {
             White => {
-                let pawns = self.piece_masks[Pawn] & self.color_masks[White];
+                let pawns = self.piece_masks[(White, Pawn)];
                 let west_attacks = (pawns << 7) & NOT_H_FILE;
                 let east_attacks = (pawns << 9) & NOT_A_FILE;
 
                 west_attacks | east_attacks
             }
             Black => {
-                let pawns = self.piece_masks[Pawn] & self.color_masks[Black];
+                let pawns = self.piece_masks[(Black, Pawn)];
                 let west_attacks = (pawns >> 9) & NOT_H_FILE;
                 let east_attacks = (pawns >> 7) & NOT_A_FILE;
 
@@ -514,7 +524,7 @@ impl BitBoards {
     }
 
     pub fn white_pawn_non_captures(&self, moves: &mut Vec<Move>) {
-        let mut pawns = self.piece_masks[Pawn] & self.color_masks[White];
+        let mut pawns = self.piece_masks[(White, Pawn)];
 
         while pawns != 0 {
             let i = pawns.trailing_zeros() as usize;
@@ -546,7 +556,7 @@ impl BitBoards {
     }
 
     pub fn white_pawn_captures(&self, captures: &mut Vec<Capture>) {
-        let mut pawns = self.piece_masks[Pawn] & self.color_masks[White];
+        let mut pawns = self.piece_masks[(White, Pawn)];
 
         while pawns != 0 {
             let i = pawns.trailing_zeros() as usize;
@@ -576,7 +586,7 @@ impl BitBoards {
     }
 
     pub fn black_pawn_non_captures(&self, moves: &mut Vec<Move>) {
-        let mut pawns = self.piece_masks[Pawn] & self.color_masks[Black];
+        let mut pawns = self.piece_masks[(Black, Pawn)];
 
         while pawns != 0 {
             let i = pawns.trailing_zeros() as usize;
@@ -608,7 +618,7 @@ impl BitBoards {
     }
 
     pub fn black_pawn_captures(&self, captures: &mut Vec<Capture>) {
-        let mut pawns = self.piece_masks[Pawn] & self.color_masks[Black];
+        let mut pawns = self.piece_masks[(Black, Pawn)];
 
         while pawns != 0 {
             let i = pawns.trailing_zeros() as usize;
@@ -642,7 +652,7 @@ impl BitBoards {
     pub fn generate_legal_castles(&self) -> Vec<Move> {
         let mut castles = Vec::with_capacity(2);
         let all_attacks = self.all_attacks(!self.current_player);
-        let king = self.piece_masks[King] & self.color_masks[self.current_player];
+        let king = self.piece_masks[(self.current_player, King)];
 
         // can't castle out of check
         if all_attacks & king != 0 {
@@ -676,7 +686,7 @@ impl BitBoards {
     }
 
     pub fn king_in_check(&self, color: ColorIndex) -> bool {
-        self.all_attacks(!color) & self.piece_masks[King] & self.color_masks[color] != 0
+        self.all_attacks(!color) & self.piece_masks[(color, King)] != 0
     }
 
     pub fn generate_legal_moves(&mut self) -> Vec<Move> {
@@ -750,7 +760,7 @@ impl BitBoards {
         if let Some((taken_piece, taken_color)) = self.piece_list[move_.target as usize] {
             // remove the taken piece
             unmove.taken = Some(taken_piece);
-            self.piece_masks[taken_piece] ^= 1 << move_.target;
+            self.piece_masks[(taken_color, taken_piece)] ^= 1 << move_.target;
             self.color_masks[taken_color] ^= 1 << move_.target;
             self.piece_list[move_.target as usize] = None;
             next_hash.update_piece(taken_piece, taken_color, move_.target as usize);
@@ -776,7 +786,7 @@ impl BitBoards {
                 if move_.target % 8 == 6 {
                     // kingside
                     let rook = (1 << move_.target as u64) << 1;
-                    self.piece_masks[Rook] ^= rook | (rook >> 2);
+                    self.piece_masks[(color, Rook)] ^= rook | (rook >> 2);
                     self.color_masks[color] ^= rook | (rook >> 2);
                     self.piece_list[move_.target as usize + 1] = None;
                     self.piece_list[move_.target as usize - 1] = Some((Rook, color));
@@ -785,7 +795,7 @@ impl BitBoards {
                 } else {
                     // queenside
                     let rook = (1 << move_.target as u64) >> 2;
-                    self.piece_masks[Rook] ^= rook | (rook << 3);
+                    self.piece_masks[(color, Rook)] ^= rook | (rook << 3);
                     self.color_masks[color] ^= rook | (rook << 3);
                     self.piece_list[move_.target as usize - 2] = None;
                     self.piece_list[move_.target as usize + 1] = Some((Rook, color));
@@ -807,7 +817,7 @@ impl BitBoards {
         }
 
         // remove the moving piece
-        self.piece_masks[piece] ^= 1 << move_.start;
+        self.piece_masks[(color, piece)] ^= 1 << move_.start;
         self.color_masks[color] ^= 1 << move_.start;
         self.piece_list[move_.start as usize] = None;
         next_hash.update_piece(piece, color, move_.start as usize);
@@ -821,7 +831,7 @@ impl BitBoards {
             if move_.target == self.en_passent_mask.trailing_zeros() as u8 {
                 unmove.en_passent = true;
                 // clear the 2 squares above and below the en passent square (should only have the taken pawn)
-                self.piece_masks[Pawn] &=
+                self.piece_masks[(!color, Pawn)] &=
                     !((self.en_passent_mask << 8) | (self.en_passent_mask >> 8));
                 self.color_masks[!color] &=
                     !((self.en_passent_mask << 8) | (self.en_passent_mask >> 8));
@@ -860,7 +870,7 @@ impl BitBoards {
         }
 
         // move the moving piece to the new square
-        self.piece_masks[piece] |= 1 << move_.target;
+        self.piece_masks[(color, piece)] |= 1 << move_.target;
         self.color_masks[color] |= 1 << move_.target;
         self.piece_list[move_.target as usize] = Some((piece, color));
         next_hash.update_piece(piece, color, move_.target as usize);
@@ -913,34 +923,34 @@ impl BitBoards {
                 self.piece_list[unmove.target as usize - 1] = None;
                 self.piece_list[unmove.target as usize + 1] = Some((Rook, color));
                 let mask = (1 << (unmove.target - 1)) | (1 << (unmove.target + 1));
-                self.piece_masks[Rook] ^= mask;
+                self.piece_masks[(color, Rook)] ^= mask;
                 self.color_masks[color] ^= mask;
             // queenside
             } else {
                 self.piece_list[unmove.target as usize + 1] = None;
                 self.piece_list[unmove.target as usize - 2] = Some((Rook, color));
                 let mask = (1 << (unmove.target - 2)) | (1 << (unmove.target + 1));
-                self.piece_masks[Rook] ^= mask;
+                self.piece_masks[(color, Rook)] ^= mask;
                 self.color_masks[color] ^= mask;
             }
         }
 
         // undo promotion
         if unmove.promotion {
-            self.piece_masks[piece] ^= 1 << unmove.target;
+            self.piece_masks[(color, piece)] ^= 1 << unmove.target;
             // color gets updated later when the pawn gets moved back
             // self.color_masks[color] ^= 1 << unmove.target;
 
             piece = Pawn;
             // place the pawn back on the promotion square, will be moved later
-            self.piece_masks[piece] |= 1 << unmove.target;
+            self.piece_masks[(color, piece)] |= 1 << unmove.target;
         }
 
         // update piece list (target square gets updated with captures)
         self.piece_list[unmove.start as usize] = Some((piece, color));
 
         // update piece/color masks
-        self.piece_masks[piece] ^= (1 << unmove.target) | (1 << unmove.start);
+        self.piece_masks[(color, piece)] ^= (1 << unmove.target) | (1 << unmove.start);
         self.color_masks[color] ^= (1 << unmove.target) | (1 << unmove.start);
 
         // reset castling rights
@@ -955,7 +965,7 @@ impl BitBoards {
         // replace pawn taken en passent and clear the target square
         if unmove.en_passent {
             let shift = unmove.target as usize - 8 + (16 * color as usize);
-            self.piece_masks[Pawn] |= 1 << shift;
+            self.piece_masks[(!color, Pawn)] |= 1 << shift;
             self.color_masks[!color] |= 1 << shift;
             self.piece_list[shift] = Some((Pawn, !color));
 
@@ -964,7 +974,7 @@ impl BitBoards {
 
         // replace other taken pieces
         } else if let Some(taken_piece) = unmove.taken {
-            self.piece_masks[taken_piece] |= 1 << unmove.target;
+            self.piece_masks[(!color, taken_piece)] |= 1 << unmove.target;
             self.color_masks[!color] |= 1 << unmove.target;
             self.piece_list[unmove.target as usize] = Some((taken_piece, !color));
 
