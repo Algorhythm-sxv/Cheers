@@ -98,6 +98,10 @@ impl Move {
         Self::new(0, 0, Pawn)
     }
 
+    pub fn is_null(&self) -> bool {
+        self.start == 0 && self.target == 0
+    }
+
     pub fn to_algebraic_notation(&self) -> String {
         let mut result = String::new();
 

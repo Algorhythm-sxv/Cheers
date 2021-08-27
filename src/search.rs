@@ -41,7 +41,7 @@ impl BitBoards {
         let (tx, rx) = std::sync::mpsc::sync_channel(depth);
         let tx = tx.clone();
         (0..depth).into_par_iter().for_each(|i| {
-            let (score, best_move) = self.clone().search(alpha, beta, i);
+            let (score, best_move) = self.clone().search(alpha, beta, i, 0);
             if score == ILLEGAL_MOVE_SCORE {
                 // position is illegal, opponent is checkmated
                 tx.send((-CHECKMATE_SCORE, Move::null(), i))
@@ -77,7 +77,13 @@ impl BitBoards {
         return (best_score, best_move);
     }
 
-    pub fn search(&mut self, mut alpha: i32, mut beta: i32, depth: usize) -> (i32, Move) {
+    pub fn search(
+        &mut self,
+        mut alpha: i32,
+        mut beta: i32,
+        depth: usize,
+        mut ply: usize,
+    ) -> (i32, Move) {
         let alpha_old = alpha;
         // avoid illegal moves
         if self.king_in_check(!self.current_player) {
@@ -127,6 +133,8 @@ impl BitBoards {
             }
             // the transposition table result is not exact or came from a worse search, use for move ordering
         }
+
+        let killer_moves = self.get_killer_moves(ply);
         let mut non_captures = self.generate_non_captures();
         non_captures.extend(self.generate_legal_castles());
 
@@ -145,6 +153,7 @@ impl BitBoards {
         let moves = hash_move
             .iter()
             .chain(captures.iter())
+            .chain(killer_moves.iter().filter(|k| non_captures.contains(&k)))
             .chain(non_captures.iter());
 
         let mut any_legal_move = false;
@@ -152,7 +161,7 @@ impl BitBoards {
         let mut score = i32::MIN;
         for move_ in moves {
             self.make_move(move_);
-            score = score.max(-self.search(-beta, -alpha, depth - 1).0);
+            score = score.max(-self.search(-beta, -alpha, depth - 1, ply + 1).0);
             self.unmake_move();
 
             if score > alpha {
@@ -165,6 +174,10 @@ impl BitBoards {
             }
 
             if alpha >= beta {
+                // beta cutoff, if not a capture store in killer move table
+                if let None = self.piece_list.get(best_move.target as usize) {
+                    self.store_killer_move(best_move, ply)
+                };
                 break;
             }
         }

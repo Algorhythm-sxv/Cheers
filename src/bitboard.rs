@@ -18,6 +18,7 @@ pub struct BitBoards {
     pub position_hash: u64,
     pub position_history: Vec<u64>,
     pub transposition_table: TranspositionTable,
+    pub killer_move_table: Vec<[Move; 2]>,
 }
 
 impl BitBoards {
@@ -108,7 +109,7 @@ impl BitBoards {
     }
 
     pub fn set_from_fen(&mut self, fen: String) -> Result<(), Box<dyn std::error::Error>> {
-        self.piece_masks = PieceMasks([[0; 6];2]);
+        self.piece_masks = PieceMasks([[0; 6]; 2]);
         self.color_masks = ColorMasks([0; 2]);
 
         self.piece_list.fill(None);
@@ -988,5 +989,33 @@ impl BitBoards {
 
         // reset zobrist hash
         self.position_hash = self.position_history.pop().unwrap();
+    }
+
+    pub fn store_killer_move(&mut self, killer: Move, ply: usize) {
+        if self.killer_move_table.len() <= ply {
+            // grow the killer move table
+            self.killer_move_table.resize(2 * ply, [Move::null(); 2]);
+        }
+
+        if let Some(i) = self.killer_move_table[ply].iter().position(|m| m.is_null()) {
+            // there is an empty slot in the table
+            self.killer_move_table[ply][i] = killer;
+        } else
+        // table is full, check for duplicates and rotate a new killer in
+        if self.killer_move_table[ply][0] != killer {
+            self.killer_move_table[ply][1] = self.killer_move_table[ply][0];
+            self.killer_move_table[ply][0] = killer;
+        }
+    }
+
+    pub fn get_killer_moves(&self, ply: usize) -> [Move; 2] {
+        if let Some(moves) = self.killer_move_table.get(ply) {
+            *moves
+        } else {
+            [
+                Move::null();
+                2
+            ]
+        }
     }
 }
