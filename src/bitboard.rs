@@ -893,21 +893,22 @@ impl BitBoards {
 
         self.move_history.push(unmove);
 
-        if next_hash != zobrist_hash(self) {
-            for m in self.move_history.iter() {
-                println!(
-                    "{}",
-                    Move::new(m.start, m.target, Pawn).to_algebraic_notation()
-                );
-            }
-            panic!(
-                "hash mismatch after {}, color: {:?}, moving: {:?}, taken: {:?}",
-                &move_.to_algebraic_notation(),
-                color,
-                self.piece_list[unmove.target as usize],
-                unmove.taken
-            );
-        }
+        // sanity check for debugging
+        // if next_hash != zobrist_hash(self) {
+        //     for m in self.move_history.iter() {
+        //         println!(
+        //             "{}",
+        //             Move::new(m.start, m.target, Pawn).to_algebraic_notation()
+        //         );
+        //     }
+        //     panic!(
+        //         "hash mismatch after {}, color: {:?}, moving: {:?}, taken: {:?}",
+        //         &move_.to_algebraic_notation(),
+        //         color,
+        //         self.piece_list[unmove.target as usize],
+        //         unmove.taken
+        //     );
+        // }
         self.position_hash = next_hash;
     }
 

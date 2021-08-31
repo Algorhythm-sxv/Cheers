@@ -1,13 +1,15 @@
 use std::error::Error;
 use std::io::{prelude::*, stdin};
-use std::sync::mpsc::*;
+use std::sync::{atomic::Ordering::*, mpsc::*};
 use std::thread;
+use std::time::{Duration, Instant};
 
 mod bitboard;
 mod evaluate;
 mod lookup_tables;
 mod piece_tables;
 mod search;
+mod time_management;
 mod transposition_table;
 mod types;
 mod utils;
@@ -15,23 +17,23 @@ mod zobrist;
 
 use bitboard::*;
 use lookup_tables::*;
+use search::RUN_SEARCH;
+use time_management::time_for_move;
 use types::*;
 
 use crate::zobrist::{zobrist_hash, zobrist_numbers};
 
 enum EngineMessage {
-    Move(Move),
     Moves(Vec<Move>),
     Reset,
     Fen(String),
-    Start,
+    // wtime, btime, infinite, depth
+    Start(usize, usize, bool, Option<usize>),
     Stop,
+    Quit,
 }
 
-fn engine_thread(
-    tx: Sender<EngineMessage>,
-    rx: Receiver<EngineMessage>,
-) -> Result<(), Box<dyn Error>> {
+fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
     use rayon::ThreadPoolBuilder;
     use EngineMessage::*;
 
@@ -39,34 +41,81 @@ fn engine_thread(
     // TODO: configurable hash table size
     // 1<<23 entries corresponds with ~140MB
     let mut bitboards = BitBoards::new((1 << 23) + 9);
+    let mut max_depth = None;
+
+    let mut best_move = Move::null();
+    let mut best_depth = 0;
+    let mut start_time = Instant::now();
+    let mut max_elapsed_time = 0;
+    let mut infinite_search = false;
 
     ThreadPoolBuilder::new().num_threads(0).build_global()?;
-    while let Ok(msg) = rx.recv() {
-        match msg {
-            Move(next_move) => {
-                bitboards.make_move(&next_move);
-            }
-            Start => {
-                // let moves = bitboards.generate_legal_moves();
+    let (move_tx, move_rx) = sync_channel(30);
+    loop {
+        if let Ok(msg) = rx.recv_timeout(Duration::from_millis(100)) {
+            match msg {
+                Start(wtime, btime, infinite, depth) => {
+                    if !infinite {
+                        infinite_search = false;
+                        max_elapsed_time = time_for_move(match bitboards.current_player {
+                            White => wtime,
+                            Black => btime,
+                        });
+                    } else {
+                        infinite_search = true;
+                    }
+                    max_depth = depth;
 
-                // if let Some(choice) = moves.choose(&mut thread_rng()) {
-                //     bitboards.make_move(choice);
-                //     tx.send(Move(*choice))?;
-                // }
-                let (_score, best_move) = bitboards.toplevel_search(i32::MIN + 1, i32::MAX - 1, 8);
-
-                tx.send(EngineMessage::Move(best_move))?;
-            }
-            Stop => break,
-            Reset => {
-                bitboards.reset();
-            }
-            Fen(fen) => bitboards.set_from_fen(fen).unwrap(),
-            Moves(moves) => {
-                for move_ in &moves {
-                    bitboards.make_move(move_);
+                    best_move = Move::null();
+                    best_depth = 0;
+                    start_time = Instant::now();
+                    bitboards.toplevel_search(i32::MIN + 1, i32::MAX - 1, move_tx.clone());
+                }
+                Stop => {
+                    RUN_SEARCH.store(false, Relaxed);
+                    // clear the channel
+                    while let Ok(_) = move_rx.recv() {}
+                    println!("bestmove {}", best_move.to_algebraic_notation());
+                }
+                Quit => break,
+                Reset => {
+                    bitboards.reset();
+                }
+                Fen(fen) => bitboards.set_from_fen(fen).unwrap(),
+                Moves(moves) => {
+                    for move_ in &moves {
+                        bitboards.make_move(move_);
+                    }
                 }
             }
+        }
+        while let Ok((score, move_, depth)) = move_rx.recv_timeout(Duration::from_millis(100)) {
+            if RUN_SEARCH.load(Relaxed) {
+                println!(
+                    "info depth {} score cp {}",
+                    depth,
+                    score * (-1 * ((bitboards.current_player as i32 + depth as i32) % 2))
+                );
+                if depth > best_depth {
+                    best_depth = depth;
+                    // best_score = score;
+                    best_move = move_;
+                }
+                if Some(depth) == max_depth {
+                    RUN_SEARCH.store(false, Relaxed);
+                    // clear the channel
+                    while let Ok(_) = move_rx.recv() {}
+                    println!("bestmove {}", best_move.to_algebraic_notation());
+                }
+            }
+        }
+        // stop search after too long
+        if !infinite_search
+            && RUN_SEARCH.load(Relaxed)
+            && (Instant::now() - start_time).as_millis() as usize >= max_elapsed_time
+        {
+            println!("bestmove {}", best_move.to_algebraic_notation());
+            RUN_SEARCH.store(false, Relaxed);
         }
     }
     Ok(())
@@ -74,10 +123,10 @@ fn engine_thread(
 
 fn main() -> Result<(), Box<dyn Error>> {
     let (tx, thread_rx) = channel();
-    let (thread_tx, rx) = channel();
+    let (_thread_tx, rx) = channel::<EngineMessage>();
 
     thread::spawn(|| {
-        engine_thread(thread_tx, thread_rx).unwrap();
+        engine_thread(thread_rx).unwrap();
     });
 
     for line_res in stdin().lock().lines() {
@@ -92,6 +141,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("uciok");
             }
             Some(&"quit") => {
+                tx.send(EngineMessage::Quit)?;
                 break;
             }
             Some(&"isready") => {
@@ -134,15 +184,33 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some(&"go") => {
                 // clear the channel buffer
                 while let Ok(_) = rx.try_recv() {}
+                if words.iter().any(|&c| c == "infinite") {
+                    tx.send(EngineMessage::Start(0, 0, true, None))?;
+                } else {
+                    let wtime = words.iter().skip_while(|&&c| c != "wtime").nth(1);
+                    let btime = words.iter().skip_while(|&&c| c != "btime").nth(1);
 
-                tx.send(EngineMessage::Start)?;
-                let msg = rx.recv()?;
-                match msg {
-                    EngineMessage::Move(move_) => {
-                        println!("bestmove {}", move_.to_algebraic_notation());
+                    if wtime.is_some() && btime.is_some() {
+                        tx.send(EngineMessage::Start(
+                            wtime.unwrap().parse::<usize>().unwrap(),
+                            btime.unwrap().parse::<usize>().unwrap(),
+                            false,
+                            None,
+                        ))?;
+                    } else if let Some(depth) = words.iter().skip_while(|&&c| c != "depth").nth(1) {
+                        tx.send(EngineMessage::Start(
+                            0,
+                            0,
+                            true,
+                            Some(depth.parse::<usize>()?),
+                        ))?;
+                    } else {
+                        println!("Incomplete 'go' command, expected one of 'infinite', 'wtime <millis> btime <millis>' or 'depth <depth>'");
                     }
-                    _ => (),
                 }
+            }
+            Some(&"stop") => {
+                tx.send(EngineMessage::Stop)?;
             }
             Some(&"perft") => {
                 let depth = words

@@ -1,80 +1,45 @@
-use std::time::*;
-
-use rayon::prelude::*;
+use std::sync::{
+    atomic::{AtomicBool, Ordering::*},
+    mpsc::*,
+};
 
 use crate::{bitboard::BitBoards, evaluate::consts::*, transposition_table::NodeType::*, types::*};
 
+pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
+
 impl BitBoards {
-    pub fn toplevel_search(&mut self, alpha: i32, beta: i32, depth: usize) -> (i32, Move) {
-        // avoid illegal moves
-        if self.king_in_check(!self.current_player) {
-            return (ILLEGAL_MOVE_SCORE, Move::null());
-        }
-
-        // weird draws
-        if self.halfmove_clock >= 8 {
-            // 50-move rule
-            if self.halfmove_clock >= 100
-            // threefold repetition
-            || self
-            .position_history
-            .iter()
-            .filter(|&&pos| pos == self.position_hash)
-            .count()
-            == 2
-            {
-                return (DRAW_SCORE, Move::null());
-            }
-        }
-
-        if depth == 0 {
-            // a toplevel search with depth 0 just returns the static score
-            let score = self.quiesce(alpha, beta);
-            self.transposition_table
-                .set(&self, Move::null(), depth as u8, score, Exact);
-            return (score, Move::null());
-        }
-
-        let start_time = Instant::now();
-
+    pub fn toplevel_search(
+        &mut self,
+        alpha: i32,
+        beta: i32,
+        move_tx: SyncSender<(i32, Move, usize)>,
+    ) {
+        RUN_SEARCH.store(true, SeqCst);
         // Iterative deepening with Lazy SMP
-        let (tx, rx) = std::sync::mpsc::sync_channel(depth);
-        let tx = tx.clone();
-        (0..depth).into_par_iter().for_each(|i| {
-            let (score, best_move) = self.clone().search(alpha, beta, i, 0);
-            if score == ILLEGAL_MOVE_SCORE {
-                // position is illegal, opponent is checkmated
-                tx.send((-CHECKMATE_SCORE, Move::null(), i))
-                    .expect("Failed to send results to main thread!");
-            }
-            // send move and score back
-            tx.send((score, best_move, i))
-                .expect("Failed to send result to main thread!")
+        // assume we're not going to break depth 30 for now
+        (0..30).for_each(|i| {
+            let mut boards = self.clone();
+            let move_tx = move_tx.clone();
+            rayon::spawn_fifo(move || {
+                // search terminated from somewhere
+                if !RUN_SEARCH.load(Relaxed) {
+                    return;
+                }
+                let (score, best_move) = boards.search(alpha, beta, i, 0);
+                if score == ILLEGAL_MOVE_SCORE {
+                    // position is illegal, opponent is checkmated
+                    move_tx
+                        .send((-CHECKMATE_SCORE, Move::null(), i))
+                        .expect("Main thread died, aborting");
+                }
+                // send move and score back
+                move_tx
+                    .send((score, best_move, i))
+                    .expect("Main thread died, aborting")
+            })
         });
 
-        let mut best_score = i32::MIN;
-        let mut best_move = Move::null();
-        let mut top_depth = 0;
-        while let Ok((score, move_, depth)) = rx.try_recv() {
-            println!(
-                "Best move at depth {}: {}, score {}",
-                depth,
-                move_.to_algebraic_notation(),
-                score
-            );
-            if depth >= top_depth {
-                best_score = score;
-                best_move = move_;
-                top_depth = depth;
-            }
-        }
-        let end_time = Instant::now();
-        println!(
-            "Search completed in {}s",
-            (end_time - start_time).as_millis() as f32 / 1000.0
-        );
-
-        return (best_score, best_move);
+        return;
     }
 
     pub fn search(
@@ -82,7 +47,7 @@ impl BitBoards {
         mut alpha: i32,
         mut beta: i32,
         depth: usize,
-        mut ply: usize,
+        ply: usize,
     ) -> (i32, Move) {
         let alpha_old = alpha;
         // avoid illegal moves
@@ -160,6 +125,11 @@ impl BitBoards {
         let mut best_move = Move::null();
         let mut score = i32::MIN;
         for move_ in moves {
+            // search was terminated somewhere,
+            if !RUN_SEARCH.load(Relaxed) {
+                return (alpha, Move::null());
+            }
+
             self.make_move(move_);
             score = score.max(-self.search(-beta, -alpha, depth - 1, ply + 1).0);
             self.unmake_move();
@@ -201,6 +171,12 @@ impl BitBoards {
                 return (CHECKMATE_SCORE, Move::null());
             }
         }
+
+        // search was terminated somewhere, results can't be trusted for the transposition table
+        if !RUN_SEARCH.load(Relaxed) {
+            return (alpha, Move::null());
+        }
+
         if score <= alpha_old {
             self.transposition_table
                 .set(&self, best_move, depth as u8, score, UpperBound);
