@@ -17,7 +17,7 @@ mod zobrist;
 
 use bitboard::*;
 use lookup_tables::*;
-use search::RUN_SEARCH;
+use search::{NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 use time_management::time_for_move;
 use types::*;
 
@@ -46,6 +46,7 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
     let mut best_move = Move::null();
     let mut best_depth = 0;
     let mut start_time = Instant::now();
+    let mut last_nps_time = Instant::now();
     let mut max_elapsed_time = 0;
     let mut infinite_search = false;
 
@@ -69,13 +70,21 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
                     best_move = Move::null();
                     best_depth = 0;
                     start_time = Instant::now();
+                    last_nps_time = Instant::now();
+                    NODE_COUNT.store(0, SeqCst);
+                    NPS_COUNT.store(0, SeqCst);
+
                     bitboards.toplevel_search(i32::MIN + 1, i32::MAX - 1, move_tx.clone());
                 }
                 Stop => {
+                    println!(
+                        "bestmove {}\nFound after {:.3}s",
+                        best_move.to_algebraic_notation(),
+                        (Instant::now() - start_time).as_secs_f32()
+                    );
                     RUN_SEARCH.store(false, Relaxed);
                     // clear the channel
-                    while let Ok(_) = move_rx.recv() {}
-                    println!("bestmove {}", best_move.to_algebraic_notation());
+                    while let Ok(_) = move_rx.recv_timeout(Duration::from_millis(100)) {}
                 }
                 Quit => break,
                 Reset => {
@@ -102,20 +111,41 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
                     best_move = move_;
                 }
                 if Some(depth) == max_depth {
+                    println!(
+                        "bestmove {}\nFound after {:.3}s",
+                        best_move.to_algebraic_notation(),
+                        (Instant::now() - start_time).as_secs_f32()
+                    );
                     RUN_SEARCH.store(false, Relaxed);
                     // clear the channel
-                    while let Ok(_) = move_rx.recv() {}
-                    println!("bestmove {}", best_move.to_algebraic_notation());
+                    while let Ok(_) = move_rx.recv_timeout(Duration::from_millis(100)) {}
                 }
             }
         }
+        // report nodes and nps
+        if RUN_SEARCH.load(Relaxed) {
+            println!("info nodes {}", NODE_COUNT.load(Relaxed));
+            println!(
+                "info nps {}",
+                (NPS_COUNT.swap(0, Relaxed) as f32 - (Instant::now() - last_nps_time).as_secs_f32())
+                    as usize
+            );
+            last_nps_time = Instant::now();
+        }
+
         // stop search after too long
         if !infinite_search
             && RUN_SEARCH.load(Relaxed)
             && (Instant::now() - start_time).as_millis() as usize >= max_elapsed_time
         {
-            println!("bestmove {}", best_move.to_algebraic_notation());
+            println!(
+                "bestmove {}\nFound after {:.3}s",
+                best_move.to_algebraic_notation(),
+                (Instant::now() - start_time).as_secs_f32()
+            );
             RUN_SEARCH.store(false, Relaxed);
+            // clear the channel of incomplete results
+            while let Ok(_) = move_rx.recv_timeout(Duration::from_millis(100)) {}
         }
     }
     Ok(())

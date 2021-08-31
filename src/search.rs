@@ -1,11 +1,13 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering::*},
+    atomic::{AtomicBool, AtomicUsize, Ordering::*},
     mpsc::*,
 };
 
 use crate::{bitboard::BitBoards, evaluate::consts::*, transposition_table::NodeType::*, types::*};
 
 pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
+pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
+pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 impl BitBoards {
     pub fn toplevel_search(
@@ -25,7 +27,7 @@ impl BitBoards {
                 if !RUN_SEARCH.load(Relaxed) {
                     return;
                 }
-                let (score, best_move) = boards.search(alpha, beta, i, 0);
+                let (score, best_move) = boards.search(alpha, beta, i, 0, 65);
                 if score == ILLEGAL_MOVE_SCORE {
                     // position is illegal, opponent is checkmated
                     move_tx
@@ -48,12 +50,16 @@ impl BitBoards {
         mut beta: i32,
         depth: usize,
         ply: usize,
+        last_target: u8,
     ) -> (i32, Move) {
         let alpha_old = alpha;
         // avoid illegal moves
         if self.king_in_check(!self.current_player) {
             return (ILLEGAL_MOVE_SCORE, Move::null());
         }
+        // increment node and nps counters
+        NODE_COUNT.fetch_add(1, Relaxed);
+        NPS_COUNT.fetch_add(1, Relaxed);
 
         // weird draws
         if self.halfmove_clock >= 8 {
@@ -103,9 +109,12 @@ impl BitBoards {
         let mut non_captures = self.generate_non_captures();
         non_captures.extend(self.generate_legal_castles());
 
-        // order captures by Most Valuable Victim, Least Valuable Attacker
+        // order captures by Most Valuable Victim, Least Valuable Attacker, recaptures first
         let mut captures = self.generate_captures();
-        captures.sort_unstable_by(|a, b| a.material_difference().cmp(&b.material_difference()));
+        captures.sort_unstable_by(|a, b| {
+            (b.material_difference() + 1000 * (b.target == last_target) as i32)
+                .cmp(&(a.material_difference() + 1000 * (a.target == last_target) as i32))
+        });
         let captures: Vec<Move> = captures.into_iter().map(|c| c.to_move()).collect();
 
         // hash move is not pseudolegal
@@ -131,7 +140,11 @@ impl BitBoards {
             }
 
             self.make_move(move_);
-            score = score.max(-self.search(-beta, -alpha, depth - 1, ply + 1).0);
+            score = score.max(
+                -self
+                    .search(-beta, -alpha, depth - 1, ply + 1, move_.target)
+                    .0,
+            );
             self.unmake_move();
 
             if score > alpha {
@@ -231,7 +244,7 @@ impl BitBoards {
 
         let mut captures = self.generate_captures();
         // sort by descending material difference (i.e search PxQ first)
-        captures.sort_unstable_by(|a, b| a.material_difference().cmp(&b.material_difference()));
+        captures.sort_unstable_by(|a, b| b.material_difference().cmp(&a.material_difference()));
         if let Some(((_, _), _, _, score, node_type)) = self.transposition_table.get(&self) {
             match node_type {
                 Exact => return score,
