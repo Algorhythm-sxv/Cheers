@@ -698,7 +698,7 @@ impl BitBoards {
             .into_iter()
             .chain(captures.iter().map(|c| c.to_move()))
             .chain(castles.into_iter())
-            .filter(|move_| {
+            .filter(|&move_| {
                 self.make_move(move_);
                 let result = !self.king_in_check(!self.current_player);
                 self.unmake_move();
@@ -740,7 +740,110 @@ impl BitBoards {
         moves
     }
 
-    pub fn make_move(&mut self, move_: &Move) {
+    pub fn is_pseudolegal(&self, move_: Move) -> bool {
+        if let Some((piece, color)) = self.piece_list[move_.start as usize] {
+            if color == self.current_player {
+                match piece {
+                    Pawn => match (move_.target as isize - move_.start as isize).abs() {
+                        // pawn pushes
+                        8 => return self.piece_list[move_.target as usize].is_none(),
+                        16 => {
+                            return self.piece_list[move_.target as usize].is_none()
+                                && self.piece_list
+                                    [(move_.start + 8 - (16 * self.current_player as u8)) as usize]
+                                    .is_none()
+                        }
+                        // captures
+                        7 | 9 => {
+                            return match self.piece_list[move_.target as usize] {
+                                Some((_, capture_color)) => capture_color == !self.current_player,
+                                // en passent
+                                None => self.en_passent_mask.trailing_zeros() as u8 == move_.target,
+                            };
+                        }
+                        _ => return false,
+                    },
+                    Knight => {
+                        return lookup_tables().lookup_knight(move_.start as usize)
+                            & !self.color_masks[self.current_player]
+                            & (1 << move_.target)
+                            != 0
+                    }
+                    Bishop => {
+                        return lookup_tables().lookup_bishop(
+                            move_.start as usize,
+                            self.color_masks[White] | self.color_masks[Black],
+                        ) & !self.color_masks[self.current_player]
+                            & (1 << move_.target)
+                            != 0
+                    }
+                    Rook => {
+                        return lookup_tables().lookup_rook(
+                            move_.start as usize,
+                            self.color_masks[White] | self.color_masks[Black],
+                        ) & !self.color_masks[self.current_player]
+                            & (1 << move_.target)
+                            != 0
+                    }
+                    Queen => {
+                        return (lookup_tables().lookup_bishop(
+                            move_.start as usize,
+                            self.color_masks[White] | self.color_masks[Black],
+                        ) | lookup_tables().lookup_rook(
+                            move_.start as usize,
+                            self.color_masks[White] | self.color_masks[Black],
+                        )) & !self.color_masks[self.current_player]
+                            & (1 << move_.target)
+                            != 0
+                    }
+                    King => {
+                        match (move_.target as isize - move_.start as isize).abs() {
+                            // single square move
+                            1 | 8 | 7 | 9 => {
+                                return lookup_tables().lookup_king(move_.start as usize)
+                                    & !self.color_masks[self.current_player]
+                                    & (1 << move_.target)
+                                    != 0
+                            }
+                            // castling
+                            2 => {
+                                let king = self.piece_masks[(self.current_player, King)];
+                                // king is on starting square
+                                if king.trailing_zeros() != 4 + (56 * self.current_player as u32) {
+                                    return false;
+                                }
+                                match move_.target % 8 {
+                                    // Queenside
+                                    2 => {
+                                        // player has queenside castling rights and not into, through of out of check
+                                        return self.castling_rights
+                                        [(self.current_player, Queenside)]
+                                        && self.all_attacks(!self.current_player)
+                                        & (king | (king >> 1) | (king >> 2))
+                                        == 0
+                                    }
+                                    // Kingside
+                                    6 => {
+                                        // player has kingside castling rights and not into, through of out of check
+                                        return self.castling_rights
+                                            [(self.current_player, Kingside)]
+                                            && self.all_attacks(!self.current_player)
+                                                & (king | (king << 1) | (king << 2))
+                                                == 0
+                                    },
+                                    _ => return false
+                                }
+                            },
+                            _ => return false
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    pub fn make_move(&mut self, move_: Move) {
         let mut next_hash = self.position_hash;
 
         let mut unmove = UnmakeMove {
@@ -1013,10 +1116,7 @@ impl BitBoards {
         if let Some(moves) = self.killer_move_table.get(ply) {
             *moves
         } else {
-            [
-                Move::null();
-                2
-            ]
+            [Move::null(); 2]
         }
     }
 }

@@ -133,7 +133,7 @@ impl BitBoards {
         let mut any_legal_move = false;
         let mut best_move = Move::null();
         let mut score = i32::MIN;
-        for move_ in moves {
+        for &move_ in moves {
             // search was terminated somewhere,
             if !RUN_SEARCH.load(Relaxed) {
                 return (alpha, Move::null());
@@ -149,7 +149,7 @@ impl BitBoards {
 
             if score > alpha {
                 alpha = score;
-                best_move = *move_;
+                best_move = move_;
             }
 
             if score != -ILLEGAL_MOVE_SCORE {
@@ -219,7 +219,7 @@ impl BitBoards {
         let mut nodes = 0;
 
         for move_ in moves {
-            self.make_move(&move_);
+            self.make_move(move_);
             nodes += self._perft(depth - 1);
             self.unmake_move();
         }
@@ -268,7 +268,7 @@ impl BitBoards {
                 continue;
             }
 
-            self.make_move(&capture.to_move());
+            self.make_move(capture.to_move());
             score = -self.quiesce(-beta, -alpha);
             self.unmake_move();
 

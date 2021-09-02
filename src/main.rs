@@ -93,7 +93,7 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
                 Fen(fen) => bitboards.set_from_fen(fen).unwrap(),
                 Moves(moves) => {
                     for move_ in &moves {
-                        bitboards.make_move(move_);
+                        bitboards.make_move(*move_);
                     }
                 }
             }
@@ -257,16 +257,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some(&"test") => {
                 let mut boards = BitBoards::new(0);
                 assert_eq!(boards.position_hash, zobrist_hash(&boards));
-                boards.make_move(&parse_move_pair("b1c3"));
-                boards.make_move(&parse_move_pair("b8c6"));
-                boards.make_move(&parse_move_pair("g1f3"));
-                boards.make_move(&parse_move_pair("g8f6"));
-                boards.make_move(&parse_move_pair("e2e3"));
-                boards.make_move(&parse_move_pair("c6b4"));
-                boards.make_move(&parse_move_pair("f1e2"));
-                boards.make_move(&parse_move_pair("b4c2"));
+                boards.make_move(parse_move_pair("b1c3"));
+                boards.make_move(parse_move_pair("b8c6"));
+                boards.make_move(parse_move_pair("g1f3"));
+                boards.make_move(parse_move_pair("g8f6"));
+                boards.make_move(parse_move_pair("e2e3"));
+                boards.make_move(parse_move_pair("c6b4"));
+                boards.make_move(parse_move_pair("f1e2"));
+                boards.make_move(parse_move_pair("b4c2"));
                 assert_eq!(boards.position_hash, zobrist_hash(&boards));
-                boards.make_move(&parse_move_pair("c3a4"));
+                boards.make_move(parse_move_pair("c3a4"));
                 assert_eq!(boards.position_hash, zobrist_hash(&boards));
             }
             _ => {
