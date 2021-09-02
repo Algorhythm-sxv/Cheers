@@ -93,7 +93,9 @@ impl BitBoards {
                 // the transposition table result came from an equal or better search!
                 match node_type {
                     Exact => {
-                        return (score, hash_move.unwrap());
+                        if self.is_pseudolegal(hash_move.unwrap()) {
+                            return (score, hash_move.unwrap());
+                        }
                     }
                     LowerBound => alpha = alpha.max(score),
                     UpperBound => beta = beta.min(score),
@@ -105,7 +107,9 @@ impl BitBoards {
             // the transposition table result is not exact or came from a worse search, use for move ordering
         }
 
-        let killer_moves = self.get_killer_moves(ply);
+        let killer_moves = std::array::IntoIter::new(self.get_killer_moves(ply))
+            .filter(|&k| self.is_pseudolegal(k))
+            .collect::<Vec<Move>>();
         let mut non_captures = self.generate_non_captures();
         non_captures.extend(self.generate_legal_castles());
 
@@ -119,7 +123,7 @@ impl BitBoards {
 
         // hash move is not pseudolegal
         if let Some(hash_move_inner) = hash_move {
-            if !(captures.contains(&hash_move_inner) || non_captures.contains(&hash_move_inner)) {
+            if !self.is_pseudolegal(hash_move_inner) {
                 hash_move = None;
             }
         }
@@ -127,7 +131,7 @@ impl BitBoards {
         let moves = hash_move
             .iter()
             .chain(captures.iter())
-            .chain(killer_moves.iter().filter(|k| non_captures.contains(&k)))
+            .chain(killer_moves.iter())
             .chain(non_captures.iter());
 
         let mut any_legal_move = false;
@@ -235,6 +239,10 @@ impl BitBoards {
         if self.king_in_check(!self.current_player) {
             return ILLEGAL_MOVE_SCORE;
         }
+
+        // increment node and nps counters
+        NODE_COUNT.fetch_add(1, Relaxed);
+        NPS_COUNT.fetch_add(1, Relaxed);
 
         let stand_pat_score = self.evaluate(self.current_player);
         if stand_pat_score >= beta {

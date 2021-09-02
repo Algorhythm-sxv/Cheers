@@ -109,6 +109,7 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
                     best_depth = depth;
                     // best_score = score;
                     best_move = move_;
+                    println!("New best: {}", best_move.to_algebraic_notation());
                 }
                 if Some(depth) == max_depth {
                     println!(
