@@ -22,11 +22,11 @@ pub mod consts {
 
     pub const PIECE_VALUES: PieceValues = PieceValues([
         [
-            100, // pawn
-            320, // knight
-            330, // bishop
-            500, // rook
-            900, // queen
+            100,   // pawn
+            350,   // knight
+            380,   // bishop
+            500,   // rook
+            900,   // queen
             30000, // king
         ],
         [125, 330, 340, 500, 900, 30000],
@@ -50,7 +50,8 @@ impl BitBoards {
     fn phase_eval(&self, color: ColorIndex, phase: GamePhase) -> i32 {
         let mut result = 0;
 
-        result += self.material_count(color, phase) - self.material_count(!color, phase);
+        result +=
+            (3 * (self.material_count(color, phase) - self.material_count(!color, phase))) / 2;
 
         if self.insufficient_mating_material(result) {
             return DRAW_SCORE;
@@ -75,10 +76,18 @@ impl BitBoards {
 
         let mut phase = total_phase;
 
-        phase -= knight_phase * ((self.piece_masks[(White, Knight)] | self.piece_masks[(Black, Knight)]).count_ones() as i32);
-        phase -= bishop_phase * ((self.piece_masks[(White, Bishop)] | self.piece_masks[(Black, Bishop)]).count_ones() as i32);
-        phase -= rook_phase * ((self.piece_masks[(White, Rook)] | self.piece_masks[(Black, Rook)]).count_ones() as i32);
-        phase -= queen_phase * ((self.piece_masks[(White, Queen)] | self.piece_masks[(Black, Queen)]).count_ones() as i32);
+        phase -= knight_phase
+            * ((self.piece_masks[(White, Knight)] | self.piece_masks[(Black, Knight)]).count_ones()
+                as i32);
+        phase -= bishop_phase
+            * ((self.piece_masks[(White, Bishop)] | self.piece_masks[(Black, Bishop)]).count_ones()
+                as i32);
+        phase -= rook_phase
+            * ((self.piece_masks[(White, Rook)] | self.piece_masks[(Black, Rook)]).count_ones()
+                as i32);
+        phase -= queen_phase
+            * ((self.piece_masks[(White, Queen)] | self.piece_masks[(Black, Queen)]).count_ones()
+                as i32);
 
         (phase * 256 + (total_phase / 2)) / total_phase
     }
@@ -86,16 +95,16 @@ impl BitBoards {
     pub fn material_count(&self, color: ColorIndex, phase: GamePhase) -> i32 {
         let mut result = 0;
 
-        result += (self.piece_masks[(color, Pawn)]).count_ones() as i32
-            * PIECE_VALUES[(phase, Pawn)];
-        result += (self.piece_masks[(color, Knight)]).count_ones() as i32
-            * PIECE_VALUES[(phase, Knight)];
-        result += (self.piece_masks[(color, Bishop)]).count_ones() as i32
-            * PIECE_VALUES[(phase, Bishop)];
-        result += (self.piece_masks[(color, Rook)]).count_ones() as i32
-            * PIECE_VALUES[(phase, Rook)];
-        result += (self.piece_masks[(color, Queen)]).count_ones() as i32
-            * PIECE_VALUES[(phase, Queen)];
+        result +=
+            (self.piece_masks[(color, Pawn)]).count_ones() as i32 * PIECE_VALUES[(phase, Pawn)];
+        result +=
+            (self.piece_masks[(color, Knight)]).count_ones() as i32 * PIECE_VALUES[(phase, Knight)];
+        result +=
+            (self.piece_masks[(color, Bishop)]).count_ones() as i32 * PIECE_VALUES[(phase, Bishop)];
+        result +=
+            (self.piece_masks[(color, Rook)]).count_ones() as i32 * PIECE_VALUES[(phase, Rook)];
+        result +=
+            (self.piece_masks[(color, Queen)]).count_ones() as i32 * PIECE_VALUES[(phase, Queen)];
 
         result
     }
