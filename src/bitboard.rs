@@ -181,25 +181,25 @@ impl BitBoards {
                         self.color_masks[White] |= 1 << index;
                     }
                     digit @ '1'..='8' => index += digit.to_digit(10).unwrap() as usize - 1,
-                    other @ _ => eprintln!("Unexpected character in FEN: {}", other),
+                    other => eprintln!("Unexpected character in FEN: {}", other),
                 }
                 index += 1;
             }
         }
 
-        match lines.nth(8).ok_or(String::from("No metadata!"))? {
+        match lines.nth(8).ok_or_else(|| String::from("No metadata!"))? {
             "w" => self.current_player = White,
             "b" => self.current_player = Black,
-            other @ _ => Err(format!("Invalid player character: {}", other))?,
+            other => return Err(format!("Invalid player character: {}", other).into()),
         }
 
         self.castling_rights = CastlingRights([[false, false], [false, false]]);
         match lines
             .next()
-            .ok_or(String::from("Insufficient metadata for castling rights!"))?
+            .ok_or_else(|| String::from("Insufficient metadata for castling rights!"))?
         {
             "-" => self.castling_rights = CastlingRights([[false, false], [false, false]]),
-            other @ _ => other.chars().try_for_each(|chr| match chr {
+            other => other.chars().try_for_each(|chr| match chr {
                 'K' => {
                     self.castling_rights[(White, Kingside)] = true;
                     Ok(())
@@ -222,26 +222,22 @@ impl BitBoards {
 
         match lines
             .next()
-            .ok_or(String::from("Insufficient metadata for en passent square!"))?
+            .ok_or_else(|| String::from("Insufficient metadata for en passent square!"))?
         {
             "-" => self.en_passent_mask = 0,
-            other @ _ => {
+            other => {
                 let mut square = 0;
-                match other
-                    .bytes()
-                    .nth(0)
-                    .ok_or(format!("Empty en passent string!"))?
+                match other.as_bytes().get(0)
+                    .ok_or_else(|| "Empty en passent string!".to_string())?
                 {
                     file @ b'a'..=b'h' => square += file - b'a',
-                    other @ _ => Err(format!("Invalid en passent file: {}", other))?,
+                    other => return Err(format!("Invalid en passent file: {}", other).into()),
                 }
-                match other
-                    .bytes()
-                    .nth(1)
-                    .ok_or(format!("En passent string too short"))?
+                match other.as_bytes().get(1)
+                    .ok_or_else(|| "En passent string too short".to_string())?
                 {
                     rank @ b'1'..=b'8' => square += 8 * (rank - b'1'),
-                    other @ _ => Err(format!("Invalid en passent rank: {}", other))?,
+                    other => return Err(format!("Invalid en passent rank: {}", other).into()),
                 }
                 self.en_passent_mask = 1 << square;
             }
@@ -249,7 +245,7 @@ impl BitBoards {
 
         self.halfmove_clock = lines
             .next()
-            .ok_or(String::from("No halfmove clock!"))?
+            .ok_or_else(|| String::from("No halfmove clock!"))?
             .parse::<u8>()?;
 
         let hash = zobrist_hash(self);
@@ -1000,9 +996,9 @@ impl BitBoards {
         if let Some(i) = self.killer_move_table[ply].iter().position(|m| m.is_null()) {
             // there is an empty slot in the table
             self.killer_move_table[ply][i] = killer;
-        } else
+        } 
         // table is full, check for duplicates and rotate a new killer in
-        if self.killer_move_table[ply][0] != killer {
+        else if self.killer_move_table[ply][0] != killer {
             self.killer_move_table[ply][1] = self.killer_move_table[ply][0];
             self.killer_move_table[ply][0] = killer;
         }

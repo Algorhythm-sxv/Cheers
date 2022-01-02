@@ -122,7 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                     _ => unreachable!(),
                 }
-                if let Some(_) = words.get(moves_index) {
+                if words.get(moves_index).is_some() {
                     tx.send(EngineMessage::Moves(
                         words[moves_index..]
                             .iter()
@@ -133,15 +133,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"go") => {
                 // clear the channel buffer
-                while let Ok(_) = rx.try_recv() {}
+                while rx.try_recv().is_ok() {}
 
                 tx.send(EngineMessage::Start)?;
                 let msg = rx.recv()?;
-                match msg {
-                    EngineMessage::Move(move_) => {
-                        println!("bestmove {}", move_.to_algebraic_notation());
-                    }
-                    _ => (),
+                if let EngineMessage::Move(move_) = msg {
+                    println!("bestmove {}", move_.to_algebraic_notation());
                 }
             }
             Some(&"perft") => {

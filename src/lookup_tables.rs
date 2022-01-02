@@ -9,7 +9,7 @@ pub fn lookup_tables() -> &'static LookupTables {
         let mut sliding_attack_table = Vec::with_capacity(10000);
 
         let rook_magics = generate_rook_magics(&mut sliding_attack_table);
-        let bishop_magics = generate_bishop_magics(&mut &mut sliding_attack_table);
+        let bishop_magics = generate_bishop_magics(&mut sliding_attack_table);
         
         LookupTables {
             knight_table: generate_knight_table(),

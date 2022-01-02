@@ -9,7 +9,7 @@ use crate::{
 pub static ZOBRIST_NUMBERS: OnceCell<Vec<u64>> = OnceCell::new();
 
 pub fn zobrist_numbers() -> &'static Vec<u64> {
-    ZOBRIST_NUMBERS.get_or_init(|| initialise_zobrist_numbers())
+    ZOBRIST_NUMBERS.get_or_init(initialise_zobrist_numbers)
 }
 fn initialise_zobrist_numbers() -> Vec<u64> {
     let mut rng = StdRng::seed_from_u64(0x11A5117AB1E0);

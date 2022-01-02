@@ -138,24 +138,24 @@ impl BitBoards {
         if file > 5 && rank.wrapping_sub(7 * color as u32) == 0 {
             // kingside
             result += ((self.piece_masks[(color, Pawn)])
-                & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1 - color as u64))
+                & ((SEVENTH_RANK * color as u64) | (SECOND_RANK * (1 - color as u64)))
                 & (F_FILE | G_FILE | H_FILE))
                 .count_ones() as i32
                 * (PIECE_VALUES[(phase, Pawn)] / 2);
             result += ((self.piece_masks[(color, Pawn)])
-                & (SIXTH_RANK * color as u64 | THIRD_RANK * (1 - color as u64))
+                & ((SIXTH_RANK * color as u64) | (THIRD_RANK * (1 - color as u64)))
                 & (F_FILE | G_FILE | H_FILE))
                 .count_ones() as i32
                 * (PIECE_VALUES[(phase, Pawn)] / 3);
         } else if file < 3 && rank.wrapping_sub(7 * color as u32) == 0 {
             // queenside
             result += ((self.piece_masks[(color, Pawn)])
-                & (SEVENTH_RANK * color as u64 | SECOND_RANK * (1 - color as u64))
+                & ((SEVENTH_RANK * color as u64) | (SECOND_RANK * (1 - color as u64)))
                 & (A_FILE | B_FILE | C_FILE))
                 .count_ones() as i32
                 * (PIECE_VALUES[(phase, Pawn)] / 2);
             result += ((self.piece_masks[(color, Pawn)])
-                & (SIXTH_RANK * color as u64 | THIRD_RANK * (1 - color as u64))
+                & ((SIXTH_RANK * color as u64) | (THIRD_RANK * (1 - color as u64)))
                 & (A_FILE | B_FILE | C_FILE))
                 .count_ones() as i32
                 * (PIECE_VALUES[(phase, Pawn)] / 3);

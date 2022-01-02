@@ -10,9 +10,9 @@ pub fn print_bitboard(board: u64) {
                 _ => unreachable!(),
             }
         }
-        print!("\n");
+        println!();
     }
-    print!("\n");
+    println!();
 }
 
 pub fn square_to_coord(square: u8) -> String {
@@ -44,7 +44,7 @@ pub fn square_to_coord(square: u8) -> String {
 }
 
 pub fn coord_to_square(coord: &str) -> u8 {
-    let mut result = match coord.chars().nth(0).unwrap() {
+    let mut result = match coord.chars().next().unwrap() {
         'a' => 0,
         'b' => 1,
         'c' => 2,
@@ -56,8 +56,8 @@ pub fn coord_to_square(coord: &str) -> u8 {
         _ => unreachable!(),
     };
     result += match coord.chars().nth(1).unwrap() {
-        '1' => 0 * 8,
-        '2' => 1 * 8,
+        '1' => 0,
+        '2' => 8,
         '3' => 2 * 8,
         '4' => 3 * 8,
         '5' => 4 * 8,

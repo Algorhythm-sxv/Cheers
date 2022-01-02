@@ -31,7 +31,7 @@ impl BitBoards {
             // a toplevel search with depth 0 just returns the static score
             let score = self.quiesce(alpha, beta);
             self.transposition_table
-                .set(&self, Move::null(), depth as u8, score, Exact);
+                .set(self, Move::null(), depth as u8, score, Exact);
             return (score, Move::null());
         }
 
@@ -39,7 +39,7 @@ impl BitBoards {
 
         // Iterative deepening with Lazy SMP
         let (tx, rx) = std::sync::mpsc::sync_channel(depth);
-        let tx = tx.clone();
+        let tx = tx;
         (0..depth).into_par_iter().for_each(|i| {
             let (score, best_move) = self.clone().search(alpha, beta, i, 0);
             if score == ILLEGAL_MOVE_SCORE {
@@ -74,7 +74,7 @@ impl BitBoards {
             (end_time - start_time).as_millis() as f32 / 1000.0
         );
 
-        return (best_score, best_move);
+        (best_score, best_move)
     }
 
     pub fn search(
@@ -82,7 +82,7 @@ impl BitBoards {
         mut alpha: i32,
         mut beta: i32,
         depth: usize,
-        mut ply: usize,
+        ply: usize,
     ) -> (i32, Move) {
         let alpha_old = alpha;
         // avoid illegal moves
@@ -109,13 +109,13 @@ impl BitBoards {
         if depth == 0 {
             let score = self.quiesce(alpha, beta);
             self.transposition_table
-                .set(&self, Move::null(), depth as u8, score, Exact);
+                .set(self, Move::null(), depth as u8, score, Exact);
             return (score, Move::null());
         }
 
         let mut hash_move = None;
         if let Some(((start, end), hash_depth, promotion, score, node_type)) =
-            self.transposition_table.get(&self)
+            self.transposition_table.get(self)
         {
             hash_move = Some(Move::new(start, end, promotion));
             if hash_depth >= depth as u8 {
@@ -140,7 +140,7 @@ impl BitBoards {
 
         // order captures by Most Valuable Victim, Least Valuable Attacker
         let mut captures = self.generate_captures();
-        captures.sort_unstable_by(|a, b| a.material_difference().cmp(&b.material_difference()));
+        captures.sort_unstable_by_key(|a| a.material_difference());
         let captures: Vec<Move> = captures.into_iter().map(|c| c.to_move()).collect();
 
         // hash move is not pseudolegal
@@ -153,7 +153,7 @@ impl BitBoards {
         let moves = hash_move
             .iter()
             .chain(captures.iter())
-            .chain(killer_moves.iter().filter(|k| non_captures.contains(&k)))
+            .chain(killer_moves.iter().filter(|k| non_captures.contains(k)))
             .chain(non_captures.iter());
 
         let mut any_legal_move = false;
@@ -175,7 +175,7 @@ impl BitBoards {
 
             if alpha >= beta {
                 // beta cutoff, if not a capture store in killer move table
-                if let None = self.piece_list.get(best_move.target as usize) {
+                if self.piece_list.get(best_move.target as usize).is_none() {
                     self.store_killer_move(best_move, ply)
                 };
                 break;
@@ -187,12 +187,12 @@ impl BitBoards {
             if !self.king_in_check(self.current_player) {
                 // stalemate
                 self.transposition_table
-                    .set(&self, Move::null(), depth as u8, DRAW_SCORE, Exact);
+                    .set(self, Move::null(), depth as u8, DRAW_SCORE, Exact);
                 return (DRAW_SCORE, Move::null());
             } else {
                 // checkmate
                 self.transposition_table.set(
-                    &self,
+                    self,
                     Move::null(),
                     depth as u8,
                     CHECKMATE_SCORE,
@@ -203,13 +203,13 @@ impl BitBoards {
         }
         if score <= alpha_old {
             self.transposition_table
-                .set(&self, best_move, depth as u8, score, UpperBound);
+                .set(self, best_move, depth as u8, score, UpperBound);
         } else if score >= beta {
             self.transposition_table
-                .set(&self, best_move, depth as u8, score, LowerBound)
+                .set(self, best_move, depth as u8, score, LowerBound)
         } else {
             self.transposition_table
-                .set(&self, best_move, depth as u8, score, Exact)
+                .set(self, best_move, depth as u8, score, Exact)
         }
         (score, best_move)
     }
@@ -255,8 +255,8 @@ impl BitBoards {
 
         let mut captures = self.generate_captures();
         // sort by descending material difference (i.e search PxQ first)
-        captures.sort_unstable_by(|a, b| a.material_difference().cmp(&b.material_difference()));
-        if let Some(((_, _), _, _, score, node_type)) = self.transposition_table.get(&self) {
+        captures.sort_unstable_by_key(|a| a.material_difference());
+        if let Some(((_, _), _, _, score, node_type)) = self.transposition_table.get(self) {
             match node_type {
                 Exact => return score,
                 LowerBound => alpha = alpha.max(score),
@@ -292,13 +292,13 @@ impl BitBoards {
 
         if score <= alpha_old {
             self.transposition_table
-                .set(&self, Move::null(), 0, score, UpperBound);
+                .set(self, Move::null(), 0, score, UpperBound);
         } else if score >= beta {
             self.transposition_table
-                .set(&self, Move::null(), 0, score, LowerBound)
+                .set(self, Move::null(), 0, score, LowerBound)
         } else {
             self.transposition_table
-                .set(&self, Move::null(), 0, score, Exact)
+                .set(self, Move::null(), 0, score, Exact)
         }
 
         alpha
