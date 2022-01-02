@@ -184,8 +184,8 @@ impl Capture {
     }
 
     pub fn material_difference(&self) -> i32 {
-        PIECE_VALUES[(GamePhase::MidGame, self.captor)]
-            - PIECE_VALUES[(GamePhase::MidGame, self.capture)]
+        PIECE_VALUES[(GamePhase::MidGame, self.capture)]
+            - PIECE_VALUES[(GamePhase::MidGame, self.captor)]
     }
 }
 
