@@ -17,31 +17,27 @@ impl BitBoards {
         move_tx: SyncSender<(i32, Move, usize)>,
     ) {
         RUN_SEARCH.store(true, SeqCst);
-        // Iterative deepening with Lazy SMP
         // assume we're not going to break depth 30 for now
-        (0..30).for_each(|i| {
+        for i in 0.. {
             let mut boards = self.clone();
             let move_tx = move_tx.clone();
-            rayon::spawn_fifo(move || {
-                // search terminated from somewhere
-                if !RUN_SEARCH.load(Relaxed) {
-                    return;
-                }
-                let (score, best_move) = boards.search(alpha, beta, i, 0, 65);
-                if score == ILLEGAL_MOVE_SCORE {
-                    // position is illegal, opponent is checkmated
-                    move_tx
-                        .send((-CHECKMATE_SCORE, Move::null(), i))
-                        .expect("Main thread died, aborting");
-                }
-                // send move and score back
-                move_tx
-                    .send((score, best_move, i))
-                    .expect("Main thread died, aborting")
-            })
-        });
 
-        return;
+            // search terminated from somewhere
+            if !RUN_SEARCH.load(Relaxed) {
+                return;
+            }
+            let (score, best_move) = boards.search(alpha, beta, i, 0, 65);
+            if score == ILLEGAL_MOVE_SCORE {
+                // position is illegal, opponent is checkmated
+                move_tx
+                    .send((-CHECKMATE_SCORE, Move::null(), i))
+                    .expect("Main thread died, aborting");
+            }
+            // send move and score back
+            move_tx
+                .send((score, best_move, i))
+                .expect("Main thread died, aborting")
+        }
     }
 
     pub fn search(
@@ -252,8 +248,8 @@ impl BitBoards {
 
         let mut captures = self.generate_captures();
         // sort by descending material difference (i.e search PxQ first)
-        captures.sort_unstable_by(|a, b| b.material_difference().cmp(&a.material_difference()));
-        if let Some(((_, _), _, _, score, node_type)) = self.transposition_table.get(&self) {
+        captures.sort_unstable_by_key(|a| std::cmp::Reverse(a.material_difference()));
+        if let Some(((_, _), _, _, score, node_type)) = self.transposition_table.get(self) {
             match node_type {
                 Exact => return score,
                 LowerBound => alpha = alpha.max(score),

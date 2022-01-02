@@ -34,7 +34,6 @@ enum EngineMessage {
 }
 
 fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
-    use rayon::ThreadPoolBuilder;
     use EngineMessage::*;
 
     let _luts = LookupTables::generate_all();
@@ -49,8 +48,7 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
     let mut last_nps_time = Instant::now();
     let mut max_elapsed_time = 0;
     let mut infinite_search = false;
-
-    ThreadPoolBuilder::new().num_threads(0).build_global()?;
+    
     let (move_tx, move_rx) = sync_channel(30);
     loop {
         if let Ok(msg) = rx.recv_timeout(Duration::from_millis(100)) {
@@ -74,7 +72,11 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
                     NODE_COUNT.store(0, SeqCst);
                     NPS_COUNT.store(0, SeqCst);
 
-                    bitboards.toplevel_search(i32::MIN + 1, i32::MAX - 1, move_tx.clone());
+                    let move_tx = move_tx.clone();
+                    let mut bitboards = bitboards.clone();
+                    thread::spawn(move || {
+                        bitboards.toplevel_search(i32::MIN + 1, i32::MAX - 1, move_tx)
+                    });
                 }
                 Stop => {
                     println!(
@@ -84,7 +86,7 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
                     );
                     RUN_SEARCH.store(false, Relaxed);
                     // clear the channel
-                    while let Ok(_) = move_rx.recv_timeout(Duration::from_millis(100)) {}
+                    while move_rx.recv_timeout(Duration::from_millis(100)).is_ok() {}
                 }
                 Quit => break,
                 Reset => {
@@ -99,28 +101,29 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
             }
         }
         while let Ok((score, move_, depth)) = move_rx.recv_timeout(Duration::from_millis(100)) {
-            if RUN_SEARCH.load(Relaxed) {
+            if !RUN_SEARCH.load(Relaxed) {
+                continue;
+            }
+            println!(
+                "info depth {} score cp {}",
+                depth,
+                score * -((bitboards.current_player as i32 + depth as i32) % 2)
+            );
+            if depth > best_depth {
+                best_depth = depth;
+                // best_score = score;
+                best_move = move_;
+                println!("New best: {}", best_move.to_algebraic_notation());
+            }
+            if Some(depth) == max_depth {
                 println!(
-                    "info depth {} score cp {}",
-                    depth,
-                    score * (-1 * ((bitboards.current_player as i32 + depth as i32) % 2))
+                    "bestmove {}\nFound after {:.3}s",
+                    best_move.to_algebraic_notation(),
+                    (Instant::now() - start_time).as_secs_f32()
                 );
-                if depth > best_depth {
-                    best_depth = depth;
-                    // best_score = score;
-                    best_move = move_;
-                    println!("New best: {}", best_move.to_algebraic_notation());
-                }
-                if Some(depth) == max_depth {
-                    println!(
-                        "bestmove {}\nFound after {:.3}s",
-                        best_move.to_algebraic_notation(),
-                        (Instant::now() - start_time).as_secs_f32()
-                    );
-                    RUN_SEARCH.store(false, Relaxed);
-                    // clear the channel
-                    while let Ok(_) = move_rx.recv_timeout(Duration::from_millis(100)) {}
-                }
+                RUN_SEARCH.store(false, Relaxed);
+                // clear the channel
+                while move_rx.recv_timeout(Duration::from_millis(100)).is_ok() {}
             }
         }
         // report nodes and nps
@@ -146,7 +149,7 @@ fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
             );
             RUN_SEARCH.store(false, Relaxed);
             // clear the channel of incomplete results
-            while let Ok(_) = move_rx.recv_timeout(Duration::from_millis(100)) {}
+            while move_rx.recv_timeout(Duration::from_millis(100)).is_ok() {}
         }
     }
     Ok(())
@@ -214,7 +217,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"go") => {
                 // clear the channel buffer
-                while let Ok(_) = rx.try_recv() {}
+                while rx.try_recv().is_ok() {}
                 if words.iter().any(|&c| c == "infinite") {
                     tx.send(EngineMessage::Start(0, 0, true, None))?;
                 } else {
