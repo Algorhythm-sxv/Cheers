@@ -12,6 +12,8 @@ use std::{
 use bitboards::BitBoards;
 use lookup_tables::lookup_tables;
 
+use crate::lookup_tables::LookupTables;
+
 fn main() -> Result<(), Box<dyn Error>> {
     for line in stdin().lock().lines() {
         let line = line?;
@@ -30,9 +32,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"magics") => {
                 let start = Instant::now();
-                lookup_tables();
+                LookupTables::generate_all();
                 let end = Instant::now();
                 println!("Generated magics in {:.3}s", (end - start).as_secs_f32());
+                lookup_tables().print_magics();
             }
             Some(&"test") => {
                 let mut boards = BitBoards::default();
