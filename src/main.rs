@@ -1,297 +1,50 @@
-use std::error::Error;
-use std::io::{prelude::*, stdin};
-use std::sync::{atomic::Ordering::*, mpsc::*};
-use std::thread;
-use std::time::{Duration, Instant};
-
-mod bitboard;
-mod evaluate;
 mod lookup_tables;
-mod piece_tables;
-mod search;
-mod time_management;
-mod transposition_table;
 mod types;
-mod utils;
-mod zobrist;
+mod bitboards;
+mod moves;
 
-use bitboard::*;
-use lookup_tables::*;
-use search::{NODE_COUNT, NPS_COUNT, RUN_SEARCH};
-use time_management::time_for_move;
-use types::*;
+use std::{
+    error::Error,
+    io::{prelude::*, stdin},
+    time::Instant,
+};
 
-use crate::zobrist::{zobrist_hash, zobrist_numbers};
-
-enum EngineMessage {
-    Moves(Vec<Move>),
-    Reset,
-    Fen(String),
-    // wtime, btime, infinite, depth
-    Start(usize, usize, bool, Option<usize>),
-    Stop,
-    Quit,
-}
-
-fn engine_thread(rx: Receiver<EngineMessage>) -> Result<(), Box<dyn Error>> {
-    use EngineMessage::*;
-
-    let _luts = LookupTables::generate_all();
-    // TODO: configurable hash table size
-    // 1<<23 entries corresponds with ~140MB
-    let mut bitboards = BitBoards::new((1 << 23) + 9);
-    let mut max_depth = None;
-
-    let mut best_move = Move::null();
-    let mut best_depth = 0;
-    let mut start_time = Instant::now();
-    let mut last_nps_time = Instant::now();
-    let mut max_elapsed_time = 0;
-    let mut infinite_search = false;
-    
-    let (move_tx, move_rx) = sync_channel(30);
-    loop {
-        if let Ok(msg) = rx.recv_timeout(Duration::from_millis(100)) {
-            match msg {
-                Start(wtime, btime, infinite, depth) => {
-                    if !infinite {
-                        infinite_search = false;
-                        max_elapsed_time = time_for_move(match bitboards.current_player {
-                            White => wtime,
-                            Black => btime,
-                        });
-                    } else {
-                        infinite_search = true;
-                    }
-                    max_depth = depth;
-
-                    best_move = Move::null();
-                    best_depth = 0;
-                    start_time = Instant::now();
-                    last_nps_time = Instant::now();
-                    NODE_COUNT.store(0, SeqCst);
-                    NPS_COUNT.store(0, SeqCst);
-
-                    let move_tx = move_tx.clone();
-                    let mut bitboards = bitboards.clone();
-                    thread::spawn(move || {
-                        bitboards.toplevel_search(i32::MIN + 1, i32::MAX - 1, move_tx)
-                    });
-                }
-                Stop => {
-                    println!(
-                        "bestmove {}\nFound after {:.3}s",
-                        best_move.to_algebraic_notation(),
-                        (Instant::now() - start_time).as_secs_f32()
-                    );
-                    RUN_SEARCH.store(false, Relaxed);
-                    // clear the channel
-                    while move_rx.recv_timeout(Duration::from_millis(100)).is_ok() {}
-                }
-                Quit => break,
-                Reset => {
-                    bitboards.reset();
-                }
-                Fen(fen) => bitboards.set_from_fen(fen).unwrap(),
-                Moves(moves) => {
-                    for move_ in &moves {
-                        bitboards.make_move(*move_);
-                    }
-                }
-            }
-        }
-        while let Ok((score, move_, depth)) = move_rx.recv_timeout(Duration::from_millis(100)) {
-            if !RUN_SEARCH.load(Relaxed) {
-                continue;
-            }
-            println!(
-                "info depth {} score cp {}",
-                depth,
-                score * -((bitboards.current_player as i32 + depth as i32) % 2)
-            );
-            if depth > best_depth {
-                best_depth = depth;
-                // best_score = score;
-                best_move = move_;
-                println!("New best: {}", best_move.to_algebraic_notation());
-            }
-            if Some(depth) == max_depth {
-                println!(
-                    "bestmove {}\nFound after {:.3}s",
-                    best_move.to_algebraic_notation(),
-                    (Instant::now() - start_time).as_secs_f32()
-                );
-                RUN_SEARCH.store(false, Relaxed);
-                // clear the channel
-                while move_rx.recv_timeout(Duration::from_millis(100)).is_ok() {}
-            }
-        }
-        // report nodes and nps
-        if RUN_SEARCH.load(Relaxed) {
-            println!("info nodes {}", NODE_COUNT.load(Relaxed));
-            println!(
-                "info nps {}",
-                (NPS_COUNT.swap(0, Relaxed) as f32 - (Instant::now() - last_nps_time).as_secs_f32())
-                    as usize
-            );
-            last_nps_time = Instant::now();
-        }
-
-        // stop search after too long
-        if !infinite_search
-            && RUN_SEARCH.load(Relaxed)
-            && (Instant::now() - start_time).as_millis() as usize >= max_elapsed_time
-        {
-            println!(
-                "bestmove {}\nFound after {:.3}s",
-                best_move.to_algebraic_notation(),
-                (Instant::now() - start_time).as_secs_f32()
-            );
-            RUN_SEARCH.store(false, Relaxed);
-            // clear the channel of incomplete results
-            while move_rx.recv_timeout(Duration::from_millis(100)).is_ok() {}
-        }
-    }
-    Ok(())
-}
+use bitboards::BitBoards;
+use lookup_tables::lookup_tables;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let (tx, thread_rx) = channel();
-    let (_thread_tx, rx) = channel::<EngineMessage>();
-
-    thread::spawn(|| {
-        engine_thread(thread_rx).unwrap();
-    });
-
-    for line_res in stdin().lock().lines() {
-        let line = line_res?;
+    for line in stdin().lock().lines() {
+        let line = line?;
 
         let words = line.split(' ').collect::<Vec<_>>();
 
         match words.get(0) {
             Some(&"uci") => {
-                println!("id name ches");
+                println!("id name cheers");
                 println!("id author Algorhythm");
                 println!("uciok");
             }
-            Some(&"quit") => {
-                tx.send(EngineMessage::Quit)?;
-                break;
-            }
+            Some(&"quit") => break,
             Some(&"isready") => {
-                // generate lookup tables and zobrist numbers
-                let _ = LookupTables::generate_all();
-                let _ = zobrist_numbers();
                 println!("readyok");
             }
-            Some(&"position") => {
-                let moves_index;
-                match words.get(1) {
-                    Some(&"fen") => {
-                        let mut test_boards = BitBoards::new(0);
-                        test_boards.set_from_fen(words[2..=7].join(" "))?;
-
-                        tx.send(EngineMessage::Fen(words[2..=7].join(" ")))?;
-                        moves_index = 9
-                    }
-                    Some(&"startpos") => {
-                        tx.send(EngineMessage::Reset)?;
-                        if let Some(word) = words.get(2) {
-                            if word != &"moves" {
-                                println!("Malformed UCI command: no \'moves\' in position command");
-                                continue;
-                            };
-                        }
-                        moves_index = 3
-                    }
-                    _ => unreachable!(),
-                }
-                if words.get(moves_index).is_some() {
-                    tx.send(EngineMessage::Moves(
-                        words[moves_index..]
-                            .iter()
-                            .map(|xy| parse_move_pair(xy))
-                            .collect(),
-                    ))?;
-                }
-            }
-            Some(&"go") => {
-                // clear the channel buffer
-                while rx.try_recv().is_ok() {}
-                if words.iter().any(|&c| c == "infinite") {
-                    tx.send(EngineMessage::Start(0, 0, true, None))?;
-                } else {
-                    let wtime = words.iter().skip_while(|&&c| c != "wtime").nth(1);
-                    let btime = words.iter().skip_while(|&&c| c != "btime").nth(1);
-
-                    if wtime.is_some() && btime.is_some() {
-                        tx.send(EngineMessage::Start(
-                            wtime.unwrap().parse::<usize>().unwrap(),
-                            btime.unwrap().parse::<usize>().unwrap(),
-                            false,
-                            None,
-                        ))?;
-                    } else if let Some(depth) = words.iter().skip_while(|&&c| c != "depth").nth(1) {
-                        tx.send(EngineMessage::Start(
-                            0,
-                            0,
-                            true,
-                            Some(depth.parse::<usize>()?),
-                        ))?;
-                    } else {
-                        println!("Incomplete 'go' command, expected one of 'infinite', 'wtime <millis> btime <millis>' or 'depth <depth>'");
-                    }
-                }
-            }
-            Some(&"stop") => {
-                tx.send(EngineMessage::Stop)?;
-            }
-            Some(&"perft") => {
-                let depth = words
-                    .get(1)
-                    .ok_or("No depth specified for perft!")?
-                    .parse::<usize>()?;
-                let nodes = BitBoards::perft(
-                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 0"
-                        .to_string(),
-                    depth,
-                )?;
-                println!("Depth {}, {} nodes", depth, nodes);
+            Some(&"magics") => {
+                let start = Instant::now();
+                lookup_tables();
+                let end = Instant::now();
+                println!("Generated magics in {:.3}s", (end - start).as_secs_f32());
             }
             Some(&"test") => {
-                let mut boards = BitBoards::new(0);
-                assert_eq!(boards.position_hash, zobrist_hash(&boards));
-                boards.make_move(parse_move_pair("b1c3"));
-                boards.make_move(parse_move_pair("b8c6"));
-                boards.make_move(parse_move_pair("g1f3"));
-                boards.make_move(parse_move_pair("g8f6"));
-                boards.make_move(parse_move_pair("e2e3"));
-                boards.make_move(parse_move_pair("c6b4"));
-                boards.make_move(parse_move_pair("f1e2"));
-                boards.make_move(parse_move_pair("b4c2"));
-                assert_eq!(boards.position_hash, zobrist_hash(&boards));
-                boards.make_move(parse_move_pair("c3a4"));
-                assert_eq!(boards.position_hash, zobrist_hash(&boards));
+                let mut boards = BitBoards::default();
+                boards.set_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10".to_string())?;
+                let moves = boards.legal_moves();
+                for move_ in &moves {
+                    println!("{}", move_);
+                }
+                println!("{}", moves.len());
             }
-            _ => {
-                eprintln!("unknown command: {}", line)
-            }
+            _ => println!("unknown command: {}", line),
         }
     }
     Ok(())
 }
-
-// get 'uci'
-// send 'id'-s
-// send 'option'-s
-// send 'uciok' before timeout
-
-// get 'isready'
-// send 'readyok'
-
-// get 'go': start calculating
-// get specifier for calculation
-// get 'stop': stop calculating
-// send 'bestmove'
-
-// get 'quit': exit program

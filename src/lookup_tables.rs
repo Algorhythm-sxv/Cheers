@@ -10,7 +10,7 @@ pub fn lookup_tables() -> &'static LookupTables {
 
         let rook_magics = generate_rook_magics(&mut sliding_attack_table);
         let bishop_magics = generate_bishop_magics(&mut sliding_attack_table);
-        
+
         LookupTables {
             knight_table: generate_knight_table(),
             king_table: generate_king_table(),
@@ -39,7 +39,6 @@ impl LookupTables {
         lookup_tables()
     }
 
-    #[inline(always)]
     fn bishop_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
         let magic_square = self.bishop_magics[square];
         magic_square.index
@@ -50,7 +49,6 @@ impl LookupTables {
             )
     }
 
-    #[inline(always)]
     fn rook_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
         let magic_square = self.rook_magics[square];
         magic_square.index
