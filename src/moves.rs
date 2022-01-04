@@ -13,7 +13,7 @@ fn coord(square: u8) -> String {
         5 => 'f',
         6 => 'g',
         7 => 'h',
-        _ => unreachable!()
+        _ => unreachable!(),
     });
     res.push(match square / 8 {
         0 => '1',
@@ -29,6 +29,7 @@ fn coord(square: u8) -> String {
     res
 }
 
+#[derive(Clone, Copy)]
 pub struct Move {
     start: u8,
     target: u8,
@@ -41,6 +42,7 @@ pub struct Move {
 }
 
 impl Move {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         start: u8,
         target: u8,
@@ -104,6 +106,42 @@ impl Move {
 
     pub fn queen_move(start: u8, target: u8, capture: bool) -> Self {
         Self::new(start, target, Queen, NoPiece, capture, false, false, false)
+    }
+
+    pub fn start(&self) -> u8 {
+        self.start
+    }
+
+    pub fn target(&self) -> u8 {
+        self.target
+    }
+
+    pub fn piece(&self) -> PieceIndex {
+        self.piece
+    }
+
+    pub fn promotion(&self) -> PieceIndex {
+        self.promotion
+    }
+
+    pub fn capture(&self) -> bool {
+        self.capture
+    }
+
+    pub fn en_passent(&self) -> bool {
+        self.enpassent_capture
+    }
+
+    pub fn castling(&self) -> bool {
+        self.castling
+    }
+
+    pub fn double_pawn_push(&self) -> bool {
+        self.double_pawn_push
+    }
+
+    pub fn coords(&self) -> String {
+        format!("{}{}", coord(self.start), coord(self.target))
     }
 }
 

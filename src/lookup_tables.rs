@@ -115,29 +115,33 @@ impl LookupTables {
 }
 
 // masks to prevent A-H file wrapping
-pub const NOT_A_FILE: u64 = !0x0101010101010101;
-pub const NOT_A_B_FILES: u64 = !0x0303030303030303;
-pub const NOT_H_FILE: u64 = !0x8080808080808080;
-pub const NOT_G_H_FILES: u64 = !0xC0C0C0C0C0C0C0C0;
+#[allow(dead_code)]
+mod consts {
+    pub const NOT_A_FILE: u64 = !0x0101010101010101;
+    pub const NOT_A_B_FILES: u64 = !0x0303030303030303;
+    pub const NOT_H_FILE: u64 = !0x8080808080808080;
+    pub const NOT_G_H_FILES: u64 = !0xC0C0C0C0C0C0C0C0;
 
-// masks for ranks/files
-pub const A_FILE: u64 = 0x0101010101010101;
-pub const B_FILE: u64 = 0x0202020202020202;
-pub const C_FILE: u64 = 0x0404040404040404;
-pub const D_FILE: u64 = 0x0808080808080808;
-pub const E_FILE: u64 = 0x1010101010101010;
-pub const F_FILE: u64 = 0x2020202020202020;
-pub const G_FILE: u64 = 0x4040404040404040;
-pub const H_FILE: u64 = 0x8080808080808080;
+    // masks for ranks/files
+    pub const A_FILE: u64 = 0x0101010101010101;
+    pub const B_FILE: u64 = 0x0202020202020202;
+    pub const C_FILE: u64 = 0x0404040404040404;
+    pub const D_FILE: u64 = 0x0808080808080808;
+    pub const E_FILE: u64 = 0x1010101010101010;
+    pub const F_FILE: u64 = 0x2020202020202020;
+    pub const G_FILE: u64 = 0x4040404040404040;
+    pub const H_FILE: u64 = 0x8080808080808080;
 
-pub const FIRST_RANK: u64 = 0x00000000000000FF;
-pub const SECOND_RANK: u64 = 0x000000000000FF00;
-pub const THIRD_RANK: u64 = 0x0000000000FF0000;
-pub const FOURTH_RANK: u64 = 0x00000000FF000000;
-pub const FIFTH_RANK: u64 = 0x000000FF00000000;
-pub const SIXTH_RANK: u64 = 0x0000FF0000000000;
-pub const SEVENTH_RANK: u64 = 0x00FF000000000000;
-pub const EIGHTH_RANK: u64 = 0xFF00000000000000;
+    pub const FIRST_RANK: u64 = 0x00000000000000FF;
+    pub const SECOND_RANK: u64 = 0x000000000000FF00;
+    pub const THIRD_RANK: u64 = 0x0000000000FF0000;
+    pub const FOURTH_RANK: u64 = 0x00000000FF000000;
+    pub const FIFTH_RANK: u64 = 0x000000FF00000000;
+    pub const SIXTH_RANK: u64 = 0x0000FF0000000000;
+    pub const SEVENTH_RANK: u64 = 0x00FF000000000000;
+    pub const EIGHTH_RANK: u64 = 0xFF00000000000000;
+}
+pub use consts::*;
 
 /// Generates a table mapping an input square to a mask of all squares a knight attacks from there
 fn generate_knight_table() -> Vec<u64> {
@@ -194,7 +198,7 @@ fn generate_pawn_push_tables() -> [Vec<u64>; 2] {
 fn generate_pawn_attack_tables() -> [Vec<u64>; 2] {
     let mut tables = [vec![0; 64], vec![0; 64]];
 
-    for square in 8..56 {
+    for square in 0..64 {
         tables[White as usize][square as usize] =
             ((1 << square << 7) & NOT_H_FILE) | ((1 << square << 9) & NOT_A_FILE);
         tables[Black as usize][square as usize] =

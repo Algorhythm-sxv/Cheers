@@ -183,6 +183,9 @@ impl BitBoards {
     }
 
     fn piece_at(&self, square: usize) -> PieceIndex {
+        if (self.color_masks[White] | self.color_masks[Black]) & (1 << square) == 0 {
+            return NoPiece;
+        }
         for piece in [Pawn, Knight, Bishop, Rook, Queen, King] {
             if (self.piece_masks[(White, piece)] | self.piece_masks[(Black, piece)]) & (1 << square)
                 != 0
@@ -282,8 +285,9 @@ impl BitBoards {
         let king_square = self.piece_masks[(color, King)].trailing_zeros() as usize;
 
         // King moves
-        let attacked_squares =
-            self.all_attacks(!color, self.color_masks[White] | self.color_masks[Black]);
+        let kingless_blocking_mask =
+            (self.color_masks[color] ^ self.piece_masks[(color, King)]) | self.color_masks[!color];
+        let attacked_squares = self.all_attacks(!color, kingless_blocking_mask);
         let mut king_moves =
             self.king_attacks(color) & !(attacked_squares | self.color_masks[color]);
         while king_moves != 0 {
@@ -294,15 +298,21 @@ impl BitBoards {
         }
 
         // Check evasions
-        let kingless_blocking_mask =
-            (self.color_masks[color] ^ self.piece_masks[(color, King)]) | self.color_masks[!color];
-        let checkers = tables.lookup_knight(king_square) & self.piece_masks[(!color, Knight)]
-            | tables.lookup_bishop(king_square, kingless_blocking_mask)
-                & self.piece_masks[(!color, Bishop)]
-            | tables.lookup_rook(king_square, kingless_blocking_mask)
-                & self.piece_masks[(!color, Rook)]
-            | tables.lookup_queen(king_square, kingless_blocking_mask)
-                & self.piece_masks[(!color, Queen)];
+        let checkers = tables.lookup_pawn_attack(king_square, color)
+            & self.piece_masks[(!color, Pawn)]
+            | tables.lookup_knight(king_square) & self.piece_masks[(!color, Knight)]
+            | tables.lookup_bishop(
+                king_square,
+                self.color_masks[White] | self.color_masks[Black],
+            ) & self.piece_masks[(!color, Bishop)]
+            | tables.lookup_rook(
+                king_square,
+                self.color_masks[White] | self.color_masks[Black],
+            ) & self.piece_masks[(!color, Rook)]
+            | tables.lookup_queen(
+                king_square,
+                self.color_masks[White] | self.color_masks[Black],
+            ) & self.piece_masks[(!color, Queen)];
 
         let num_checkers = checkers.count_ones();
         // - Double Check
@@ -323,8 +333,8 @@ impl BitBoards {
             if self.piece_at(checker_square).is_slider() {
                 // if the checking piece is a slider, we can push a piece to block it
                 let slider_rays;
-                if (king_square as isize - checker_square as isize) % 8 == 0
-                    || (king_square as isize - checker_square as isize) / 8 == 0
+                if (king_square % 8) == (checker_square % 8)
+                    || (king_square / 8) == (checker_square / 8)
                 {
                     // orthogonal slider
                     slider_rays = tables.lookup_rook(king_square, 1 << checker_square);
@@ -332,7 +342,8 @@ impl BitBoards {
                 } else {
                     // diagonal slider
                     slider_rays = tables.lookup_bishop(king_square, 1 << checker_square);
-                    push_mask = tables.lookup_bishop(checker_square, 0u64) & slider_rays;
+                    push_mask =
+                        tables.lookup_bishop(checker_square, 1 << king_square) & slider_rays;
                 }
             } else {
                 // if the piece is not a slider, we can only capture
@@ -365,7 +376,9 @@ impl BitBoards {
                     pin_ray & (self.piece_masks[(color, Rook)] | self.piece_masks[(color, Queen)]);
                 if pinned_rook_or_queen != 0 {
                     let rook_square = pinned_rook_or_queen.trailing_zeros() as u8;
-                    let mut rook_moves = pin_ray & !((1 << king_square) | pinned_rook_or_queen);
+                    let mut rook_moves = pin_ray
+                        & (push_mask | capture_mask)
+                        & !((1 << king_square) | pinned_rook_or_queen);
                     while rook_moves != 0 {
                         let target = rook_moves.trailing_zeros() as u8;
                         let capture = target as usize == pinner_square;
@@ -387,10 +400,19 @@ impl BitBoards {
                     let pawn_square = pinned_pawn.trailing_zeros() as u8;
                     let mut pawn_moves = tables.lookup_pawn_push(pawn_square as usize, color)
                         & pin_ray
+                        & push_mask
                         & !self.color_masks[!color];
                     pawn_moves |= if pawn_moves != 0
-                        && ((color == White && pawn_square / 8 == 1)
-                            || (color == Black && pawn_square / 8 == 6))
+                        && ((color == White
+                            && pawn_square / 8 == 1
+                            && (self.color_masks[White] | self.color_masks[Black])
+                                & 1 << (pawn_square + 16)
+                                == 0)
+                            || (color == Black
+                                && pawn_square / 8 == 6
+                                && (self.color_masks[White] | self.color_masks[Black])
+                                    & 1 << (pawn_square - 16)
+                                    == 0))
                     {
                         tables.lookup_pawn_push(pawn_moves.trailing_zeros() as usize, color)
                     } else {
@@ -438,7 +460,9 @@ impl BitBoards {
                     & (self.piece_masks[(color, Bishop)] | self.piece_masks[(color, Queen)]);
                 if pinned_bishop_or_queen != 0 {
                     let bishop_square = pinned_bishop_or_queen.trailing_zeros() as u8;
-                    let mut bishop_moves = pin_ray & !((1 << king_square) | pinned_bishop_or_queen);
+                    let mut bishop_moves = pin_ray
+                        & (push_mask | capture_mask)
+                        & !((1 << king_square) | pinned_bishop_or_queen);
                     while bishop_moves != 0 {
                         let target = bishop_moves.trailing_zeros() as u8;
                         let capture = target as usize == pinner_square;
@@ -461,20 +485,29 @@ impl BitBoards {
                     let pawn_square = pinned_pawn.trailing_zeros() as u8;
                     let mut pawn_moves = tables.lookup_pawn_attack(pawn_square as usize, color)
                         & pin_ray
+                        & capture_mask
                         & (self.color_masks[!color] | self.en_passent_mask);
                     while pawn_moves != 0 {
                         let target = pawn_moves.trailing_zeros() as u8;
-                        moves.push(Move::new(
-                            pawn_square,
-                            target,
-                            Pawn,
-                            NoPiece,
-                            true,
-                            false,
-                            // en passent capture
-                            target == self.en_passent_mask.trailing_zeros() as u8,
-                            false,
-                        ));
+                        if target / 8 == !color as u8 * 7 {
+                            // pinned pawn capture promotions
+                            moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
+                            moves.push(Move::pawn_capture_promotion(pawn_square, target, Bishop));
+                            moves.push(Move::pawn_capture_promotion(pawn_square, target, Rook));
+                            moves.push(Move::pawn_capture_promotion(pawn_square, target, Queen));
+                        } else {
+                            moves.push(Move::new(
+                                pawn_square,
+                                target,
+                                Pawn,
+                                NoPiece,
+                                true,
+                                false,
+                                // en passent capture
+                                target == self.en_passent_mask.trailing_zeros() as u8,
+                                false,
+                            ));
+                        }
                         pawn_moves ^= 1 << target;
                     }
                 }
@@ -487,7 +520,8 @@ impl BitBoards {
         if num_checkers == 0 {
             let king = self.piece_masks[(color, King)];
             if self.castling_rights[(color, Kingside)]
-                && self.color_masks[color] & ((king << 1) | (king << 2)) == 0
+                && (self.color_masks[White] | self.color_masks[Black]) & ((king << 1) | (king << 2))
+                    == 0
                 && attacked_squares & ((king << 1) | (king << 2)) == 0
             {
                 // generate castling kingside if rights remain, the way is clear and the squares aren't attacked
@@ -495,7 +529,9 @@ impl BitBoards {
                 moves.push(Move::king_castle(start, start + 2));
             }
             if self.castling_rights[(color, Queenside)]
-                && self.color_masks[color] & ((king >> 1) | (king >> 2)) == 0
+                && (self.color_masks[White] | self.color_masks[Black])
+                    & ((king >> 1) | (king >> 2) | (king >> 3))
+                    == 0
                 && attacked_squares & ((king >> 1) | (king >> 2)) == 0
             {
                 // generate castling queenside if rights remain, the way is clear and the squares aren't attacked
@@ -542,7 +578,7 @@ impl BitBoards {
                 }
                 // pawn captures
                 let mut pawn_captures = (((pawn & NOT_A_FILE) << 7) | ((pawn & NOT_H_FILE) << 9))
-                    & capture_mask
+                    & (capture_mask | self.en_passent_mask)
                     & (self.color_masks[!color] | self.en_passent_mask);
                 while pawn_captures != 0 {
                     let target = pawn_captures.trailing_zeros() as u8;
@@ -636,7 +672,7 @@ impl BitBoards {
                 }
                 // pawn captures
                 let mut pawn_captures = (((pawn & NOT_A_FILE) >> 9) | ((pawn & NOT_H_FILE) >> 7))
-                    & capture_mask
+                    & (capture_mask | self.en_passent_mask)
                     & (self.color_masks[!color] | self.en_passent_mask);
                 while pawn_captures != 0 {
                     let target = pawn_captures.trailing_zeros() as u8;
@@ -754,5 +790,168 @@ impl BitBoards {
         }
 
         moves
+    }
+
+    pub fn make_move(&mut self, move_: Move) {
+        // increment the halfmove clock for 50-move rule
+        self.halfmove_clock += 1;
+
+        let color = self.current_player;
+        let start = move_.start() as usize;
+        let target = move_.target() as usize;
+        let piece = move_.piece();
+        let captured = if move_.en_passent() {
+            Pawn
+        } else {
+            self.piece_at(target)
+        };
+
+        // Castling
+        if move_.castling() {
+            let dx = target as isize - start as isize;
+            let (rook_start, rook_target) = if dx == 2 {
+                // Kingside
+                (target + 1, target - 1)
+            } else {
+                // Queenside
+                (target - 2, target + 1)
+            };
+
+            // update king position
+            self.piece_masks[(color, King)] ^= (1 << target) | (1 << start);
+            // update rook position
+            self.piece_masks[(color, Rook)] ^= (1 << rook_target) | (1 << rook_start);
+            // update color masks
+            self.color_masks[color] ^=
+                (1 << start) | (1 << target) | (1 << rook_start) | (1 << rook_target);
+            // update castling rights
+            self.castling_rights[color] = [false, false];
+        }
+        // Remove captured piece (en passent, rule 50)
+        if captured != NoPiece {
+            let cap_square = if move_.en_passent() {
+                if color == White {
+                    target - 8
+                } else {
+                    target + 8
+                }
+            } else {
+                target
+            };
+            // remove piece from target square
+            self.piece_masks[(!color, captured)] ^= 1 << cap_square;
+            self.color_masks[!color] ^= 1 << cap_square;
+
+            // reset halfmove clock
+            self.halfmove_clock = 0;
+        }
+
+        // reset en passent square
+        if self.en_passent_mask != 0 {
+            self.en_passent_mask = 0;
+        }
+
+        // update castling rights
+        if piece == King {
+            self.castling_rights[color] = [false, false]
+        } else if piece == Rook {
+            if self.castling_rights[(color, Kingside)] && start % 8 == 7 {
+                // kingside rook has made first move
+                self.castling_rights[(color, Kingside)] = false;
+            } else if self.castling_rights[(color, Queenside)] && start % 8 == 0 {
+                // queenside rook has made first move
+                self.castling_rights[(color, Queenside)] = false;
+            }
+        }
+        if captured == Rook {
+            if self.castling_rights[(!color, Kingside)]
+                && target % 8 == 7
+                && target / 8 == !color as usize * 7
+            {
+                // kingside rook has been captured
+                self.castling_rights[(!color, Kingside)] = false;
+            } else if self.castling_rights[(!color, Queenside)]
+                && target % 8 == 0
+                && target / 8 == !color as usize * 7
+            {
+                // queenside rook has been captured
+                self.castling_rights[(!color, Queenside)] = false;
+            }
+        }
+
+        // move the piece
+        if !move_.castling() {
+            self.piece_masks[(color, piece)] ^= (1 << start) | (1 << target);
+            self.color_masks[color] ^= (1 << start) | (1 << target);
+        }
+
+        // pawn special cases
+        if piece == Pawn {
+            // en passent square
+            if move_.double_pawn_push() {
+                let ep_square = if color == White {
+                    target - 8
+                } else {
+                    target + 8
+                };
+                // only set the ep mask if the pawn can be taken
+                self.en_passent_mask = (1 << ep_square) & self.pawn_attacks(!color);
+            }
+            // promotion
+            if move_.promotion() != NoPiece {
+                self.piece_masks[(color, Pawn)] ^= 1 << target;
+                self.piece_masks[(color, move_.promotion())] |= 1 << target;
+            }
+            // rule 50
+            self.halfmove_clock = 0;
+        }
+
+        // swap players
+        self.current_player = !self.current_player;
+    }
+
+    pub fn perft(&self, depth: usize) -> usize {
+        if depth == 0 {
+            return 1;
+        }
+
+        let moves = self.legal_moves();
+        let mut nodes = 0;
+
+        for move_ in moves {
+            let mut copy = self.clone();
+            copy.make_move(move_);
+            nodes += copy.perft(depth - 1);
+        }
+        nodes
+    }
+
+    pub fn divide(&self, depth: usize) {
+        if depth == 0 {
+            return;
+        }
+        let moves = self.legal_moves();
+        let mut move_count = 0;
+        let mut node_count = 0;
+        for move_ in moves {
+            move_count += 1;
+            let mut copy = self.clone();
+            copy.make_move(move_);
+            let nodes = copy.perft(depth - 1);
+            node_count += nodes;
+            println!(
+                "{}{}: {}",
+                move_.coords(),
+                match move_.promotion() {
+                    Knight => "=N",
+                    Bishop => "=B",
+                    Rook => "=R",
+                    Queen => "=Q",
+                    _ => "",
+                },
+                nodes
+            );
+        }
+        println!("Moves: {}, Nodes: {}\n", move_count, node_count);
     }
 }

@@ -1,10 +1,11 @@
-mod lookup_tables;
-mod types;
 mod bitboards;
+mod lookup_tables;
 mod moves;
+mod types;
 
 use std::{
     error::Error,
+    fs::File,
     io::{prelude::*, stdin},
     time::Instant,
 };
@@ -38,13 +39,57 @@ fn main() -> Result<(), Box<dyn Error>> {
                 lookup_tables().print_magics();
             }
             Some(&"test") => {
-                let mut boards = BitBoards::default();
-                boards.set_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10".to_string())?;
-                let moves = boards.legal_moves();
-                for move_ in &moves {
-                    println!("{}", move_);
+                let mut test_suite = String::new();
+                File::open("src/perftsuite.txt")?.read_to_string(&mut test_suite)?;
+                for depth in 1..=6 {
+                    for test in test_suite.split('\n') {
+                        let mut test_params = test.split(';');
+
+                        let test_fen = test_params.next().unwrap().to_string();
+                        let mut boards = BitBoards::default();
+                        boards.set_from_fen(test_fen.clone())?;
+                        let answer = test_params
+                            .nth(depth - 1)
+                            .unwrap()
+                            .split(' ')
+                            .nth(1)
+                            .unwrap()
+                            .trim()
+                            .parse::<usize>()
+                            .unwrap();
+
+                        if boards.perft(depth) != answer {
+                            println!("Test for fen {} failed at depth {}", test_fen, depth);
+                        } else if depth > 5 {
+                            println!("Perft {} completed successfully for FEN {}", depth, test_fen);
+                        }
+                    }
+                    println!("Perft tests completed at depth {}", depth);
                 }
-                println!("{}", moves.len());
+            }
+            Some(&"perft") => {
+                let mut boards = BitBoards::default();
+                boards.set_from_fen(
+                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+                )?;
+                let depth = match words.get(1) {
+                    None => 5,
+                    Some(num) => num.parse::<usize>()?,
+                };
+                for i in 0..=depth {
+                    println!("Perft {}: {}", i, boards.perft(i))
+                }
+            }
+            Some(&"divide") => {
+                let depth = match words.get(1) {
+                    None => 5,
+                    Some(num) => num.parse::<usize>()?,
+                };
+                let mut boards = BitBoards::default();
+                boards.set_from_fen(
+                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+                )?;
+                boards.divide(depth);
             }
             _ => println!("unknown command: {}", line),
         }
