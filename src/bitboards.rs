@@ -9,6 +9,7 @@ use crate::{
         PieceIndex::{self, *},
         PieceMasks,
     },
+    zobrist::*,
 };
 
 #[allow(dead_code)]
@@ -35,7 +36,7 @@ fn print_bitboard(board: u64) {
     println!("\n   a b c d e f g h")
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct BitBoards {
     color_masks: ColorMasks,
     piece_masks: PieceMasks,
@@ -43,13 +44,34 @@ pub struct BitBoards {
     castling_rights: CastlingRights,
     en_passent_mask: u64,
     halfmove_clock: u8,
+    hash: u64,
 }
 
 impl BitBoards {
-    pub fn set_from_fen(&mut self, fen: String) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn new() -> Self {
+        let mut boards = Self {
+            color_masks: ColorMasks::default(),
+            piece_masks: PieceMasks::default(),
+            current_player: ColorIndex::default(),
+            castling_rights: CastlingRights::default(),
+            en_passent_mask: 0,
+            halfmove_clock: 0,
+            hash: 0,
+        };
+        boards
+            .set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+            .unwrap();
+        boards
+    }
+
+    pub fn set_from_fen(
+        &mut self,
+        fen: impl Into<String>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.piece_masks = PieceMasks([[0; 6]; 2]);
         self.color_masks = ColorMasks([0; 2]);
 
+        let fen = fen.into();
         let mut lines = fen.split(&['/', ' '][..]);
 
         for (i, line) in lines.clone().take(8).enumerate() {
@@ -176,8 +198,8 @@ impl BitBoards {
             .ok_or_else(|| String::from("No halfmove clock!"))?
             .parse::<u8>()?;
 
-        // let hash = zobrist_hash(self);
-        // self.position_hash = hash;
+        let hash = self.zobrist_hash();
+        self.hash = hash;
 
         Ok(())
     }
@@ -817,16 +839,22 @@ impl BitBoards {
                 (target - 2, target + 1)
             };
 
-            // update king position
+            // update king position and hash
+            self.hash ^= zobrist_piece(King, color, start) ^ zobrist_piece(King, color, target);
             self.piece_masks[(color, King)] ^= (1 << target) | (1 << start);
-            // update rook position
+            // update rook position and hash
+            self.hash ^=
+                zobrist_piece(Rook, color, rook_start) ^ zobrist_piece(Rook, color, rook_target);
             self.piece_masks[(color, Rook)] ^= (1 << rook_target) | (1 << rook_start);
             // update color masks
             self.color_masks[color] ^=
                 (1 << start) | (1 << target) | (1 << rook_start) | (1 << rook_target);
             // update castling rights
+            self.hash ^= zobrist_castling(self.castling_rights);
             self.castling_rights[color] = [false, false];
+            self.hash ^= zobrist_castling(self.castling_rights);
         }
+
         // Remove captured piece (en passent, rule 50)
         if captured != NoPiece {
             let cap_square = if move_.en_passent() {
@@ -839,6 +867,7 @@ impl BitBoards {
                 target
             };
             // remove piece from target square
+            self.hash ^= zobrist_piece(captured, !color, cap_square);
             self.piece_masks[(!color, captured)] ^= 1 << cap_square;
             self.color_masks[!color] ^= 1 << cap_square;
 
@@ -848,39 +877,45 @@ impl BitBoards {
 
         // reset en passent square
         if self.en_passent_mask != 0 {
+            self.hash ^= zobrist_enpassent(self.en_passent_mask);
             self.en_passent_mask = 0;
         }
 
         // update castling rights
         if piece == King {
-            self.castling_rights[color] = [false, false]
+            self.hash ^= zobrist_castling(self.castling_rights);
+            self.castling_rights[color] = [false, false];
+            self.hash ^= zobrist_castling(self.castling_rights);
         } else if piece == Rook {
-            if self.castling_rights[(color, Kingside)] && start % 8 == 7 {
+            if self.castling_rights[(color, Kingside)] && start == 7 + 56 * color as usize {
                 // kingside rook has made first move
+                self.hash ^= zobrist_castling(self.castling_rights);
                 self.castling_rights[(color, Kingside)] = false;
-            } else if self.castling_rights[(color, Queenside)] && start % 8 == 0 {
+                self.hash ^= zobrist_castling(self.castling_rights);
+            } else if self.castling_rights[(color, Queenside)] && start == 56 * color as usize {
                 // queenside rook has made first move
+                self.hash ^= zobrist_castling(self.castling_rights);
                 self.castling_rights[(color, Queenside)] = false;
+                self.hash ^= zobrist_castling(self.castling_rights);
             }
         }
         if captured == Rook {
-            if self.castling_rights[(!color, Kingside)]
-                && target % 8 == 7
-                && target / 8 == !color as usize * 7
-            {
+            if self.castling_rights[(!color, Kingside)] && target == 7 + 56 * !color as usize {
                 // kingside rook has been captured
+                self.hash ^= zobrist_castling(self.castling_rights);
                 self.castling_rights[(!color, Kingside)] = false;
-            } else if self.castling_rights[(!color, Queenside)]
-                && target % 8 == 0
-                && target / 8 == !color as usize * 7
-            {
+                self.hash ^= zobrist_castling(self.castling_rights);
+            } else if self.castling_rights[(!color, Queenside)] && target == 56 * !color as usize {
                 // queenside rook has been captured
+                self.hash ^= zobrist_castling(self.castling_rights);
                 self.castling_rights[(!color, Queenside)] = false;
+                self.hash ^= zobrist_castling(self.castling_rights);
             }
         }
 
         // move the piece
         if !move_.castling() {
+            self.hash ^= zobrist_piece(piece, color, start) ^ zobrist_piece(piece, color, target);
             self.piece_masks[(color, piece)] ^= (1 << start) | (1 << target);
             self.color_masks[color] ^= (1 << start) | (1 << target);
         }
@@ -896,9 +931,14 @@ impl BitBoards {
                 };
                 // only set the ep mask if the pawn can be taken
                 self.en_passent_mask = (1 << ep_square) & self.pawn_attacks(!color);
+                if self.en_passent_mask != 0 {
+                    self.hash ^= zobrist_enpassent(self.en_passent_mask);
+                }
             }
             // promotion
             if move_.promotion() != NoPiece {
+                self.hash ^= zobrist_piece(Pawn, color, target)
+                    ^ zobrist_piece(move_.promotion(), color, target);
                 self.piece_masks[(color, Pawn)] ^= 1 << target;
                 self.piece_masks[(color, move_.promotion())] |= 1 << target;
             }
@@ -907,7 +947,40 @@ impl BitBoards {
         }
 
         // swap players
+        self.hash ^= zobrist_player();
         self.current_player = !self.current_player;
+
+        debug_assert!(self.hash == self.zobrist_hash());
+    }
+
+    pub fn zobrist_hash(&self) -> u64 {
+        let mut hash = 0u64;
+        // pieces
+        for piece in [Pawn, Knight, Bishop, Rook, Queen, King] {
+            for color in [White, Black] {
+                let mut pieces = self.piece_masks[(color, piece)];
+                while pieces != 0 {
+                    let square = pieces.trailing_zeros() as usize;
+                    hash ^= zobrist_piece(piece, color, square);
+                    pieces ^= 1 << square;
+                }
+            }
+        }
+
+        // side to move
+        if self.current_player == Black {
+            hash ^= zobrist_player();
+        }
+
+        // castling rights
+        hash ^= zobrist_castling(self.castling_rights);
+
+        // en passent square
+        if self.en_passent_mask != 0 {
+            hash ^= zobrist_enpassent(self.en_passent_mask);
+        }
+
+        hash
     }
 
     pub fn perft(&self, depth: usize) -> usize {

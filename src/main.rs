@@ -2,6 +2,7 @@ mod bitboards;
 mod lookup_tables;
 mod moves;
 mod types;
+mod zobrist;
 
 use std::{
     error::Error,
@@ -46,7 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         let mut test_params = test.split(';');
 
                         let test_fen = test_params.next().unwrap().to_string();
-                        let mut boards = BitBoards::default();
+                        let mut boards = BitBoards::new();
                         boards.set_from_fen(test_fen.clone())?;
                         let answer = test_params
                             .nth(depth - 1)
@@ -61,16 +62,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                         if boards.perft(depth) != answer {
                             println!("Test for fen {} failed at depth {}", test_fen, depth);
                         } else if depth > 5 {
-                            println!("Perft {} completed successfully for FEN {}", depth, test_fen);
+                            println!(
+                                "Perft {} completed successfully for FEN {}",
+                                depth, test_fen
+                            );
                         }
                     }
                     println!("Perft tests completed at depth {}", depth);
                 }
             }
             Some(&"perft") => {
-                let mut boards = BitBoards::default();
+                let mut boards = BitBoards::new();
                 boards.set_from_fen(
-                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
                 )?;
                 let depth = match words.get(1) {
                     None => 5,
@@ -85,9 +89,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     None => 5,
                     Some(num) => num.parse::<usize>()?,
                 };
-                let mut boards = BitBoards::default();
+                let mut boards = BitBoards::new();
                 boards.set_from_fen(
-                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
                 )?;
                 boards.divide(depth);
             }
