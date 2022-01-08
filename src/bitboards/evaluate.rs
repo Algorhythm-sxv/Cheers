@@ -13,6 +13,9 @@ pub const PIECE_VALUES: PieceValues = PieceValues([
     20000, // king value
 ]);
 
+pub const CHECKMATE_SCORE: i32 = PIECE_VALUES[King];
+pub const DRAW_SCORE: i32 = 0;
+
 pub struct PieceValues([i32; 6]);
 
 impl std::ops::Index<PieceIndex> for PieceValues {

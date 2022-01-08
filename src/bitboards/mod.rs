@@ -215,7 +215,7 @@ impl BitBoards {
     pub fn enpassent_square(&self) -> usize {
         self.en_passent_mask.trailing_zeros() as usize
     }
-    
+
     pub fn piece_at(&self, square: usize) -> PieceIndex {
         if (self.color_masks[White] | self.color_masks[Black]) & (1 << square) == 0 {
             return NoPiece;
@@ -309,6 +309,12 @@ impl BitBoards {
             | self.bishop_attacks(color, blocking_mask)
             | self.rook_attacks(color, blocking_mask)
             | self.queen_attacks(color, blocking_mask)
+    }
+
+    pub fn in_check(&self, color: ColorIndex) -> bool {
+        self.all_attacks(!color, self.color_masks[White] | self.color_masks[Black])
+            & self.piece_masks[(color, King)]
+            != 0
     }
 
     pub fn legal_moves(&self) -> Vec<Move> {
@@ -829,7 +835,7 @@ impl BitBoards {
     pub fn make_move(&mut self, move_: Move) {
         // add the last position into the history
         self.position_history.push(self.hash);
-        
+
         // increment the halfmove clock for 50-move rule
         self.halfmove_clock += 1;
 

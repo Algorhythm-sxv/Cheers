@@ -1,4 +1,5 @@
 use super::*;
+use evaluate::*;
 
 impl BitBoards {
     pub fn search(&self) -> (i32, Move) {
@@ -15,7 +16,7 @@ impl BitBoards {
                 .count()
                 == 2
         {
-            return (0, Move::null());
+            return (DRAW_SCORE, Move::null());
         }
 
         // quiescence search at full depth
@@ -24,6 +25,16 @@ impl BitBoards {
         }
 
         let moves = self.legal_moves();
+
+        if moves.is_empty() {
+            if self.in_check(self.current_player) {
+                // checkmate
+                return (-CHECKMATE_SCORE, Move::null());
+            } else {
+                // stalemate
+                return (DRAW_SCORE, Move::null());
+            }
+        }
 
         let mut best_move = Move::null();
         for move_ in moves {
