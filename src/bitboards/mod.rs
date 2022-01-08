@@ -49,6 +49,7 @@ pub struct BitBoards {
     en_passent_mask: u64,
     halfmove_clock: u8,
     hash: u64,
+    position_history: Vec<u64>,
 }
 
 impl BitBoards {
@@ -61,6 +62,7 @@ impl BitBoards {
             en_passent_mask: 0,
             halfmove_clock: 0,
             hash: 0,
+            position_history: Vec::new(),
         };
         boards.reset();
         boards
@@ -825,6 +827,9 @@ impl BitBoards {
     }
 
     pub fn make_move(&mut self, move_: Move) {
+        // add the last position into the history
+        self.position_history.push(self.hash);
+        
         // increment the halfmove clock for 50-move rule
         self.halfmove_clock += 1;
 

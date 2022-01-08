@@ -6,6 +6,19 @@ impl BitBoards {
     }
 
     fn negamax(&self, mut alpha: i32, beta: i32, depth: usize) -> (i32, Move) {
+        // check 50 move and repetition draws
+        if self.halfmove_clock == 100
+            || self
+                .position_history
+                .iter()
+                .filter(|&&p| p == self.hash)
+                .count()
+                == 2
+        {
+            return (0, Move::null());
+        }
+
+        // quiescence search at full depth
         if depth == 0 {
             return (self.quiesce(alpha, beta), Move::null());
         }
