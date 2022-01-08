@@ -68,7 +68,6 @@ impl BitBoards {
                 opponent_pieces ^= 1 << square;
             }
         }
-        dbg!(sum);
         sum
     }
 }
