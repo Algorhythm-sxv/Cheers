@@ -25,6 +25,7 @@ impl std::ops::Not for ColorIndex {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum PieceIndex {
     Pawn = 0,
     Knight = 1,

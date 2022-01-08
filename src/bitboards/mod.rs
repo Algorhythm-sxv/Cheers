@@ -12,6 +12,10 @@ use crate::{
     zobrist::*,
 };
 
+mod evaluate;
+mod piece_tables;
+mod search;
+
 #[allow(dead_code)]
 fn print_bitboard(board: u64) {
     let board_string = format!("{:064b}", board);
@@ -58,12 +62,14 @@ impl BitBoards {
             halfmove_clock: 0,
             hash: 0,
         };
-        boards
-            .set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-            .unwrap();
+        boards.reset();
         boards
     }
 
+    pub fn reset(&mut self) {
+        self.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+            .unwrap()
+    }
     pub fn set_from_fen(
         &mut self,
         fen: impl Into<String>,
@@ -204,7 +210,11 @@ impl BitBoards {
         Ok(())
     }
 
-    fn piece_at(&self, square: usize) -> PieceIndex {
+    pub fn enpassent_square(&self) -> usize {
+        self.en_passent_mask.trailing_zeros() as usize
+    }
+    
+    pub fn piece_at(&self, square: usize) -> PieceIndex {
         if (self.color_masks[White] | self.color_masks[Black]) & (1 << square) == 0 {
             return NoPiece;
         }

@@ -2,7 +2,6 @@ use once_cell::sync::OnceCell;
 use rand::prelude::*;
 
 use crate::{
-    bitboards::*,
     types::{CastlingRights, ColorIndex, PieceIndex},
 };
 

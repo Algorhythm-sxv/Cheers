@@ -8,19 +8,26 @@ use std::{
     error::Error,
     fs::File,
     io::{prelude::*, stdin},
+    thread,
     time::Instant,
 };
 
+use crossbeam::channel::{unbounded, Sender};
+
 use bitboards::BitBoards;
 use lookup_tables::lookup_tables;
+use moves::Move;
 
 use crate::lookup_tables::LookupTables;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let mut position = BitBoards::new();
+    let (tx, rx) = unbounded::<Message>();
     for line in stdin().lock().lines() {
         let line = line?;
 
         let words = line.split(' ').collect::<Vec<_>>();
+
 
         match words.get(0) {
             Some(&"uci") => {
@@ -30,7 +37,52 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"quit") => break,
             Some(&"isready") => {
+                let _ = zobrist::zobrist_numbers();
+                let _ = lookup_tables();
                 println!("readyok");
+            }
+            Some(&"position") => {
+                let moves_index;
+                match words.get(1) {
+                    Some(&"fen") => {
+                        let mut test_boards = BitBoards::new();
+                        let fen = words[2..=7].join(" ");
+                        if let Err(err) = test_boards.set_from_fen(fen.clone()) {
+                            println!("Failed to set board with FEN {}: {}", fen, err)
+                        }
+                        // position is valid
+                        position.set_from_fen(fen)?;
+                        moves_index = 9
+                    }
+                    Some(&"startpos") => {
+                        position.reset();
+                        if let Some(word) = words.get(2) {
+                            if word != &"moves" {
+                                println!("Malformed UCI command: no \'moves\' in position command");
+                                continue;
+                            };
+                        }
+                        moves_index = 3
+                    }
+                    _ => unreachable!(),
+                }
+                if words.get(moves_index).is_some() {
+                    words[moves_index..].iter().for_each(|xy| {
+                        let move_ = Move::from_pair(&position, xy);
+                        position.make_move(move_)
+                    });
+                }
+            }
+            Some(&"go") => {
+                let params = SearchParams {
+                    position: position.clone(),
+                    depth: None,
+                    wtime: None,
+                    btime: None,
+                    infinite: false,
+                };
+                let tx = tx.clone();
+                let _ = thread::spawn(move || engine_thread(params, tx).unwrap());
             }
             Some(&"magics") => {
                 let start = Instant::now();
@@ -98,5 +150,28 @@ fn main() -> Result<(), Box<dyn Error>> {
             _ => println!("unknown command: {}", line),
         }
     }
+    Ok(())
+}
+
+struct SearchParams {
+    position: BitBoards,
+    depth: Option<usize>,
+    wtime: Option<usize>,
+    btime: Option<usize>,
+    infinite: bool,
+}
+
+enum Message {
+    Result((i32, Move)),
+}
+
+fn engine_thread(search_params: SearchParams, tx: Sender<Message>) -> Result<(), Box<dyn Error>> {
+    let boards = search_params.position;
+
+    let (score, best_move) = boards.search();
+    println!("info score {}", score);
+    println!("bestmove {}", best_move.coords());
+
+    tx.send(Message::Result((score, best_move)))?;
     Ok(())
 }

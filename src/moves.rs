@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use crate::types::{PieceIndex, PieceIndex::*};
+use crate::{
+    bitboards::BitBoards,
+    types::{PieceIndex, PieceIndex::*},
+};
 
 fn coord(square: u8) -> String {
     let mut res = String::new();
@@ -27,6 +30,32 @@ fn coord(square: u8) -> String {
         _ => unreachable!(),
     });
     res
+}
+
+pub fn square(coord: &str) -> u8 {
+    let mut result = match coord.chars().next().unwrap() {
+        'a' => 0,
+        'b' => 1,
+        'c' => 2,
+        'd' => 3,
+        'e' => 4,
+        'f' => 5,
+        'g' => 6,
+        'h' => 7,
+        _ => unreachable!(),
+    };
+    result += match coord.chars().nth(1).unwrap() {
+        '1' => 0,
+        '2' => 8,
+        '3' => 2 * 8,
+        '4' => 3 * 8,
+        '5' => 4 * 8,
+        '6' => 5 * 8,
+        '7' => 6 * 8,
+        '8' => 7 * 8,
+        _ => unreachable!(),
+    };
+    result
 }
 
 #[derive(Clone, Copy)]
@@ -65,6 +94,41 @@ impl Move {
         }
     }
 
+    pub fn null() -> Self {
+        Self::new(0, 0, NoPiece, NoPiece, false, false, false, false)
+    }
+
+    pub fn from_pair(boards: &BitBoards, xy: impl AsRef<str>) -> Self {
+        let (x, yp) = xy.as_ref().trim().split_at(2);
+        let mut p = Pawn;
+
+        let y = if yp.len() == 3 {
+            p = match &yp[2..] {
+                "q" => Queen,
+                "r" => Rook,
+                "n" => Knight,
+                "b" => Bishop,
+                _ => unreachable!(),
+            };
+            &yp[0..2]
+        } else {
+            yp
+        };
+        let start = square(x) as usize;
+        let target = square(y) as usize;
+        let piece = boards.piece_at(start);
+        Self::new(
+            start as u8,
+            target as u8,
+            piece,
+            p,
+            boards.piece_at(target) != NoPiece,
+            // TODO: replace with `abs_diff` once stabilised
+            piece == Pawn && (target as isize - start as isize).abs() == 16,
+            piece == Pawn && target == boards.enpassent_square(),
+            piece == King && (target as isize - start as isize).abs() == 2,
+        )
+    }
     pub fn pawn_push(start: u8, target: u8) -> Self {
         Self::new(start, target, Pawn, NoPiece, false, false, false, false)
     }
