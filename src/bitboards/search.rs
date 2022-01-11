@@ -3,7 +3,7 @@ use evaluate::*;
 
 impl BitBoards {
     pub fn search(&self) -> (i32, Move) {
-        self.negamax(i32::MIN + 1, i32::MAX - 1, 6)
+        self.negamax(i32::MIN + 1, i32::MAX - 1, 5)
     }
 
     fn negamax(&self, mut alpha: i32, beta: i32, depth: usize) -> (i32, Move) {
@@ -36,7 +36,7 @@ impl BitBoards {
             }
         }
 
-        let mut best_move = Move::null();
+        let mut best_move = *moves.first().unwrap();
         for move_ in moves {
             let mut copy = self.clone();
             copy.make_move(move_);

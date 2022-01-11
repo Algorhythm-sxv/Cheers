@@ -158,6 +158,7 @@ mod tables {
 
 pub use tables::*;
 
+#[derive(Clone, Copy, Debug)]
 pub enum GamePhase {
     Midgame = 0,
     Endgame = 1,

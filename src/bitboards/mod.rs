@@ -64,14 +64,26 @@ impl BitBoards {
             hash: 0,
             position_history: Vec::new(),
         };
-        boards.reset();
+        boards.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+        .unwrap();
         boards
     }
 
     pub fn reset(&mut self) {
+        *self = Self {
+            color_masks: ColorMasks::default(),
+            piece_masks: PieceMasks::default(),
+            current_player: ColorIndex::default(),
+            castling_rights: CastlingRights::default(),
+            en_passent_mask: 0,
+            halfmove_clock: 0,
+            hash: 0,
+            position_history: Vec::new(),
+        };
         self.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
             .unwrap()
     }
+    
     pub fn set_from_fen(
         &mut self,
         fen: impl Into<String>,
