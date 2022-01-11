@@ -3,7 +3,7 @@ use evaluate::*;
 
 impl BitBoards {
     pub fn search(&self) -> (i32, Move) {
-        self.negamax(i32::MIN + 1, i32::MAX - 1, 7)
+        self.negamax(i32::MIN + 1, i32::MAX - 1, 6)
     }
 
     fn negamax(&self, mut alpha: i32, beta: i32, depth: usize) -> (i32, Move) {
