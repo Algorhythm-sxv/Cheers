@@ -34,6 +34,7 @@ impl BitBoards {
         let mut endgame = 0i32;
 
         eval += self.material_difference();
+        eval += self.piece_mobility(self.current_player) - self.piece_mobility(!self.current_player);
 
         midgame += self.piece_placement(Midgame);
         midgame += self.pawn_shield(self.current_player) - self.pawn_shield(!self.current_player);
@@ -137,5 +138,16 @@ impl BitBoards {
                 + (shield_pawns & rank_2).count_ones() as i32 * PAWN_SHIELD_2;
         }
         sum
+    }
+
+    pub fn piece_mobility(&self, color: ColorIndex) -> i32 {
+        let mut mobility = 0i32;
+
+        mobility += self.knight_attacks(color).count_ones() as i32;
+        mobility += self.bishop_attacks(color, self.color_masks[White] | self.color_masks[Black]).count_ones() as i32;
+        mobility += self.rook_attacks(color, self.color_masks[White] | self.color_masks[Black]).count_ones() as i32;
+        mobility += self.queen_attacks(color, self.color_masks[White] | self.color_masks[Black]).count_ones() as i32;
+
+        mobility
     }
 }
