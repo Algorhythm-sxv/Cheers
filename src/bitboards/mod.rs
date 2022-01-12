@@ -1,6 +1,7 @@
 use crate::{
     lookup_tables::*,
     moves::Move,
+    transposition_table::TranspositionTable,
     types::{
         CastlingIndex::*,
         CastlingRights, ColorIndex,
@@ -50,10 +51,11 @@ pub struct BitBoards {
     halfmove_clock: u8,
     hash: u64,
     position_history: Vec<u64>,
+    transposition_table: TranspositionTable,
 }
 
 impl BitBoards {
-    pub fn new() -> Self {
+    pub fn new(tt: TranspositionTable) -> Self {
         let mut boards = Self {
             color_masks: ColorMasks::default(),
             piece_masks: PieceMasks::default(),
@@ -63,6 +65,7 @@ impl BitBoards {
             halfmove_clock: 0,
             hash: 0,
             position_history: Vec::new(),
+            transposition_table: tt
         };
         boards
             .set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
@@ -80,6 +83,7 @@ impl BitBoards {
             halfmove_clock: 0,
             hash: 0,
             position_history: Vec::new(),
+            transposition_table: self.transposition_table.clone(),
         };
         self.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
             .unwrap()

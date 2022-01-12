@@ -24,8 +24,7 @@ impl std::ops::Not for ColorIndex {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum PieceIndex {
     Pawn = 0,
     Knight = 1,
@@ -40,20 +39,36 @@ impl PieceIndex {
     pub fn is_slider(self) -> bool {
         self == Self::Bishop || self == Self::Rook || self == Self::Queen
     }
+    pub fn from_u8(n: u8) -> Self {
+        use PieceIndex::*;
+        match n {
+            0 => Pawn,
+            1 => Knight,
+            2 => Bishop,
+            3 => Rook,
+            4 => Queen,
+            5 => King,
+            _ => NoPiece,
+        }
+    }
 }
 
 impl Display for PieceIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use PieceIndex::*;
-        Ok(write!(f, "{}", match self {
-            Pawn => "Pawn",
-            Knight => "Knight",
-            Bishop => "Bishop",
-            Rook => "Rook",
-            Queen => "Queen",
-            King => "King",
-            NoPiece => "None"
-        })?)
+        Ok(write!(
+            f,
+            "{}",
+            match self {
+                Pawn => "Pawn",
+                Knight => "Knight",
+                Bishop => "Bishop",
+                Rook => "Rook",
+                Queen => "Queen",
+                King => "King",
+                NoPiece => "None",
+            }
+        )?)
     }
 }
 

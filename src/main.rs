@@ -3,6 +3,7 @@ mod lookup_tables;
 mod moves;
 mod types;
 mod zobrist;
+mod transposition_table;
 
 use std::{
     error::Error,
@@ -17,11 +18,13 @@ use crossbeam::channel::{unbounded, Sender};
 use bitboards::BitBoards;
 use lookup_tables::lookup_tables;
 use moves::Move;
+use transposition_table::{TranspositionTable, TT_DEFAULT_SIZE};
 
 use crate::lookup_tables::LookupTables;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut position = BitBoards::new();
+    let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
+    let mut position = BitBoards::new(tt.clone());
     let (tx, rx) = unbounded::<Message>();
     for line in stdin().lock().lines() {
         let line = line?;
@@ -45,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let moves_index;
                 match words.get(1) {
                     Some(&"fen") => {
-                        let mut test_boards = BitBoards::new();
+                        let mut test_boards = BitBoards::new(tt.clone());
                         let fen = words[2..=7].join(" ");
                         if let Err(err) = test_boards.set_from_fen(fen.clone()) {
                             println!("Failed to set board with FEN {}: {}", fen, err)
@@ -99,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         let mut test_params = test.split(';');
 
                         let test_fen = test_params.next().unwrap().to_string();
-                        let mut boards = BitBoards::new();
+                        let mut boards = BitBoards::new(tt.clone());
                         boards.set_from_fen(test_fen.clone())?;
                         let answer = test_params
                             .nth(depth - 1)
