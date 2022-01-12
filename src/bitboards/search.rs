@@ -3,10 +3,10 @@ use evaluate::*;
 
 impl BitBoards {
     pub fn search(&self) -> (i32, Move) {
-        self.negamax(i32::MIN + 1, i32::MAX - 1, 5)
+        self.negamax(i32::MIN + 1, i32::MAX - 1, 5, Move::null())
     }
 
-    fn negamax(&self, mut alpha: i32, beta: i32, depth: usize) -> (i32, Move) {
+    fn negamax(&self, mut alpha: i32, beta: i32, depth: usize, last_move: Move) -> (i32, Move) {
         // check 50 move and repetition draws
         if self.halfmove_clock == 100
             || self
@@ -36,11 +36,38 @@ impl BitBoards {
             }
         }
 
-        let mut best_move = *moves.first().unwrap();
-        for move_ in moves {
+        let mut moves: Vec<(Move, i32)> = moves
+            .iter()
+            .map(|m| {
+                (
+                    *m,
+                    if m.capture() {
+                        let mut score = 0i32;
+                        // try recaptures first
+                        if last_move.capture() && m.target() == last_move.target() {
+                            score += 1000;
+                        }
+                        // order captures before quiet moves, MVV-LVA
+                        if !m.en_passent() {
+                            score += PIECE_VALUES[self.piece_at(m.target() as usize)]
+                                - PIECE_VALUES[m.piece()] / 10;
+                        } else {
+                            score += 90;
+                        }
+                        score
+                    } else {
+                        0i32
+                    },
+                )
+            })
+            .collect();
+        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
+
+        let mut best_move = moves.first().unwrap().0;
+        for (move_, _) in moves {
             let mut copy = self.clone();
             copy.make_move(move_);
-            let score = -copy.negamax(-beta, -alpha, depth - 1).0;
+            let score = -copy.negamax(-beta, -alpha, depth - 1, move_).0;
             if score >= beta {
                 return (beta, move_);
             }

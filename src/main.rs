@@ -124,16 +124,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             Some(&"perft") => {
-                let mut boards = BitBoards::new();
-                boards.set_from_fen(
-                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-                )?;
                 let depth = match words.get(1) {
                     None => 5,
                     Some(num) => num.parse::<usize>()?,
                 };
                 for i in 0..=depth {
-                    println!("Perft {}: {}", i, boards.perft(i))
+                    println!("Perft {}: {}", i, position.perft(i))
                 }
             }
             Some(&"divide") => {
@@ -141,11 +137,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     None => 5,
                     Some(num) => num.parse::<usize>()?,
                 };
-                let mut boards = BitBoards::new();
-                boards.set_from_fen(
-                    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-                )?;
-                boards.divide(depth);
+                position.divide(depth);
             }
             _ => println!("unknown command: {}", line),
         }
@@ -170,7 +162,13 @@ fn engine_thread(search_params: SearchParams, tx: Sender<Message>) -> Result<(),
 
     let (score, best_move) = boards.search();
     println!("info score {}", score);
-    println!("bestmove {}", best_move.coords());
+    println!("bestmove {}{}", best_move.coords(), match best_move.promotion() {
+        types::PieceIndex::Knight => "n",
+        types::PieceIndex::Bishop => "b",
+        types::PieceIndex::Rook => "r",
+        types::PieceIndex::Queen => "q",
+        _ => "",
+    },);
 
     tx.send(Message::Result((score, best_move)))?;
     Ok(())
