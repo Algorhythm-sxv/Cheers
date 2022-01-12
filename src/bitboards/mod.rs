@@ -64,8 +64,9 @@ impl BitBoards {
             hash: 0,
             position_history: Vec::new(),
         };
-        boards.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-        .unwrap();
+        boards
+            .set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+            .unwrap();
         boards
     }
 
@@ -83,7 +84,7 @@ impl BitBoards {
         self.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
             .unwrap()
     }
-    
+
     pub fn set_from_fen(
         &mut self,
         fen: impl Into<String>,
@@ -453,7 +454,7 @@ impl BitBoards {
                     let mut pawn_moves = tables.lookup_pawn_push(pawn_square as usize, color)
                         & pin_ray
                         & push_mask
-                        & !self.color_masks[!color];
+                        & !(self.color_masks[color] | self.color_masks[!color]);
                     pawn_moves |= if pawn_moves != 0
                         && ((color == White
                             && pawn_square / 8 == 1
