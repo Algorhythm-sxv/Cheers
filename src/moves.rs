@@ -205,7 +205,18 @@ impl Move {
     }
 
     pub fn coords(&self) -> String {
-        format!("{}{}", coord(self.start), coord(self.target))
+        format!(
+            "{}{}{}",
+            coord(self.start),
+            coord(self.target),
+            match self.promotion() {
+                Knight => "n",
+                Bishop => "b",
+                Rook => "r",
+                Queen => "q",
+                _ => "",
+            }
+        )
     }
 }
 

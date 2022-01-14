@@ -16,6 +16,7 @@ use crate::{
 mod evaluate;
 mod piece_tables;
 mod search;
+pub use search::RUN_SEARCH;
 
 #[allow(dead_code)]
 fn print_bitboard(board: u64) {
@@ -231,6 +232,10 @@ impl BitBoards {
 
     pub fn enpassent_square(&self) -> usize {
         self.en_passent_mask.trailing_zeros() as usize
+    }
+
+    pub fn current_player(&self) -> ColorIndex {
+        self.current_player
     }
 
     pub fn piece_at(&self, square: usize) -> PieceIndex {

@@ -1,21 +1,41 @@
+use std::sync::atomic::*;
+
 use super::*;
 use crate::transposition_table::NodeType::*;
 use evaluate::*;
 
+pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
+
 impl BitBoards {
-    pub fn search(&self) -> (i32, Move) {
+    pub fn search(&self, max_depth: Option<usize>) -> (i32, Move) {
         let mut score = i32::MIN;
         let mut best_move = Move::null();
-        for i in 0..=7 {
+        for i in 0.. {
             let result = self.negamax(i32::MIN + 1, i32::MAX - 1, i, Move::null());
-            println!("info depth {i}");
+            if !RUN_SEARCH.load(Ordering::Relaxed) {
+                // can't trust results from a partial search
+                break;
+            }
             score = result.0;
-            best_move = result.1
+            best_move = result.1;
+            let pv = best_move.coords();
+            println!("info depth {i} score cp {score} pv {pv}");
+
+            // terminate search at max depth
+            if max_depth == Some(i) {
+                RUN_SEARCH.store(false, Ordering::Relaxed);
+                break;
+            }
         }
         (score, best_move)
     }
 
     fn negamax(&self, mut alpha: i32, beta: i32, depth: usize, last_move: Move) -> (i32, Move) {
+        // terminate search early
+        if !RUN_SEARCH.load(Ordering::Relaxed) {
+            return (0, Move::null());
+        }
+
         // check 50 move and repetition draws
         if self.halfmove_clock == 100
             || self
@@ -56,13 +76,20 @@ impl BitBoards {
 
         if moves.is_empty() {
             if self.in_check(self.current_player) {
-                // checkmate
-                return (-CHECKMATE_SCORE, Move::null());
+                // checkmate, preferring shorter mating sequences
+                return (-CHECKMATE_SCORE - depth as i32, Move::null());
             } else {
                 // stalemate
                 return (DRAW_SCORE, Move::null());
             }
         }
+
+        let depth = if moves.len() == 1 {
+            // reduce depth when we only have 1 legal move
+            depth.saturating_sub(3).max(1)
+        } else {
+            depth
+        };
 
         let mut moves: Vec<(Move, i32)> = moves
             .iter()
