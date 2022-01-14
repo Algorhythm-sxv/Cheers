@@ -16,7 +16,7 @@ use crate::{
 mod evaluate;
 mod piece_tables;
 mod search;
-pub use search::RUN_SEARCH;
+pub use search::*;
 
 #[allow(dead_code)]
 fn print_bitboard(board: u64) {

@@ -14,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bitboards::{BitBoards, RUN_SEARCH};
+use bitboards::{BitBoards, NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 use lookup_tables::lookup_tables;
 use moves::Move;
 use transposition_table::{TranspositionTable, TT_DEFAULT_SIZE};
@@ -137,6 +137,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         infinite,
                     };
                     RUN_SEARCH.store(true, Ordering::Relaxed);
+                    NODE_COUNT.store(0, Ordering::Relaxed);
+                    NPS_COUNT.store(0, Ordering::Relaxed);
                     let _ = thread::spawn(move || engine_thread(params).unwrap());
                 }
             }
@@ -209,21 +211,20 @@ fn engine_thread(search_params: SearchParams) -> Result<(), Box<dyn Error>> {
     thread::spawn(move || {
         let (score, best_move) = boards.search(max_depth);
         println!("info score cp {score}");
-        println!(
-            "bestmove {}{}",
-            best_move.coords(),
-            match best_move.promotion() {
-                types::PieceIndex::Knight => "n",
-                types::PieceIndex::Bishop => "b",
-                types::PieceIndex::Rook => "r",
-                types::PieceIndex::Queen => "q",
-                _ => "",
-            },
-        );
+        println!("bestmove {}", best_move.coords(),);
     });
 
     let search_start = Instant::now();
+    let mut nodes_report = Instant::now();
     while bitboards::RUN_SEARCH.load(Ordering::Relaxed) {
+        let node_report_time = Instant::now().duration_since(nodes_report);
+        if node_report_time > Duration::from_millis(500) {
+            nodes_report = Instant::now();
+            let nodes = NODE_COUNT.load(Ordering::Relaxed);
+            let nps = (NPS_COUNT.swap(0, Ordering::Relaxed) as f32 / node_report_time.as_secs_f32())
+                as usize;
+            println!("info nodes {nodes} nps {nps}");
+        }
         if !search_params.infinite {
             let search_time = match current_player {
                 types::ColorIndex::White => search_params.wtime.map(move_time),

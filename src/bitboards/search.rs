@@ -5,6 +5,8 @@ use crate::transposition_table::NodeType::*;
 use evaluate::*;
 
 pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
+pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
+pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 impl BitBoards {
     pub fn search(&self, max_depth: Option<usize>) -> (i32, Move) {
@@ -31,6 +33,9 @@ impl BitBoards {
     }
 
     fn negamax(&self, mut alpha: i32, beta: i32, depth: usize, last_move: Move) -> (i32, Move) {
+        NODE_COUNT.fetch_add(1, Ordering::Relaxed);
+        NPS_COUNT.fetch_add(1, Ordering::Relaxed);
+        
         // terminate search early
         if !RUN_SEARCH.load(Ordering::Relaxed) {
             return (0, Move::null());
