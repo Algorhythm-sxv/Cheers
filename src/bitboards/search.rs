@@ -4,7 +4,15 @@ use evaluate::*;
 
 impl BitBoards {
     pub fn search(&self) -> (i32, Move) {
-        self.negamax(i32::MIN + 1, i32::MAX - 1, 6, Move::null())
+        let mut score = i32::MIN;
+        let mut best_move = Move::null();
+        for i in 0..=7 {
+            let result = self.negamax(i32::MIN + 1, i32::MAX - 1, i, Move::null());
+            println!("info depth {i}");
+            score = result.0;
+            best_move = result.1
+        }
+        (score, best_move)
     }
 
     fn negamax(&self, mut alpha: i32, beta: i32, depth: usize, last_move: Move) -> (i32, Move) {

@@ -164,7 +164,7 @@ fn engine_thread(search_params: SearchParams, tx: Sender<Message>) -> Result<(),
     let boards = search_params.position;
 
     let (score, best_move) = boards.search();
-    println!("info score {}", score);
+    println!("info score cp {score}");
     println!("bestmove {}{}", best_move.coords(), match best_move.promotion() {
         types::PieceIndex::Knight => "n",
         types::PieceIndex::Bishop => "b",
