@@ -35,7 +35,7 @@ impl BitBoards {
     fn negamax(&self, mut alpha: i32, beta: i32, depth: usize, last_move: Move) -> (i32, Move) {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
-        
+
         // terminate search early
         if !RUN_SEARCH.load(Ordering::Relaxed) {
             return (0, Move::null());
@@ -64,7 +64,19 @@ impl BitBoards {
         // transposition table lookup
         let mut tt_move = Move::null();
         if let Some(tt_entry) = self.transposition_table.get(self.hash) {
-            // TODO: prune on exact score/beta cutoff with pseudolegal move and equal/higher depth
+            // prune on exact score/beta cutoff with pseudolegal move and equal/higher depth
+            if tt_entry.depth as usize >= depth
+                && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound) && tt_entry.score >= beta
+                    && self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target) {
+                return (
+                    beta,
+                    self.move_from(
+                        tt_entry.move_start,
+                        tt_entry.move_target,
+                        tt_entry.promotion,
+                    ),
+                );
+            }
             // build a dummy move for move ordering
             tt_move = Move::new(
                 tt_entry.move_start,

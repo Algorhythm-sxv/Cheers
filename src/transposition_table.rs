@@ -4,6 +4,7 @@ use crate::{moves::Move, types::PieceIndex};
 
 pub const TT_DEFAULT_SIZE: usize = 1 << 22; // 2^22 entries for ~64MB
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NodeType {
     Exact,
     UpperBound,

@@ -66,7 +66,7 @@ impl BitBoards {
             halfmove_clock: 0,
             hash: 0,
             position_history: Vec::new(),
-            transposition_table: tt
+            transposition_table: tt,
         };
         boards
             .set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
@@ -337,6 +337,80 @@ impl BitBoards {
         self.all_attacks(!color, self.color_masks[White] | self.color_masks[Black])
             & self.piece_masks[(color, King)]
             != 0
+    }
+
+    pub fn is_pseudolegal(&self, start: u8, target: u8) -> bool {
+        let piece = self.piece_at(start as usize);
+        let color = self.current_player;
+
+        match piece {
+            Pawn => {
+                // TODO: replace with abs_diff
+                let d = (target as i8 - start as i8).abs();
+                if d % 8 != 0 {
+                    // captures
+                    self.pawn_attacks(color)
+                        & (self.color_masks[!color] | self.en_passent_mask)
+                        & (1 << target)
+                        != 0
+                } else {
+                    // pushes
+                    let push_one = lookup_tables().lookup_pawn_push(start as usize, color)
+                        & !(self.color_masks[White] | self.color_masks[Black]);
+                    if d == 8 && push_one & (1 << target) != 0 {
+                        true
+                    } else if d == 16 && push_one != 0 {
+                        return lookup_tables()
+                            .lookup_pawn_push(push_one.trailing_zeros() as usize, color)
+                            & !(self.color_masks[White] | self.color_masks[Black])
+                            & (1 << target)
+                            != 0;
+                    } else {
+                        false
+                    }
+                }
+            }
+            Knight => self.knight_attacks(color) & !self.color_masks[color] & (1 << target) != 0,
+            Bishop => {
+                self.bishop_attacks(color, self.color_masks[White] | self.color_masks[Black])
+                    & !self.color_masks[color]
+                    & (1 << target)
+                    != 0
+            }
+            Rook => {
+                self.rook_attacks(color, self.color_masks[White] | self.color_masks[Black])
+                    & !self.color_masks[color]
+                    & (1 << target)
+                    != 0
+            }
+            Queen => {
+                self.queen_attacks(color, self.color_masks[White] | self.color_masks[Black])
+                    & !self.color_masks[color]
+                    & (1 << target)
+                    != 0
+            }
+            King => self.king_attacks(color) & !self.color_masks[color] & (1 << target) != 0,
+            NoPiece => false,
+        }
+    }
+
+    pub fn move_from(&self, start: u8, target: u8, promotion: PieceIndex) -> Move {
+        let piece = self.piece_at(start as usize);
+        debug_assert!(piece != NoPiece);
+        let double_pawn_push = piece == Pawn && (target as i8 - start as i8).abs() == 16;
+        let capture = self.piece_at(target as usize) != NoPiece;
+        let en_passent = piece == Pawn && target == self.enpassent_square() as u8;
+        let castling = piece == King && (target as i8 - start as i8) == 2;
+        Move::new(
+            start,
+            target,
+            piece,
+            promotion,
+            capture,
+            double_pawn_push,
+            en_passent,
+            castling,
+        )
     }
 
     pub fn legal_moves(&self) -> Vec<Move> {
