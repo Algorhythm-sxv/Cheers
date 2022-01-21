@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     bitboards::BitBoards,
-    types::{PieceIndex, PieceIndex::*},
+    types::{PieceIndex, PieceIndex::*, CastlingRights},
 };
 
 fn coord(square: u8) -> String {
@@ -239,5 +239,45 @@ impl Display for Move {
             self.enpassent_capture,
             self.castling
         )?)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct UnMove {
+    pub start: u8,
+    pub target: u8,
+    pub promotion: bool,
+    pub capture: PieceIndex,
+    pub en_passent: bool,
+    pub en_passent_mask: u64,
+    pub castling: bool,
+    pub castling_rights: CastlingRights,
+    pub halfmove_clock: u8,
+}
+
+impl UnMove {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        start: u8,
+        target: u8,
+        promotion: bool,
+        capture: PieceIndex,
+        en_passent: bool,
+        en_passent_mask: u64,
+        castling: bool,
+        castling_rights: CastlingRights,
+        halfmove_clock: u8,
+    ) -> Self {
+        Self {
+            start,
+            target,
+            promotion,
+            capture,
+            en_passent,
+            en_passent_mask,
+            castling,
+            castling_rights,
+            halfmove_clock
+        }
     }
 }

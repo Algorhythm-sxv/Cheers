@@ -12,8 +12,9 @@ impl BitBoards {
     pub fn search(&self, max_depth: Option<usize>) -> (i32, Move) {
         let mut score = i32::MIN;
         let mut best_move = Move::null();
+        let mut boards = self.clone();
         for i in 0.. {
-            let result = self.negamax(i32::MIN + 1, i32::MAX - 1, i, Move::null());
+            let result = boards.negamax(i32::MIN + 1, i32::MAX - 1, i, Move::null());
             if !RUN_SEARCH.load(Ordering::Relaxed) {
                 // can't trust results from a partial search
                 break;
@@ -36,7 +37,7 @@ impl BitBoards {
         (score, best_move)
     }
 
-    fn negamax(&self, mut alpha: i32, beta: i32, depth: usize, last_move: Move) -> (i32, Move) {
+    fn negamax(&mut self, mut alpha: i32, beta: i32, depth: usize, last_move: Move) -> (i32, Move) {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
 
@@ -144,9 +145,9 @@ impl BitBoards {
 
         let mut best_move = moves.first().unwrap().0;
         for (move_, _) in moves {
-            let mut copy = self.clone();
-            copy.make_move(move_);
-            let score = -copy.negamax(-beta, -alpha, depth - 1, move_).0;
+            self.make_move(move_);
+            let score = -self.negamax(-beta, -alpha, depth - 1, move_).0;
+            self.unmake_move();
             if score >= beta {
                 self.transposition_table
                     .set(self.hash, move_, depth as u8, beta, LowerBound);
@@ -162,7 +163,7 @@ impl BitBoards {
         (alpha, best_move)
     }
 
-    pub fn quiesce(&self, mut alpha: i32, beta: i32, last_move: Move) -> i32 {
+    pub fn quiesce(&mut self, mut alpha: i32, beta: i32, last_move: Move) -> i32 {
         let stand_pat_score = self.evaluate();
 
         if stand_pat_score >= beta {
@@ -196,9 +197,9 @@ impl BitBoards {
         moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
 
         for (move_, _) in moves.iter() {
-            let mut boards = self.clone();
-            boards.make_move(*move_);
-            let score = -boards.quiesce(-beta, -alpha, *move_);
+            self.make_move(*move_);
+            let score = -self.quiesce(-beta, -alpha, *move_);
+            self.unmake_move();
             if score >= beta {
                 return beta;
             }

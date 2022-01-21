@@ -1,6 +1,6 @@
 use crate::{
     lookup_tables::*,
-    moves::Move,
+    moves::*,
     transposition_table::TranspositionTable,
     types::{
         CastlingIndex::*,
@@ -46,12 +46,14 @@ fn print_bitboard(board: u64) {
 pub struct BitBoards {
     color_masks: ColorMasks,
     piece_masks: PieceMasks,
+    piece_list: [PieceIndex; 64],
     current_player: ColorIndex,
     castling_rights: CastlingRights,
     en_passent_mask: u64,
     halfmove_clock: u8,
     hash: u64,
     position_history: Vec<u64>,
+    unmove_history: Vec<UnMove>,
     transposition_table: TranspositionTable,
 }
 
@@ -60,12 +62,14 @@ impl BitBoards {
         let mut boards = Self {
             color_masks: ColorMasks::default(),
             piece_masks: PieceMasks::default(),
+            piece_list: [NoPiece; 64],
             current_player: ColorIndex::default(),
             castling_rights: CastlingRights::default(),
             en_passent_mask: 0,
             halfmove_clock: 0,
             hash: 0,
             position_history: Vec::new(),
+            unmove_history: Vec::new(),
             transposition_table: tt,
         };
         boards
@@ -78,12 +82,14 @@ impl BitBoards {
         *self = Self {
             color_masks: ColorMasks::default(),
             piece_masks: PieceMasks::default(),
+            piece_list: [NoPiece; 64],
             current_player: ColorIndex::default(),
             castling_rights: CastlingRights::default(),
             en_passent_mask: 0,
             halfmove_clock: 0,
             hash: 0,
             position_history: Vec::new(),
+            unmove_history: Vec::new(),
             transposition_table: self.transposition_table.clone(),
         };
         self.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
@@ -96,6 +102,7 @@ impl BitBoards {
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.piece_masks = PieceMasks([[0; 6]; 2]);
         self.color_masks = ColorMasks([0; 2]);
+        self.piece_list = [NoPiece; 64];
 
         let fen = fen.into();
         let mut lines = fen.split(&['/', ' '][..]);
@@ -107,50 +114,62 @@ impl BitBoards {
                     'n' => {
                         self.piece_masks[(Black, Knight)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
+                        self.piece_list[index] = Knight;
                     }
                     'N' => {
                         self.piece_masks[(White, Knight)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
+                        self.piece_list[index] = Knight;
                     }
                     'b' => {
                         self.piece_masks[(Black, Bishop)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
+                        self.piece_list[index] = Bishop;
                     }
                     'B' => {
                         self.piece_masks[(White, Bishop)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
+                        self.piece_list[index] = Bishop;
                     }
                     'r' => {
                         self.piece_masks[(Black, Rook)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
+                        self.piece_list[index] = Rook;
                     }
                     'R' => {
                         self.piece_masks[(White, Rook)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
+                        self.piece_list[index] = Rook;
                     }
                     'q' => {
                         self.piece_masks[(Black, Queen)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
+                        self.piece_list[index] = Queen;
                     }
                     'Q' => {
                         self.piece_masks[(White, Queen)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
+                        self.piece_list[index] = Queen;
                     }
                     'k' => {
                         self.piece_masks[(Black, King)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
+                        self.piece_list[index] = King;
                     }
                     'K' => {
                         self.piece_masks[(White, King)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
+                        self.piece_list[index] = King;
                     }
                     'p' => {
                         self.piece_masks[(Black, Pawn)] |= 1 << index;
                         self.color_masks[Black] |= 1 << index;
+                        self.piece_list[index] = Pawn;
                     }
                     'P' => {
                         self.piece_masks[(White, Pawn)] |= 1 << index;
                         self.color_masks[White] |= 1 << index;
+                        self.piece_list[index] = Pawn;
                     }
                     digit @ '1'..='8' => index += digit.to_digit(10).unwrap() as usize - 1,
                     other => eprintln!("Unexpected character in FEN: {}", other),
@@ -239,17 +258,18 @@ impl BitBoards {
     }
 
     pub fn piece_at(&self, square: usize) -> PieceIndex {
-        if (self.color_masks[White] | self.color_masks[Black]) & (1 << square) == 0 {
-            return NoPiece;
-        }
-        for piece in [Pawn, Knight, Bishop, Rook, Queen, King] {
-            if (self.piece_masks[(White, piece)] | self.piece_masks[(Black, piece)]) & (1 << square)
-                != 0
-            {
-                return piece;
-            }
-        }
-        NoPiece
+        self.piece_list[square]
+        // if (self.color_masks[White] | self.color_masks[Black]) & (1 << square) == 0 {
+        //     return NoPiece;
+        // }
+        // for piece in [Pawn, Knight, Bishop, Rook, Queen, King] {
+        //     if (self.piece_masks[(White, piece)] | self.piece_masks[(Black, piece)]) & (1 << square)
+        //         != 0
+        //     {
+        //         return piece;
+        //     }
+        // }
+        // NoPiece
     }
 
     fn pawn_attacks(&self, color: ColorIndex) -> u64 {
@@ -943,21 +963,35 @@ impl BitBoards {
     }
 
     pub fn make_move(&mut self, move_: Move) {
-        // add the last position into the history
-        self.position_history.push(self.hash);
-
-        // increment the halfmove clock for 50-move rule
-        self.halfmove_clock += 1;
-
         let color = self.current_player;
         let start = move_.start() as usize;
         let target = move_.target() as usize;
         let piece = move_.piece();
+
         let captured = if move_.en_passent() {
             Pawn
         } else {
             self.piece_at(target)
         };
+
+        // Update unmove history
+        self.unmove_history.push(UnMove::new(
+            start as u8,
+            target as u8,
+            move_.promotion() != NoPiece,
+            captured,
+            move_.en_passent(),
+            self.en_passent_mask,
+            move_.castling(),
+            self.castling_rights,
+            self.halfmove_clock,
+        ));
+
+        // add the last position into the history
+        self.position_history.push(self.hash);
+
+        // increment the halfmove clock for 50-move rule
+        self.halfmove_clock += 1;
 
         // Castling
         if move_.castling() {
@@ -973,10 +1007,14 @@ impl BitBoards {
             // update king position and hash
             self.hash ^= zobrist_piece(King, color, start) ^ zobrist_piece(King, color, target);
             self.piece_masks[(color, King)] ^= (1 << target) | (1 << start);
+            self.piece_list[start] = NoPiece;
+            self.piece_list[target] = King;
             // update rook position and hash
             self.hash ^=
                 zobrist_piece(Rook, color, rook_start) ^ zobrist_piece(Rook, color, rook_target);
             self.piece_masks[(color, Rook)] ^= (1 << rook_target) | (1 << rook_start);
+            self.piece_list[rook_start] = NoPiece;
+            self.piece_list[rook_target] = Rook;
             // update color masks
             self.color_masks[color] ^=
                 (1 << start) | (1 << target) | (1 << rook_start) | (1 << rook_target);
@@ -1000,6 +1038,7 @@ impl BitBoards {
             // remove piece from target square
             self.hash ^= zobrist_piece(captured, !color, cap_square);
             self.piece_masks[(!color, captured)] ^= 1 << cap_square;
+            self.piece_list[cap_square] = NoPiece;
             self.color_masks[!color] ^= 1 << cap_square;
 
             // reset halfmove clock
@@ -1048,6 +1087,8 @@ impl BitBoards {
         if !move_.castling() {
             self.hash ^= zobrist_piece(piece, color, start) ^ zobrist_piece(piece, color, target);
             self.piece_masks[(color, piece)] ^= (1 << start) | (1 << target);
+            self.piece_list[start] = NoPiece;
+            self.piece_list[target] = piece;
             self.color_masks[color] ^= (1 << start) | (1 << target);
         }
 
@@ -1071,6 +1112,7 @@ impl BitBoards {
                 self.hash ^= zobrist_piece(Pawn, color, target)
                     ^ zobrist_piece(move_.promotion(), color, target);
                 self.piece_masks[(color, Pawn)] ^= 1 << target;
+                self.piece_list[target] = move_.promotion();
                 self.piece_masks[(color, move_.promotion())] |= 1 << target;
             }
             // rule 50
@@ -1080,6 +1122,87 @@ impl BitBoards {
         // swap players
         self.hash ^= zobrist_player();
         self.current_player = !self.current_player;
+
+        debug_assert!(self.hash == self.zobrist_hash());
+    }
+
+    pub fn unmake_move(&mut self) {
+        self.current_player = !self.current_player;
+
+        let unmove = self.unmove_history.pop().unwrap();
+        let start = unmove.start as usize;
+        let target = unmove.target as usize;
+
+        let mut piece = self.piece_list[target];
+        if unmove.promotion {
+            self.piece_masks[(self.current_player, piece)] ^= 1 << target;
+
+            self.piece_masks[(self.current_player, Pawn)] ^= 1 << target;
+            self.piece_list[target] = Pawn;
+            piece = Pawn;
+        }
+
+        if unmove.castling {
+            if target % 8 == 2 {
+                // queenside
+                self.piece_masks[(self.current_player, King)] ^= (1 << start) | (1 << target);
+                self.piece_list[start] = King;
+                self.piece_list[target] = NoPiece;
+
+                let rook_start = target - 2;
+                let rook_target = target + 1;
+
+                self.piece_masks[(self.current_player, Rook)] ^=
+                    (1 << rook_start) | (1 << rook_target);
+                self.piece_list[rook_start] = Rook;
+                self.piece_list[rook_target] = NoPiece;
+
+                self.color_masks[self.current_player] ^=
+                    (1 << start) | (1 << target) | (1 << rook_start) | (1 << rook_target);
+            } else {
+                // kingside
+                self.piece_masks[(self.current_player, King)] ^= (1 << start) | (1 << target);
+                self.piece_list[start] = King;
+                self.piece_list[target] = NoPiece;
+
+                let rook_start = target + 1;
+                let rook_target = target - 1;
+
+                self.piece_masks[(self.current_player, Rook)] ^=
+                    (1 << rook_start) | (1 << rook_target);
+                self.piece_list[rook_start] = Rook;
+                self.piece_list[rook_target] = NoPiece;
+
+                self.color_masks[self.current_player] ^=
+                    (1 << start) | (1 << target) | (1 << rook_start) | (1 << rook_target);
+            }
+        } else {
+            // move piece back to start
+            self.piece_masks[(self.current_player, piece)] ^= (1 << start) | (1 << target);
+            self.piece_list[target] = NoPiece;
+            self.piece_list[start] = piece;
+            self.color_masks[self.current_player] ^= (1 << start) | (1 << target);
+
+            if unmove.capture != NoPiece {
+                let mut cap_square = target;
+                if unmove.en_passent {
+                    cap_square = match self.current_player {
+                        White => target - 8,
+                        Black => target + 8,
+                    };
+                }
+                // replace captured piece
+                self.piece_masks[(!self.current_player, unmove.capture)] ^= 1 << cap_square;
+                self.piece_list[cap_square] = unmove.capture;
+                self.color_masks[!self.current_player] ^= 1 << cap_square;
+            }
+        }
+
+        // restore board state
+        self.castling_rights = unmove.castling_rights;
+        self.en_passent_mask = unmove.en_passent_mask;
+        self.hash = self.position_history.pop().unwrap();
+        self.halfmove_clock = unmove.halfmove_clock;
 
         debug_assert!(self.hash == self.zobrist_hash());
     }
@@ -1114,7 +1237,7 @@ impl BitBoards {
         hash
     }
 
-    pub fn perft(&self, depth: usize) -> usize {
+    pub fn perft(&mut self, depth: usize) -> usize {
         if depth == 0 {
             return 1;
         }
@@ -1123,14 +1246,14 @@ impl BitBoards {
         let mut nodes = 0;
 
         for move_ in moves {
-            let mut copy = self.clone();
-            copy.make_move(move_);
-            nodes += copy.perft(depth - 1);
+            self.make_move(move_);
+            nodes += self.perft(depth - 1);
+            self.unmake_move();
         }
         nodes
     }
 
-    pub fn divide(&self, depth: usize) {
+    pub fn divide(&mut self, depth: usize) {
         if depth == 0 {
             return;
         }
@@ -1139,9 +1262,9 @@ impl BitBoards {
         let mut node_count = 0;
         for move_ in moves {
             move_count += 1;
-            let mut copy = self.clone();
-            copy.make_move(move_);
-            let nodes = copy.perft(depth - 1);
+            self.make_move(move_);
+            let nodes = self.perft(depth - 1);
+            self.unmake_move();
             node_count += nodes;
             println!(
                 "{}{}: {}",
