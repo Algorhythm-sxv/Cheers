@@ -172,12 +172,12 @@ impl BitBoards {
         sum += 100 * passers.count_ones() as i32;
 
         // double pawns: -40
-        // for file in FILES {
-        //     sum -= 40
-        //         * ((self.piece_masks[(color, Pawn)] & file)
-        //             .count_ones()
-        //             .saturating_sub(1) as i32);
-        // }
+        for file in FILES {
+            sum -= 40
+                * ((self.piece_masks[(color, Pawn)] & file)
+                    .count_ones()
+                    .saturating_sub(1) as i32);
+        }
 
         // backward pawns: -10?
         // isolated pawns: -20?
