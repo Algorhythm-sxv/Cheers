@@ -218,6 +218,10 @@ impl Move {
             }
         )
     }
+
+    pub fn is_null(&self) -> bool {
+        self.start() == self.target()
+    }
 }
 
 impl Display for Move {

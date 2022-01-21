@@ -20,8 +20,12 @@ impl BitBoards {
             }
             score = result.0;
             best_move = result.1;
-            let pv = best_move.coords();
-            println!("info depth {i} score cp {score} pv {pv}");
+            let pv_string = if !best_move.is_null() {
+                format!(" pv {}", best_move.coords())
+            } else {
+                String::from("")
+            };
+            println!("info depth {i} score cp {score}{pv_string}");
 
             // terminate search at max depth
             if max_depth == Some(i) {
@@ -66,8 +70,10 @@ impl BitBoards {
         if let Some(tt_entry) = self.transposition_table.get(self.hash) {
             // prune on exact score/beta cutoff with pseudolegal move and equal/higher depth
             if tt_entry.depth as usize >= depth
-                && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound) && tt_entry.score >= beta
-                    && self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target) {
+                && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound)
+                && tt_entry.score >= beta
+                && self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target)
+            {
                 return (
                     beta,
                     self.move_from(

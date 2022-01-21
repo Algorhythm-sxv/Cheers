@@ -271,6 +271,20 @@ impl BitBoards {
         }
     }
 
+    pub fn pawn_front_spans(&self, color: ColorIndex) -> u64 {
+        let mut spans = self.piece_masks[(color, Pawn)];
+        if color == White {
+            spans |= spans << 8;
+            spans |= spans << 16;
+            spans |= spans << 32;
+        } else {
+            spans |= spans >> 8;
+            spans |= spans >> 16;
+            spans |= spans >> 32;
+        }
+        spans
+    }
+
     fn knight_attacks(&self, color: ColorIndex) -> u64 {
         let mut knights = self.piece_masks[(color, Knight)];
 

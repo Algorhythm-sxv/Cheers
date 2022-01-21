@@ -34,7 +34,11 @@ impl BitBoards {
         let mut endgame = 0i32;
 
         eval += self.material_difference();
-        eval += self.piece_mobility(self.current_player) - self.piece_mobility(!self.current_player);
+        eval +=
+            self.piece_mobility(self.current_player) - self.piece_mobility(!self.current_player);
+
+        eval +=
+            self.pawn_structure(self.current_player) - self.pawn_structure(!self.current_player);
 
         midgame += self.piece_placement(Midgame);
         midgame += self.pawn_shield(self.current_player) - self.pawn_shield(!self.current_player);
@@ -144,10 +148,40 @@ impl BitBoards {
         let mut mobility = 0i32;
 
         mobility += self.knight_attacks(color).count_ones() as i32;
-        mobility += self.bishop_attacks(color, self.color_masks[White] | self.color_masks[Black]).count_ones() as i32;
-        mobility += self.rook_attacks(color, self.color_masks[White] | self.color_masks[Black]).count_ones() as i32;
-        mobility += self.queen_attacks(color, self.color_masks[White] | self.color_masks[Black]).count_ones() as i32;
+        mobility += self
+            .bishop_attacks(color, self.color_masks[White] | self.color_masks[Black])
+            .count_ones() as i32;
+        mobility += self
+            .rook_attacks(color, self.color_masks[White] | self.color_masks[Black])
+            .count_ones() as i32;
+        mobility += self
+            .queen_attacks(color, self.color_masks[White] | self.color_masks[Black])
+            .count_ones() as i32;
 
         mobility
+    }
+
+    pub fn pawn_structure(&self, color: ColorIndex) -> i32 {
+        let mut sum = 0i32;
+
+        // passed pawns: +100
+        let front_spans = self.pawn_front_spans(!color);
+        let all_front_spans =
+            front_spans | (front_spans & NOT_H_FILE) << 1 | (front_spans & NOT_A_FILE) >> 1;
+        let passers = self.piece_masks[(color, Pawn)] & !all_front_spans;
+        sum += 100 * passers.count_ones() as i32;
+
+        // double pawns: -40
+        // for file in FILES {
+        //     sum -= 40
+        //         * ((self.piece_masks[(color, Pawn)] & file)
+        //             .count_ones()
+        //             .saturating_sub(1) as i32);
+        // }
+
+        // backward pawns: -10?
+        // isolated pawns: -20?
+
+        sum
     }
 }

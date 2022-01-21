@@ -132,6 +132,10 @@ mod consts {
     pub const G_FILE: u64 = 0x4040404040404040;
     pub const H_FILE: u64 = 0x8080808080808080;
 
+    pub const FILES: [u64; 8] = [
+        A_FILE, B_FILE, C_FILE, D_FILE, E_FILE, F_FILE, G_FILE, H_FILE,
+    ];
+
     pub const FIRST_RANK: u64 = 0x00000000000000FF;
     pub const SECOND_RANK: u64 = 0x000000000000FF00;
     pub const THIRD_RANK: u64 = 0x0000000000FF0000;
