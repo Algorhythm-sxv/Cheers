@@ -59,7 +59,7 @@ impl BitBoards {
 
         // quiescence search at full depth
         if depth == 0 {
-            let score = self.quiesce(alpha, beta);
+            let score = self.quiesce(alpha, beta, last_move);
             self.transposition_table
                 .set(self.hash, Move::null(), depth as u8, score, Exact);
             return (score, Move::null());
@@ -162,7 +162,7 @@ impl BitBoards {
         (alpha, best_move)
     }
 
-    pub fn quiesce(&self, mut alpha: i32, beta: i32) -> i32 {
+    pub fn quiesce(&self, mut alpha: i32, beta: i32, last_move: Move) -> i32 {
         let stand_pat_score = self.evaluate();
 
         if stand_pat_score >= beta {
@@ -171,10 +171,34 @@ impl BitBoards {
         alpha = alpha.max(stand_pat_score);
 
         let moves = self.legal_moves();
-        for move_ in moves.iter().filter(|m| m.capture()) {
+        let mut moves: Vec<(Move, i32)> = moves
+            .iter()
+            .filter_map(|m| {
+                if m.capture() {
+                        let mut score = 0i32;
+                        // try recaptures first
+                        if last_move.capture() && m.target() == last_move.target() {
+                            score += 1001;
+                        }
+                        // order captures by MVV-LVA
+                        if !m.en_passent() {
+                            score += PIECE_VALUES[self.piece_at(m.target() as usize)]
+                                - PIECE_VALUES[m.piece()] / 10;
+                        } else {
+                            score += 90;
+                        }
+                        Some((*m, score))
+                    } else {
+                        None
+                    }
+                })
+            .collect();
+        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
+
+        for (move_, _) in moves.iter() {
             let mut boards = self.clone();
             boards.make_move(*move_);
-            let score = -boards.quiesce(-beta, -alpha);
+            let score = -boards.quiesce(-beta, -alpha, *move_);
             if score >= beta {
                 return beta;
             }
