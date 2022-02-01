@@ -272,6 +272,14 @@ impl BitBoards {
         // NoPiece
     }
 
+    pub fn has_non_pawn_material(&self, color: ColorIndex) -> bool {
+        self.piece_masks[(color, Knight)]
+            | self.piece_masks[(color, Bishop)]
+            | self.piece_masks[(color, Rook)]
+            | self.piece_masks[(color, Queen)]
+            != 0
+    }
+
     fn pawn_attacks(&self, color: ColorIndex) -> u64 {
         match color {
             White => {
@@ -1205,6 +1213,41 @@ impl BitBoards {
         self.halfmove_clock = unmove.halfmove_clock;
 
         debug_assert!(self.hash == self.zobrist_hash());
+    }
+
+    pub fn make_null_move(&mut self) {
+        let unmove = UnMove::new(
+            0,
+            0,
+            false,
+            NoPiece,
+            false,
+            self.en_passent_mask,
+            false,
+            self.castling_rights,
+            0,
+        );
+
+        self.unmove_history.push(unmove);
+        self.position_history.push(self.hash);
+
+        if self.en_passent_mask != 0 {
+            self.hash ^= zobrist_enpassent(self.en_passent_mask);
+            self.en_passent_mask = 0;
+        }
+
+        self.hash ^= zobrist_player();
+        self.halfmove_clock += 1;
+        self.current_player = !self.current_player;
+    }
+
+    pub fn unmake_null_move(&mut self) {
+        let unmove = self.unmove_history.pop().unwrap();
+
+        self.en_passent_mask = unmove.en_passent_mask;
+        self.current_player = !self.current_player;
+        self.halfmove_clock -= 1;
+        self.hash = self.position_history.pop().unwrap();
     }
 
     pub fn zobrist_hash(&self) -> u64 {

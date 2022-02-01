@@ -85,6 +85,7 @@ impl BitBoards {
                 );
             }
             // build a dummy move for move ordering
+            // this is checked against legal moves later
             tt_move = Move::new(
                 tt_entry.move_start,
                 tt_entry.move_target,
@@ -96,6 +97,22 @@ impl BitBoards {
                 false,
             );
         }
+
+        // Null move pruning
+        // don't search the null move when in check or only down to pawn/kings
+        if depth >= 3
+            && !self.in_check(self.current_player)
+            && self.has_non_pawn_material(self.current_player)
+        {
+            self.make_null_move();
+            let null_score = -self.negamax(-beta, -beta + 1, depth - 3, Move::null()).0;
+            self.unmake_null_move();
+
+            if null_score >= beta {
+                return (beta, Move::null());
+            }
+        }
+
         let moves = self.legal_moves();
 
         if moves.is_empty() {
@@ -176,23 +193,23 @@ impl BitBoards {
             .iter()
             .filter_map(|m| {
                 if m.capture() {
-                        let mut score = 0i32;
-                        // try recaptures first
-                        if last_move.capture() && m.target() == last_move.target() {
-                            score += 1001;
-                        }
-                        // order captures by MVV-LVA
-                        if !m.en_passent() {
-                            score += PIECE_VALUES[self.piece_at(m.target() as usize)]
-                                - PIECE_VALUES[m.piece()] / 10;
-                        } else {
-                            score += 90;
-                        }
-                        Some((*m, score))
-                    } else {
-                        None
+                    let mut score = 0i32;
+                    // try recaptures first
+                    if last_move.capture() && m.target() == last_move.target() {
+                        score += 1001;
                     }
-                })
+                    // order captures by MVV-LVA
+                    if !m.en_passent() {
+                        score += PIECE_VALUES[self.piece_at(m.target() as usize)]
+                            - PIECE_VALUES[m.piece()] / 10;
+                    } else {
+                        score += 90;
+                    }
+                    Some((*m, score))
+                } else {
+                    None
+                }
+            })
             .collect();
         moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
 
