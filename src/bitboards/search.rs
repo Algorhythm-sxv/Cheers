@@ -161,18 +161,37 @@ impl BitBoards {
         moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
 
         let mut best_move = moves.first().unwrap().0;
-        for (move_, _) in moves {
-            self.make_move(move_);
-            let score = -self.negamax(-beta, -alpha, depth - 1, move_).0;
-            self.unmake_move();
-            if score >= beta {
-                self.transposition_table
-                    .set(self.hash, move_, depth as u8, beta, LowerBound);
-                return (beta, move_);
-            }
+        for (i, &(move_, _)) in moves.iter().enumerate() {
+            // Late move reduction on non-captures and non-queen-promotions
+            let mut score = if i >= 4
+                && depth >= 3
+                && !move_.capture()
+                && move_.promotion() != Queen
+                && !self.in_check(self.current_player())
+            {
+                self.make_move(move_);
+                // search with a null window; we only care whether it fails low or not
+                let score = -self.negamax(-alpha-1, -alpha, depth - 2, move_).0;
+                self.unmake_move();
+                score
+            } else {
+                alpha + 1
+            };
+
+            // search at full depth, if a reduced move improves alpha it is searched again
             if score > alpha {
-                alpha = score;
-                best_move = move_;
+                self.make_move(move_);
+                score = -self.negamax(-beta, -alpha, depth - 1, move_).0;
+                self.unmake_move();
+                if score >= beta {
+                    self.transposition_table
+                        .set(self.hash, move_, depth as u8, beta, LowerBound);
+                    return (beta, move_);
+                }
+                if score > alpha {
+                    alpha = score;
+                    best_move = move_;
+                }
             }
         }
         self.transposition_table
