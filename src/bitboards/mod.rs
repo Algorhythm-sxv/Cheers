@@ -436,25 +436,6 @@ impl BitBoards {
         }
     }
 
-    pub fn move_from(&self, start: u8, target: u8, promotion: PieceIndex) -> Move {
-        let piece = self.piece_at(start as usize);
-        debug_assert!(piece != NoPiece);
-        let double_pawn_push = piece == Pawn && (target as i8 - start as i8).abs() == 16;
-        let capture = self.piece_at(target as usize) != NoPiece;
-        let en_passent = piece == Pawn && target == self.enpassent_square() as u8;
-        let castling = piece == King && (target as i8 - start as i8) == 2;
-        Move::new(
-            start,
-            target,
-            piece,
-            promotion,
-            capture,
-            double_pawn_push,
-            en_passent,
-            castling,
-        )
-    }
-
     pub fn legal_moves(&self) -> Vec<Move> {
         let mut moves = Vec::with_capacity(50);
         let color = self.current_player;

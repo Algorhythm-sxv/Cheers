@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     bitboards::BitBoards,
-    types::{PieceIndex, PieceIndex::*, CastlingRights},
+    types::{CastlingRights, PieceIndex, PieceIndex::*},
 };
 
 fn coord(square: u8) -> String {
@@ -68,6 +68,7 @@ pub struct Move {
     double_pawn_push: bool,
     enpassent_capture: bool,
     castling: bool,
+    pub sort_score: i32,
 }
 
 impl Move {
@@ -91,6 +92,7 @@ impl Move {
             double_pawn_push,
             enpassent_capture,
             castling,
+            sort_score: 0,
         }
     }
 
@@ -277,7 +279,38 @@ impl UnMove {
             en_passent_mask,
             castling,
             castling_rights,
-            halfmove_clock
+            halfmove_clock,
         }
+    }
+}
+
+pub struct MoveSorter {
+    moves: Vec<Move>,
+    sorted_index: usize,
+}
+
+// impl MoveSorter {
+//     pub fn new(moves: Vec<Move>) -> Self {
+//         Self {
+//             moves,
+//             sorted_index: 0,
+//         }
+//     }
+// }
+
+impl Iterator for MoveSorter {
+    type Item = Move;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.sorted_index == self.moves.len() {
+            return None;
+        }
+        for i in (self.sorted_index + 1)..self.moves.len() {
+            if self.moves[i].sort_score > self.moves[self.sorted_index].sort_score {
+                self.moves.swap(i, self.sorted_index);
+            }
+        }
+
+        self.sorted_index += 1;
+        Some(self.moves[self.sorted_index - 1])
     }
 }

@@ -69,33 +69,27 @@ impl BitBoards {
         // transposition table lookup
         let mut tt_move = Move::null();
         if let Some(tt_entry) = self.transposition_table.get(self.hash) {
-            // prune on exact score/beta cutoff with pseudolegal move and equal/higher depth
-            if tt_entry.depth as usize >= depth
-                && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound)
-                && tt_entry.score >= beta
-                && self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target)
-            {
-                return (
-                    beta,
-                    self.move_from(
-                        tt_entry.move_start,
-                        tt_entry.move_target,
-                        tt_entry.promotion,
-                    ),
+            // if the tt move is pseudolegal cross fingers we don't have a key collision
+            if self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target) {
+                tt_move = Move::new(
+                    tt_entry.move_start,
+                    tt_entry.move_target,
+                    self.piece_at(tt_entry.move_start as usize),
+                    tt_entry.promotion,
+                    tt_entry.en_passent_capture
+                        || self.piece_at(tt_entry.move_target as usize) != NoPiece,
+                    tt_entry.double_pawn_push,
+                    tt_entry.en_passent_capture,
+                    tt_entry.castling,
                 );
+                // prune on exact score/beta cutoff with pseudolegal move and equal/higher depth
+                if tt_entry.depth as usize >= depth
+                    && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound)
+                    && tt_entry.score >= beta
+                {
+                    return (beta, tt_move);
+                }
             }
-            // build a dummy move for move ordering
-            // this is checked against legal moves later
-            tt_move = Move::new(
-                tt_entry.move_start,
-                tt_entry.move_target,
-                NoPiece,
-                tt_entry.promotion,
-                false,
-                false,
-                false,
-                false,
-            );
         }
 
         // Null move pruning
@@ -113,7 +107,7 @@ impl BitBoards {
             }
         }
 
-        let moves = self.legal_moves();
+        let mut moves = self.legal_moves();
 
         if moves.is_empty() {
             if self.in_check(self.current_player) {
@@ -132,36 +126,34 @@ impl BitBoards {
             depth
         };
 
-        let mut moves: Vec<(Move, i32)> = moves
-            .iter()
-            .map(|m| {
-                (*m, {
-                    let mut score = 0i32;
-                    // try the transposition table move early
-                    if m.start() == tt_move.start() && m.target() == tt_move.target() {
-                        score += 1000;
+        moves.iter_mut().for_each(|m| {
+            m.sort_score = {
+                let mut score = 0i32;
+                // try the transposition table move early
+                if m.start() == tt_move.start() && m.target() == tt_move.target() {
+                    score += 1000;
+                }
+                if m.capture() {
+                    // try recaptures first
+                    if last_move.capture() && m.target() == last_move.target() {
+                        score += 1001;
                     }
-                    if m.capture() {
-                        // try recaptures first
-                        if last_move.capture() && m.target() == last_move.target() {
-                            score += 1001;
-                        }
-                        // order captures before quiet moves, MVV-LVA
-                        if !m.en_passent() {
-                            score += PIECE_VALUES[self.piece_at(m.target() as usize)]
-                                - PIECE_VALUES[m.piece()] / 10;
-                        } else {
-                            score += 90;
-                        }
+                    // order captures before quiet moves, MVV-LVA
+                    if !m.en_passent() {
+                        score += PIECE_VALUES[self.piece_at(m.target() as usize)]
+                            - PIECE_VALUES[m.piece()] / 10;
+                    } else {
+                        score += 90;
                     }
-                    score
-                })
-            })
-            .collect();
-        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
+                }
+                score
+            }
+        });
+        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
+        let mut best_move = *moves.first().unwrap();
+        // let moves = MoveSorter::new(moves);
 
-        let mut best_move = moves.first().unwrap().0;
-        for (i, &(move_, _)) in moves.iter().enumerate() {
+        for (i, &move_) in moves.iter().enumerate() {
             // Late move reduction on non-captures and non-queen-promotions
             let mut score = if i >= 4
                 && depth >= 3
@@ -171,7 +163,7 @@ impl BitBoards {
             {
                 self.make_move(move_);
                 // search with a null window; we only care whether it fails low or not
-                let score = -self.negamax(-alpha-1, -alpha, depth - 2, move_).0;
+                let score = -self.negamax(-alpha - 1, -alpha, depth - 2, move_).0;
                 self.unmake_move();
                 score
             } else {
