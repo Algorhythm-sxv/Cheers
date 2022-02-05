@@ -72,9 +72,9 @@ impl TranspositionTable {
         }
     }
 
-    pub fn set_size(&self, size: usize) {
-        let capacity = size / std::mem::size_of::<Entry>();
-        self.table.write().unwrap().truncate(capacity);
+    pub fn set_size(&self, size_mb: usize) {
+        let capacity = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
+        self.table.write().unwrap().resize_with(capacity, Entry::default);
     }
 
     pub fn set(&self, hash: u64, best_move: Move, depth: u8, score: i32, node_type: NodeType) {
