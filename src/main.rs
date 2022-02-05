@@ -33,6 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some(&"uci") => {
                 println!("id name cheers");
                 println!("id author Algorhythm");
+                println!("option name Hash type spin");
                 println!("uciok");
             }
             Some(&"quit") => break,
@@ -143,6 +144,34 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             Some(&"stop") => RUN_SEARCH.store(false, Ordering::Relaxed),
+            Some(&"setoption") => {
+                let option_name = words
+                    .iter()
+                    .position(|&w| w == "name")
+                    .map(|i| words.get(i + 1).map(|w| w.to_lowercase()))
+                    .flatten();
+
+                if let Some(option) = option_name {
+                    match option.as_ref() {
+                        "hash" => {
+                            let option_value = words
+                                .iter()
+                                .position(|&w| w == "value")
+                                .map(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
+                                .flatten()
+                                .flatten();
+                            if let Some(val) = option_value {
+                                tt.set_size(val);
+                            } else {
+                                println!("Invalid value for hash table size");
+                            }
+                        }
+                        other => {
+                            println!("Unrecognised engine option: {other}")
+                        }
+                    }
+                }
+            }
             Some(&"magics") => {
                 let start = Instant::now();
                 LookupTables::generate_all();
