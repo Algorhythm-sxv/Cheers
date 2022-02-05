@@ -155,7 +155,7 @@ impl BitBoards {
 
         for (i, &move_) in moves.iter().enumerate() {
             // Late move reduction on non-captures and non-queen-promotions
-            let mut score = if i >= 4
+            let mut score = if i >= 3
                 && depth >= 3
                 && !move_.capture()
                 && move_.promotion() != Queen
