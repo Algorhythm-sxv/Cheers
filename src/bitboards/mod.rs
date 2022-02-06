@@ -737,7 +737,7 @@ impl BitBoards {
                 }
                 // pawn captures
                 let mut pawn_captures = (((pawn & NOT_A_FILE) << 7) | ((pawn & NOT_H_FILE) << 9))
-                    & (capture_mask | self.en_passent_mask)
+                    & capture_mask & self.en_passent_mask
                     & (self.color_masks[!color] | self.en_passent_mask);
                 while pawn_captures != 0 {
                     let target = pawn_captures.trailing_zeros() as u8;
@@ -831,7 +831,7 @@ impl BitBoards {
                 }
                 // pawn captures
                 let mut pawn_captures = (((pawn & NOT_A_FILE) >> 9) | ((pawn & NOT_H_FILE) >> 7))
-                    & (capture_mask | self.en_passent_mask)
+                    & capture_mask & self.en_passent_mask
                     & (self.color_masks[!color] | self.en_passent_mask);
                 while pawn_captures != 0 {
                     let target = pawn_captures.trailing_zeros() as u8;
