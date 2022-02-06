@@ -80,9 +80,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                         None => 5,
                         Some(num) => num.parse::<usize>()?,
                     };
-                    for i in 0..=depth {
-                        println!("Perft {}: {}", i, position.perft(i))
-                    }
+                    let start = Instant::now();
+                    let nodes = position.perft(depth);
+                    let end = Instant::now();
+                    let time = (end - start).as_secs_f32();
+                    let nps = nodes as f32 / time;
+                    println!("Perft({depth}): {nodes}\t\t{time}s\t\t{nps:.1}nps");
                 } else {
                     let infinite = words.iter().any(|&w| w == "infinite");
                     let depth = words
