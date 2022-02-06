@@ -457,21 +457,17 @@ impl BitBoards {
         }
 
         // Check evasions
-        let checkers = tables.lookup_pawn_attack(king_square, color)
-            & self.piece_masks[(!color, Pawn)]
-            | tables.lookup_knight(king_square) & self.piece_masks[(!color, Knight)]
-            | tables.lookup_bishop(
+        let checkers = (tables.lookup_pawn_attack(king_square, color)
+            & self.piece_masks[(!color, Pawn)])
+            | (tables.lookup_knight(king_square) & self.piece_masks[(!color, Knight)])
+            | (tables.lookup_bishop(
                 king_square,
                 self.color_masks[White] | self.color_masks[Black],
-            ) & self.piece_masks[(!color, Bishop)]
-            | tables.lookup_rook(
+            ) & (self.piece_masks[(!color, Bishop)] | self.piece_masks[(!color, Queen)]))
+            | (tables.lookup_rook(
                 king_square,
                 self.color_masks[White] | self.color_masks[Black],
-            ) & self.piece_masks[(!color, Rook)]
-            | tables.lookup_queen(
-                king_square,
-                self.color_masks[White] | self.color_masks[Black],
-            ) & self.piece_masks[(!color, Queen)];
+            ) & (self.piece_masks[(!color, Rook)] | self.piece_masks[(!color, Queen)]));
 
         let num_checkers = checkers.count_ones();
         // - Double Check
@@ -737,7 +733,8 @@ impl BitBoards {
                 }
                 // pawn captures
                 let mut pawn_captures = (((pawn & NOT_A_FILE) << 7) | ((pawn & NOT_H_FILE) << 9))
-                    & capture_mask & self.en_passent_mask
+                    // if a double-pushed pawn is giving check, mark it as takeable by en passent
+                    & (capture_mask | (self.en_passent_mask & (capture_mask << 8)))
                     & (self.color_masks[!color] | self.en_passent_mask);
                 while pawn_captures != 0 {
                     let target = pawn_captures.trailing_zeros() as u8;
@@ -831,7 +828,8 @@ impl BitBoards {
                 }
                 // pawn captures
                 let mut pawn_captures = (((pawn & NOT_A_FILE) >> 9) | ((pawn & NOT_H_FILE) >> 7))
-                    & capture_mask & self.en_passent_mask
+                    // if a double-pushed pawn is giving check, mark it as takeable by en passent
+                    & (capture_mask | (self.en_passent_mask & (capture_mask >> 8)))
                     & (self.color_masks[!color] | self.en_passent_mask);
                 while pawn_captures != 0 {
                     let target = pawn_captures.trailing_zeros() as u8;
