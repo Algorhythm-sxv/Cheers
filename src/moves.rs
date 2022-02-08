@@ -284,33 +284,14 @@ impl UnMove {
     }
 }
 
-pub struct MoveSorter {
-    moves: Vec<Move>,
-    sorted_index: usize,
-}
+pub fn pick_move(move_list: &mut [Move], current_index: usize) {
+    let mut best_index = current_index;
 
-// impl MoveSorter {
-//     pub fn new(moves: Vec<Move>) -> Self {
-//         Self {
-//             moves,
-//             sorted_index: 0,
-//         }
-//     }
-// }
-
-impl Iterator for MoveSorter {
-    type Item = Move;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.sorted_index == self.moves.len() {
-            return None;
+    for i in (current_index + 1)..move_list.len() {
+        if move_list[i].sort_score > move_list[best_index].sort_score {
+            best_index = i;
         }
-        for i in (self.sorted_index + 1)..self.moves.len() {
-            if self.moves[i].sort_score > self.moves[self.sorted_index].sort_score {
-                self.moves.swap(i, self.sorted_index);
-            }
-        }
-
-        self.sorted_index += 1;
-        Some(self.moves[self.sorted_index - 1])
     }
+
+    move_list.swap(current_index, best_index);
 }

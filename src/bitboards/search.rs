@@ -149,11 +149,12 @@ impl BitBoards {
                 score
             }
         });
-        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
+        // moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
         let mut best_move = *moves.first().unwrap();
-        // let moves = MoveSorter::new(moves);
 
-        for (i, &move_) in moves.iter().enumerate() {
+        for i in 0..moves.len() {
+            pick_move(&mut moves, i);
+            let move_ = moves[i];
             // Late move reduction on non-captures and non-queen-promotions
             let mut score = if i >= 3
                 && depth >= 3
@@ -199,34 +200,35 @@ impl BitBoards {
         }
         alpha = alpha.max(stand_pat_score);
 
-        let moves = self.legal_moves();
-        let mut moves: Vec<(Move, i32)> = moves
-            .iter()
-            .filter_map(|m| {
-                if m.capture() {
+        let mut moves: Vec<Move> = self
+            .legal_moves()
+            .into_iter()
+            .filter(|m| m.capture())
+            .map(|mut m| {
+                m.sort_score = {
                     let mut score = 0i32;
                     // try recaptures first
                     if last_move.capture() && m.target() == last_move.target() {
                         score += 1001;
                     }
-                    // order captures by MVV-LVA
+                    // order captures before quiet moves, MVV-LVA
                     if !m.en_passent() {
                         score += PIECE_VALUES[self.piece_at(m.target() as usize)]
                             - PIECE_VALUES[m.piece()] / 10;
                     } else {
                         score += 90;
                     }
-                    Some((*m, score))
-                } else {
-                    None
-                }
+
+                    score
+                };
+                m
             })
             .collect();
-        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
+        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
 
-        for (move_, _) in moves.iter() {
-            self.make_move(*move_);
-            let score = -self.quiesce(-beta, -alpha, *move_);
+        for &move_ in moves.iter() {
+            self.make_move(move_);
+            let score = -self.quiesce(-beta, -alpha, move_);
             self.unmake_move();
             if score >= beta {
                 return beta;
