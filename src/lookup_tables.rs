@@ -1,27 +1,9 @@
 use crate::types::{ColorIndex, ColorIndex::*};
-use once_cell::sync::OnceCell;
+// use once_cell::sync::OnceCell;
 use rand::prelude::*;
 
-pub static LOOKUP_TABLES: OnceCell<LookupTables> = OnceCell::new();
-
-pub fn lookup_tables() -> &'static LookupTables {
-    LOOKUP_TABLES.get_or_init(|| {
-        let mut sliding_attack_table = Vec::with_capacity(10000);
-
-        let rook_magics = generate_rook_magics(&mut sliding_attack_table, true);
-        let bishop_magics = generate_bishop_magics(&mut sliding_attack_table, true);
-
-        LookupTables {
-            knight_table: generate_knight_table(),
-            king_table: generate_king_table(),
-            pawn_push_one_tables: generate_pawn_push_tables(),
-            pawn_attack_tables: generate_pawn_attack_tables(),
-            sliding_attack_table,
-            rook_magics,
-            bishop_magics,
-        }
-    })
-}
+//pub static LOOKUP_TABLES: OnceCell<LookupTables> = OnceCell::new();
+pub static mut LOOKUP_TABLES: LookupTables = LookupTables::new();
 
 #[derive(Clone, Default)]
 pub struct LookupTables {
@@ -35,27 +17,40 @@ pub struct LookupTables {
 }
 
 impl LookupTables {
-    pub fn generate_all() -> &'static Self {
-        LOOKUP_TABLES.get_or_init(|| {
-            let mut sliding_attack_table = Vec::with_capacity(10000);
+    pub const fn new() -> Self {
+        Self {
+            knight_table: Vec::new(),
+            king_table: Vec::new(),
+            pawn_push_one_tables: [Vec::new(), Vec::new()],
+            pawn_attack_tables: [Vec::new(), Vec::new()],
+            sliding_attack_table: Vec::new(),
+            rook_magics: Vec::new(),
+            bishop_magics: Vec::new(),
+        }
+    }
+    pub fn generate_all() {
+        unsafe {
+            LOOKUP_TABLES = {
+                let mut sliding_attack_table = Vec::with_capacity(10000);
 
-            let rook_magics = generate_rook_magics(&mut sliding_attack_table, false);
-            let bishop_magics = generate_bishop_magics(&mut sliding_attack_table, false);
+                let rook_magics = generate_rook_magics(&mut sliding_attack_table, false);
+                let bishop_magics = generate_bishop_magics(&mut sliding_attack_table, false);
 
-            LookupTables {
-                knight_table: generate_knight_table(),
-                king_table: generate_king_table(),
-                pawn_push_one_tables: generate_pawn_push_tables(),
-                pawn_attack_tables: generate_pawn_attack_tables(),
-                sliding_attack_table,
-                rook_magics,
-                bishop_magics,
-            }
-        })
+                LookupTables {
+                    knight_table: generate_knight_table(),
+                    king_table: generate_king_table(),
+                    pawn_push_one_tables: generate_pawn_push_tables(),
+                    pawn_attack_tables: generate_pawn_attack_tables(),
+                    sliding_attack_table,
+                    rook_magics,
+                    bishop_magics,
+                }
+            };
+        }
     }
 
     fn bishop_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
-        let magic_square = self.bishop_magics[square];
+        let magic_square = unsafe { self.bishop_magics.get_unchecked(square) };
         magic_square.index
             + magic_hash(
                 magic_square.mask & blocking_mask,
@@ -65,41 +60,13 @@ impl LookupTables {
     }
 
     fn rook_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
-        let magic_square = self.rook_magics[square];
+        let magic_square = unsafe { self.rook_magics.get_unchecked(square) };
         magic_square.index
             + magic_hash(
                 magic_square.mask & blocking_mask,
                 magic_square.magic,
                 magic_square.shift,
             )
-    }
-
-    pub fn lookup_knight(&self, square: usize) -> u64 {
-        self.knight_table[square]
-    }
-
-    pub fn lookup_king(&self, square: usize) -> u64 {
-        self.king_table[square]
-    }
-
-    pub fn lookup_pawn_push(&self, square: usize, color: ColorIndex) -> u64 {
-        self.pawn_push_one_tables[color as usize][square]
-    }
-
-    pub fn lookup_pawn_attack(&self, square: usize, color: ColorIndex) -> u64 {
-        self.pawn_attack_tables[color as usize][square]
-    }
-
-    pub fn lookup_bishop(&self, square: usize, blocking_mask: u64) -> u64 {
-        self.sliding_attack_table[self.bishop_attack_index(square, blocking_mask)]
-    }
-
-    pub fn lookup_rook(&self, square: usize, blocking_mask: u64) -> u64 {
-        self.sliding_attack_table[self.rook_attack_index(square, blocking_mask)]
-    }
-
-    pub fn lookup_queen(&self, square: usize, blocking_mask: u64) -> u64 {
-        self.lookup_bishop(square, blocking_mask) | self.lookup_rook(square, blocking_mask)
     }
 
     pub fn print_magics(&self) {
@@ -111,6 +78,74 @@ impl LookupTables {
         for square in self.bishop_magics.iter() {
             println!("{:#018X},", square.magic);
         }
+    }
+}
+
+pub fn lookup_pawn_attack(square: usize, color: ColorIndex) -> u64 {
+    unsafe {
+        *LOOKUP_TABLES
+            
+            .pawn_attack_tables
+            .get_unchecked(color as usize)
+            .get_unchecked(square)
+    }
+}
+
+pub fn lookup_pawn_push(square: usize, color: ColorIndex) -> u64 {
+    unsafe {
+        *LOOKUP_TABLES
+            
+            .pawn_push_one_tables
+            .get_unchecked(color as usize)
+            .get_unchecked(square)
+    }
+}
+
+pub fn lookup_knight(square: usize) -> u64 {
+    unsafe {
+        *LOOKUP_TABLES
+            
+            .knight_table
+            .get_unchecked(square)
+    }
+}
+
+pub fn lookup_king(square: usize) -> u64 {
+    unsafe {
+        *LOOKUP_TABLES
+            
+            .king_table
+            .get_unchecked(square)
+    }
+}
+
+pub fn lookup_bishop(square: usize, blocking_mask: u64) -> u64 {
+    unsafe {
+        let tables = &LOOKUP_TABLES;
+        *tables
+            .sliding_attack_table
+            .get_unchecked(tables.bishop_attack_index(square, blocking_mask))
+    }
+}
+
+pub fn lookup_rook(square: usize, blocking_mask: u64) -> u64 {
+    unsafe {
+        let tables = &LOOKUP_TABLES;
+        *tables
+            .sliding_attack_table
+            .get_unchecked(tables.rook_attack_index(square, blocking_mask))
+    }
+}
+
+pub fn lookup_queen(square: usize, blocking_mask: u64) -> u64 {
+    unsafe {
+        let tables = &LOOKUP_TABLES;
+        *tables
+            .sliding_attack_table
+            .get_unchecked(tables.rook_attack_index(square, blocking_mask))
+            | tables
+                .sliding_attack_table
+                .get_unchecked(tables.bishop_attack_index(square, blocking_mask))
     }
 }
 

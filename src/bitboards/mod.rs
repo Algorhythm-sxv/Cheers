@@ -319,7 +319,7 @@ impl BitBoards {
         let mut result = 0;
         while knights != 0 {
             let i = knights.trailing_zeros() as usize;
-            result |= lookup_tables().lookup_knight(i);
+            result |= lookup_knight(i);
             knights ^= 1 << i;
         }
         result
@@ -331,7 +331,7 @@ impl BitBoards {
         let mut result = 0;
         while bishops != 0 {
             let i = bishops.trailing_zeros() as usize;
-            result |= lookup_tables().lookup_bishop(i, blocking_mask);
+            result |= lookup_bishop(i, blocking_mask);
             bishops ^= 1 << i;
         }
         result
@@ -343,7 +343,7 @@ impl BitBoards {
         let mut result = 0;
         while rooks != 0 {
             let i = rooks.trailing_zeros() as usize;
-            result |= lookup_tables().lookup_rook(i, blocking_mask);
+            result |= lookup_rook(i, blocking_mask);
             rooks ^= 1 << i;
         }
         result
@@ -355,7 +355,7 @@ impl BitBoards {
         let mut result = 0;
         while queens != 0 {
             let i = queens.trailing_zeros() as usize;
-            result |= lookup_tables().lookup_queen(i, blocking_mask);
+            result |= lookup_queen(i, blocking_mask);
             queens ^= 1 << i;
         }
         result
@@ -363,7 +363,7 @@ impl BitBoards {
 
     fn king_attacks(&self, color: ColorIndex) -> u64 {
         let king = self.piece_masks[(color, King)];
-        lookup_tables().lookup_king(king.trailing_zeros() as usize)
+        lookup_king(king.trailing_zeros() as usize)
     }
 
     fn all_attacks(&self, color: ColorIndex, blocking_mask: u64) -> u64 {
@@ -397,16 +397,15 @@ impl BitBoards {
                         != 0
                 } else {
                     // pushes
-                    let push_one = lookup_tables().lookup_pawn_push(start as usize, color)
+                    let push_one = lookup_pawn_push(start as usize, color)
                         & !(self.color_masks[White] | self.color_masks[Black]);
                     if d == 8 && push_one & (1 << target) != 0 {
                         true
                     } else if d == 16 && push_one != 0 {
-                        return lookup_tables()
-                            .lookup_pawn_push(push_one.trailing_zeros() as usize, color)
+                        lookup_pawn_push(push_one.trailing_zeros() as usize, color)
                             & !(self.color_masks[White] | self.color_masks[Black])
                             & (1 << target)
-                            != 0;
+                            != 0
                     } else {
                         false
                     }
@@ -440,7 +439,6 @@ impl BitBoards {
         let mut moves = Vec::with_capacity(50);
         let color = self.current_player;
 
-        let tables = lookup_tables();
         let king_square = self.piece_masks[(color, King)].trailing_zeros() as usize;
 
         // King moves
@@ -457,14 +455,13 @@ impl BitBoards {
         }
 
         // Check evasions
-        let checkers = (tables.lookup_pawn_attack(king_square, color)
-            & self.piece_masks[(!color, Pawn)])
-            | (tables.lookup_knight(king_square) & self.piece_masks[(!color, Knight)])
-            | (tables.lookup_bishop(
+        let checkers = (lookup_pawn_attack(king_square, color) & self.piece_masks[(!color, Pawn)])
+            | (lookup_knight(king_square) & self.piece_masks[(!color, Knight)])
+            | (lookup_bishop(
                 king_square,
                 self.color_masks[White] | self.color_masks[Black],
             ) & (self.piece_masks[(!color, Bishop)] | self.piece_masks[(!color, Queen)]))
-            | (tables.lookup_rook(
+            | (lookup_rook(
                 king_square,
                 self.color_masks[White] | self.color_masks[Black],
             ) & (self.piece_masks[(!color, Rook)] | self.piece_masks[(!color, Queen)]));
@@ -492,13 +489,12 @@ impl BitBoards {
                     || (king_square / 8) == (checker_square / 8)
                 {
                     // orthogonal slider
-                    slider_rays = tables.lookup_rook(king_square, 1 << checker_square);
-                    push_mask = tables.lookup_rook(checker_square, 1 << king_square) & slider_rays;
+                    slider_rays = lookup_rook(king_square, 1 << checker_square);
+                    push_mask = lookup_rook(checker_square, 1 << king_square) & slider_rays;
                 } else {
                     // diagonal slider
-                    slider_rays = tables.lookup_bishop(king_square, 1 << checker_square);
-                    push_mask =
-                        tables.lookup_bishop(checker_square, 1 << king_square) & slider_rays;
+                    slider_rays = lookup_bishop(king_square, 1 << checker_square);
+                    push_mask = lookup_bishop(checker_square, 1 << king_square) & slider_rays;
                 }
             } else {
                 // if the piece is not a slider, we can only capture
@@ -508,14 +504,13 @@ impl BitBoards {
         // Pinned pieces
         let mut pinned_pieces = 0u64;
 
-        let orthogonal_pin_rays = tables.lookup_rook(king_square, self.color_masks[!color]);
+        let orthogonal_pin_rays = lookup_rook(king_square, self.color_masks[!color]);
         let mut pinning_orthogonals = (self.piece_masks[(!color, Rook)]
             | self.piece_masks[(!color, Queen)])
             & orthogonal_pin_rays;
         while pinning_orthogonals != 0 {
             let pinner_square = pinning_orthogonals.trailing_zeros() as usize;
-            let pin_ray = (orthogonal_pin_rays
-                & tables.lookup_rook(pinner_square, 1 << king_square))
+            let pin_ray = (orthogonal_pin_rays & lookup_rook(pinner_square, 1 << king_square))
                 | (1 << pinner_square)
                 | (1 << king_square);
 
@@ -553,7 +548,7 @@ impl BitBoards {
                 let pinned_pawn = pin_ray & self.piece_masks[(color, Pawn)];
                 if pinned_pawn != 0 {
                     let pawn_square = pinned_pawn.trailing_zeros() as u8;
-                    let mut pawn_moves = tables.lookup_pawn_push(pawn_square as usize, color)
+                    let mut pawn_moves = lookup_pawn_push(pawn_square as usize, color)
                         & pin_ray
                         & push_mask
                         & !(self.color_masks[color] | self.color_masks[!color]);
@@ -569,7 +564,7 @@ impl BitBoards {
                                     & 1 << (pawn_square - 16)
                                     == 0))
                     {
-                        tables.lookup_pawn_push(pawn_moves.trailing_zeros() as usize, color)
+                        lookup_pawn_push(pawn_moves.trailing_zeros() as usize, color)
                     } else {
                         0
                     };
@@ -592,14 +587,13 @@ impl BitBoards {
             }
             pinning_orthogonals ^= 1 << pinner_square;
         }
-        let diagonal_pin_rays = tables.lookup_bishop(king_square, self.color_masks[!color]);
+        let diagonal_pin_rays = lookup_bishop(king_square, self.color_masks[!color]);
         let mut pinning_diagonals = (self.piece_masks[(!color, Bishop)]
             | self.piece_masks[(!color, Queen)])
             & diagonal_pin_rays;
         while pinning_diagonals != 0 {
             let pinner_square = pinning_diagonals.trailing_zeros() as usize;
-            let pin_ray = (diagonal_pin_rays
-                & tables.lookup_bishop(pinner_square, 1 << king_square))
+            let pin_ray = (diagonal_pin_rays & lookup_bishop(pinner_square, 1 << king_square))
                 | (1 << pinner_square)
                 | (1 << king_square);
 
@@ -638,7 +632,7 @@ impl BitBoards {
                 let pinned_pawn = pin_ray & self.piece_masks[(color, Pawn)];
                 if pinned_pawn != 0 {
                     let pawn_square = pinned_pawn.trailing_zeros() as u8;
-                    let mut pawn_moves = tables.lookup_pawn_attack(pawn_square as usize, color)
+                    let mut pawn_moves = lookup_pawn_attack(pawn_square as usize, color)
                         & pin_ray
                         & capture_mask
                         & (self.color_masks[!color] | self.en_passent_mask);
@@ -756,7 +750,7 @@ impl BitBoards {
                             while attacking_rooks_or_queens != 0 {
                                 let rook_square =
                                     attacking_rooks_or_queens.trailing_zeros() as usize;
-                                if tables.lookup_rook(rook_square, blocking_mask)
+                                if lookup_rook(rook_square, blocking_mask)
                                     & self.piece_masks[(color, King)]
                                     != 0
                                 {
@@ -769,7 +763,7 @@ impl BitBoards {
                                 self.piece_masks[(!color, Queen)] & FOURTH_RANK;
                             while attacking_queens != 0 {
                                 let queen_square = attacking_queens.trailing_zeros() as usize;
-                                if tables.lookup_queen(queen_square, blocking_mask)
+                                if lookup_queen(queen_square, blocking_mask)
                                     & self.piece_masks[(color, King)]
                                     != 0
                                 {
@@ -851,7 +845,7 @@ impl BitBoards {
                             while attacking_rooks_or_queens != 0 {
                                 let rook_square =
                                     attacking_rooks_or_queens.trailing_zeros() as usize;
-                                if tables.lookup_rook(rook_square, blocking_mask)
+                                if lookup_rook(rook_square, blocking_mask)
                                     & self.piece_masks[(color, King)]
                                     != 0
                                 {
@@ -880,7 +874,7 @@ impl BitBoards {
         let mut knights = self.piece_masks[(color, Knight)] & !pinned_pieces;
         while knights != 0 {
             let knight_square = knights.trailing_zeros() as usize;
-            let mut attacks = tables.lookup_knight(knight_square)
+            let mut attacks = lookup_knight(knight_square)
                 & !self.color_masks[color]
                 & (push_mask | capture_mask);
             while attacks != 0 {
@@ -896,7 +890,7 @@ impl BitBoards {
         let mut bishops = self.piece_masks[(color, Bishop)] & !pinned_pieces;
         while bishops != 0 {
             let bishop_square = bishops.trailing_zeros() as usize;
-            let mut attacks = tables.lookup_bishop(
+            let mut attacks = lookup_bishop(
                 bishop_square,
                 self.color_masks[White] | self.color_masks[Black],
             ) & !self.color_masks[color]
@@ -914,7 +908,7 @@ impl BitBoards {
         let mut rooks = self.piece_masks[(color, Rook)] & !pinned_pieces;
         while rooks != 0 {
             let rook_square = rooks.trailing_zeros() as usize;
-            let mut attacks = tables.lookup_rook(
+            let mut attacks = lookup_rook(
                 rook_square,
                 self.color_masks[White] | self.color_masks[Black],
             ) & !self.color_masks[color]
@@ -932,7 +926,7 @@ impl BitBoards {
         let mut queens = self.piece_masks[(color, Queen)] & !pinned_pieces;
         while queens != 0 {
             let queen_square = queens.trailing_zeros() as usize;
-            let mut attacks = tables.lookup_queen(
+            let mut attacks = lookup_queen(
                 queen_square,
                 self.color_masks[White] | self.color_masks[Black],
             ) & !self.color_masks[color]

@@ -15,15 +15,18 @@ use std::{
 };
 
 use bitboards::{BitBoards, NODE_COUNT, NPS_COUNT, RUN_SEARCH};
-use lookup_tables::lookup_tables;
 use moves::Move;
 use transposition_table::{TranspositionTable, TT_DEFAULT_SIZE};
 
-use crate::lookup_tables::LookupTables;
+use crate::lookup_tables::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    LookupTables::generate_all();
+    zobrist::initialise_zobrist_numbers();
+
     let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
     let mut position = BitBoards::new(tt.clone());
+
     for line in stdin().lock().lines() {
         let line = line?;
 
@@ -38,8 +41,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"quit") => break,
             Some(&"isready") => {
-                let _ = zobrist::zobrist_numbers();
-                let _ = lookup_tables();
                 println!("readyok");
             }
             Some(&"position") => {
@@ -180,7 +181,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 LookupTables::generate_all();
                 let end = Instant::now();
                 println!("Generated magics in {:.3}s", (end - start).as_secs_f32());
-                lookup_tables().print_magics();
+                unsafe { LOOKUP_TABLES.print_magics() };
             }
             Some(&"test") => {
                 let mut test_suite = String::new();
