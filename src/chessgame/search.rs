@@ -8,7 +8,7 @@ pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-impl BitBoards {
+impl ChessGame {
     pub fn search(&self, max_depth: Option<usize>) -> (i32, Move) {
         let mut score = i32::MIN;
         let mut best_move = Move::null();

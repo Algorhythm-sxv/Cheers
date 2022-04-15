@@ -27,7 +27,7 @@ impl std::ops::Index<PieceIndex> for PieceValues {
     }
 }
 
-impl BitBoards {
+impl ChessGame {
     pub fn evaluate(&self) -> i32 {
         let mut eval = 0i32;
         let mut midgame = 0i32;
@@ -93,25 +93,19 @@ impl BitBoards {
         let mut sum = 0i32;
         let color = self.current_player;
         for piece in [Pawn, Knight, Bishop, Rook, Queen, King] {
-            let mut player_pieces = self.piece_masks[(color, piece)];
+            let player_pieces = self.piece_masks[(color, piece)];
 
-            while player_pieces != 0 {
-                let square = player_pieces.trailing_zeros() as usize;
-                let player_index = if color == White { square ^ 56 } else { square };
+            for square in player_pieces {
+                let player_index = if color == White { square ^ 56 } else { square } as usize;
 
                 sum += PIECE_TABLES[(phase, piece)][player_index];
-
-                player_pieces ^= 1 << square;
             }
-            let mut opponent_pieces = self.piece_masks[(!color, piece)];
+            let opponent_pieces = self.piece_masks[(!color, piece)];
 
-            while opponent_pieces != 0 {
-                let square = opponent_pieces.trailing_zeros() as usize;
-                let opponent_index = if !color == White { square ^ 56 } else { square };
+            for square in opponent_pieces {
+                let opponent_index = if !color == White { square ^ 56 } else { square } as usize;
 
                 sum -= PIECE_TABLES[(phase, piece)][opponent_index];
-
-                opponent_pieces ^= 1 << square;
             }
         }
         sum
@@ -130,12 +124,12 @@ impl BitBoards {
             SIXTH_RANK
         };
 
-        if self.piece_masks[(color, King)].trailing_zeros() % 8 <= 2 {
+        if self.piece_masks[(color, King)].lsb_index() % 8 <= 2 {
             // castled queenside
             let shield_pawns = self.piece_masks[(color, Pawn)] & (A_FILE | B_FILE | C_FILE);
             sum += (shield_pawns & rank_1).count_ones() as i32 * PAWN_SHIELD_1
                 + (shield_pawns & rank_2).count_ones() as i32 * PAWN_SHIELD_2;
-        } else if self.piece_masks[(color, King)].trailing_zeros() % 8 >= 5 {
+        } else if self.piece_masks[(color, King)].lsb_index() % 8 >= 5 {
             // castled kingside
             let shield_pawns = self.piece_masks[(color, Pawn)] & (F_FILE | G_FILE | H_FILE);
             sum += (shield_pawns & rank_1).count_ones() as i32 * PAWN_SHIELD_1
@@ -168,7 +162,7 @@ impl BitBoards {
         let front_spans = self.pawn_front_spans(!color);
         let all_front_spans =
             front_spans | (front_spans & NOT_H_FILE) << 1 | (front_spans & NOT_A_FILE) >> 1;
-        let passers = self.piece_masks[(color, Pawn)] & !all_front_spans;
+        let passers = self.piece_masks[(color, Pawn)] & all_front_spans.inverse();
         sum += 100 * passers.count_ones() as i32;
 
         // double pawns: -40

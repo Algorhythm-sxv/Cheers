@@ -1,4 +1,5 @@
-mod bitboards;
+mod bitboard;
+mod chessgame;
 mod lookup_tables;
 mod moves;
 mod transposition_table;
@@ -14,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bitboards::{BitBoards, NODE_COUNT, NPS_COUNT, RUN_SEARCH};
+use chessgame::{ChessGame, NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 use moves::Move;
 use transposition_table::{TranspositionTable, TT_DEFAULT_SIZE};
 
@@ -25,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     zobrist::initialise_zobrist_numbers();
 
     let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
-    let mut position = BitBoards::new(tt.clone());
+    let mut position = ChessGame::new(tt.clone());
 
     for line in stdin().lock().lines() {
         let line = line?;
@@ -47,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let moves_index;
                 match words.get(1) {
                     Some(&"fen") => {
-                        let mut test_boards = BitBoards::new(tt.clone());
+                        let mut test_boards = ChessGame::new(tt.clone());
                         let fen = words[2..=7].join(" ");
                         if let Err(err) = test_boards.set_from_fen(fen.clone()) {
                             println!("Failed to set board with FEN {}: {}", fen, err)
@@ -191,7 +192,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         let mut test_params = test.split(';');
 
                         let test_fen = test_params.next().unwrap().to_string();
-                        let mut boards = BitBoards::new(tt.clone());
+                        let mut boards = ChessGame::new(tt.clone());
                         boards.set_from_fen(test_fen.clone())?;
                         let answer = test_params
                             .nth(depth - 1)
@@ -229,7 +230,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 struct SearchParams {
-    position: BitBoards,
+    position: ChessGame,
     depth: Option<usize>,
     wtime: Option<usize>,
     btime: Option<usize>,
@@ -249,7 +250,7 @@ fn engine_thread(search_params: SearchParams) -> Result<(), Box<dyn Error>> {
 
     let search_start = Instant::now();
     let mut nodes_report = Instant::now();
-    while bitboards::RUN_SEARCH.load(Ordering::Relaxed) {
+    while chessgame::RUN_SEARCH.load(Ordering::Relaxed) {
         let node_report_time = Instant::now().duration_since(nodes_report);
         if node_report_time > Duration::from_millis(500) {
             nodes_report = Instant::now();

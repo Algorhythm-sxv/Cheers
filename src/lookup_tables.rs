@@ -1,4 +1,7 @@
-use crate::types::{ColorIndex, ColorIndex::*};
+use crate::{
+    bitboard::BitBoard,
+    types::{ColorIndex, ColorIndex::*},
+};
 // use once_cell::sync::OnceCell;
 use rand::prelude::*;
 
@@ -7,11 +10,11 @@ pub static mut LOOKUP_TABLES: LookupTables = LookupTables::new();
 
 #[derive(Clone, Default)]
 pub struct LookupTables {
-    knight_table: Vec<u64>,
-    king_table: Vec<u64>,
-    pawn_push_one_tables: [Vec<u64>; 2],
-    pawn_attack_tables: [Vec<u64>; 2],
-    sliding_attack_table: Vec<u64>,
+    knight_table: Vec<BitBoard>,
+    king_table: Vec<BitBoard>,
+    pawn_push_one_tables: [Vec<BitBoard>; 2],
+    pawn_attack_tables: [Vec<BitBoard>; 2],
+    sliding_attack_table: Vec<BitBoard>,
     rook_magics: Vec<MagicSquare>,
     bishop_magics: Vec<MagicSquare>,
 }
@@ -49,7 +52,7 @@ impl LookupTables {
         }
     }
 
-    fn bishop_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
+    fn bishop_attack_index(&self, square: usize, blocking_mask: BitBoard) -> usize {
         let magic_square = unsafe { self.bishop_magics.get_unchecked(square) };
         magic_square.index
             + magic_hash(
@@ -59,7 +62,7 @@ impl LookupTables {
             )
     }
 
-    fn rook_attack_index(&self, square: usize, blocking_mask: u64) -> usize {
+    fn rook_attack_index(&self, square: usize, blocking_mask: BitBoard) -> usize {
         let magic_square = unsafe { self.rook_magics.get_unchecked(square) };
         magic_square.index
             + magic_hash(
@@ -81,45 +84,33 @@ impl LookupTables {
     }
 }
 
-pub fn lookup_pawn_attack(square: usize, color: ColorIndex) -> u64 {
+pub fn lookup_pawn_attack(square: usize, color: ColorIndex) -> BitBoard {
     unsafe {
         *LOOKUP_TABLES
-            
             .pawn_attack_tables
             .get_unchecked(color as usize)
             .get_unchecked(square)
     }
 }
 
-pub fn lookup_pawn_push(square: usize, color: ColorIndex) -> u64 {
+pub fn lookup_pawn_push(square: usize, color: ColorIndex) -> BitBoard {
     unsafe {
         *LOOKUP_TABLES
-            
             .pawn_push_one_tables
             .get_unchecked(color as usize)
             .get_unchecked(square)
     }
 }
 
-pub fn lookup_knight(square: usize) -> u64 {
-    unsafe {
-        *LOOKUP_TABLES
-            
-            .knight_table
-            .get_unchecked(square)
-    }
+pub fn lookup_knight(square: usize) -> BitBoard {
+    unsafe { *LOOKUP_TABLES.knight_table.get_unchecked(square) }
 }
 
-pub fn lookup_king(square: usize) -> u64 {
-    unsafe {
-        *LOOKUP_TABLES
-            
-            .king_table
-            .get_unchecked(square)
-    }
+pub fn lookup_king(square: usize) -> BitBoard {
+    unsafe { *LOOKUP_TABLES.king_table.get_unchecked(square) }
 }
 
-pub fn lookup_bishop(square: usize, blocking_mask: u64) -> u64 {
+pub fn lookup_bishop(square: usize, blocking_mask: BitBoard) -> BitBoard {
     unsafe {
         let tables = &LOOKUP_TABLES;
         *tables
@@ -128,7 +119,7 @@ pub fn lookup_bishop(square: usize, blocking_mask: u64) -> u64 {
     }
 }
 
-pub fn lookup_rook(square: usize, blocking_mask: u64) -> u64 {
+pub fn lookup_rook(square: usize, blocking_mask: BitBoard) -> BitBoard {
     unsafe {
         let tables = &LOOKUP_TABLES;
         *tables
@@ -137,7 +128,7 @@ pub fn lookup_rook(square: usize, blocking_mask: u64) -> u64 {
     }
 }
 
-pub fn lookup_queen(square: usize, blocking_mask: u64) -> u64 {
+pub fn lookup_queen(square: usize, blocking_mask: BitBoard) -> BitBoard {
     unsafe {
         let tables = &LOOKUP_TABLES;
         *tables
@@ -152,42 +143,44 @@ pub fn lookup_queen(square: usize, blocking_mask: u64) -> u64 {
 // masks to prevent A-H file wrapping
 #[allow(dead_code)]
 mod consts {
-    pub const NOT_A_FILE: u64 = !0x0101010101010101;
-    pub const NOT_A_B_FILES: u64 = !0x0303030303030303;
-    pub const NOT_H_FILE: u64 = !0x8080808080808080;
-    pub const NOT_G_H_FILES: u64 = !0xC0C0C0C0C0C0C0C0;
+    use crate::bitboard::BitBoard;
+
+    pub const NOT_A_FILE: BitBoard = BitBoard::from(!0x0101010101010101);
+    pub const NOT_A_B_FILES: BitBoard = BitBoard::from(!0x0303030303030303);
+    pub const NOT_H_FILE: BitBoard = BitBoard::from(!0x8080808080808080);
+    pub const NOT_G_H_FILES: BitBoard = BitBoard::from(!0xC0C0C0C0C0C0C0C0);
 
     // masks for ranks/files
-    pub const A_FILE: u64 = 0x0101010101010101;
-    pub const B_FILE: u64 = 0x0202020202020202;
-    pub const C_FILE: u64 = 0x0404040404040404;
-    pub const D_FILE: u64 = 0x0808080808080808;
-    pub const E_FILE: u64 = 0x1010101010101010;
-    pub const F_FILE: u64 = 0x2020202020202020;
-    pub const G_FILE: u64 = 0x4040404040404040;
-    pub const H_FILE: u64 = 0x8080808080808080;
+    pub const A_FILE: BitBoard = BitBoard::from(0x0101010101010101);
+    pub const B_FILE: BitBoard = BitBoard::from(0x0202020202020202);
+    pub const C_FILE: BitBoard = BitBoard::from(0x0404040404040404);
+    pub const D_FILE: BitBoard = BitBoard::from(0x0808080808080808);
+    pub const E_FILE: BitBoard = BitBoard::from(0x1010101010101010);
+    pub const F_FILE: BitBoard = BitBoard::from(0x2020202020202020);
+    pub const G_FILE: BitBoard = BitBoard::from(0x4040404040404040);
+    pub const H_FILE: BitBoard = BitBoard::from(0x8080808080808080);
 
-    pub const FILES: [u64; 8] = [
+    pub const FILES: [BitBoard; 8] = [
         A_FILE, B_FILE, C_FILE, D_FILE, E_FILE, F_FILE, G_FILE, H_FILE,
     ];
 
-    pub const FIRST_RANK: u64 = 0x00000000000000FF;
-    pub const SECOND_RANK: u64 = 0x000000000000FF00;
-    pub const THIRD_RANK: u64 = 0x0000000000FF0000;
-    pub const FOURTH_RANK: u64 = 0x00000000FF000000;
-    pub const FIFTH_RANK: u64 = 0x000000FF00000000;
-    pub const SIXTH_RANK: u64 = 0x0000FF0000000000;
-    pub const SEVENTH_RANK: u64 = 0x00FF000000000000;
-    pub const EIGHTH_RANK: u64 = 0xFF00000000000000;
+    pub const FIRST_RANK: BitBoard = BitBoard::from(0x00000000000000FF);
+    pub const SECOND_RANK: BitBoard = BitBoard::from(0x000000000000FF00);
+    pub const THIRD_RANK: BitBoard = BitBoard::from(0x0000000000FF0000);
+    pub const FOURTH_RANK: BitBoard = BitBoard::from(0x00000000FF000000);
+    pub const FIFTH_RANK: BitBoard = BitBoard::from(0x000000FF00000000);
+    pub const SIXTH_RANK: BitBoard = BitBoard::from(0x0000FF0000000000);
+    pub const SEVENTH_RANK: BitBoard = BitBoard::from(0x00FF000000000000);
+    pub const EIGHTH_RANK: BitBoard = BitBoard::from(0xFF00000000000000);
 }
 pub use consts::*;
 
 /// Generates a table mapping an input square to a mask of all squares a knight attacks from there
-fn generate_knight_table() -> Vec<u64> {
+fn generate_knight_table() -> Vec<BitBoard> {
     let mut table = Vec::with_capacity(64);
 
     for square in 0..64 {
-        let knight = 1 << square;
+        let knight: BitBoard = BitBoard::from(1 << square);
 
         let moves = ((knight << 6) & NOT_G_H_FILES)
             | ((knight << 10) & NOT_A_B_FILES)
@@ -204,11 +197,11 @@ fn generate_knight_table() -> Vec<u64> {
 }
 
 /// Generates a table mapping an input square to a mask of all squares a king attacks from there
-fn generate_king_table() -> Vec<u64> {
+fn generate_king_table() -> Vec<BitBoard> {
     let mut table = Vec::with_capacity(64);
 
     for square in 0..64 {
-        let mut king = 1 << square;
+        let mut king = BitBoard::from(1 << square);
 
         let mut moves = ((king << 1) & NOT_A_FILE) | ((king >> 1) & NOT_H_FILE);
 
@@ -223,25 +216,25 @@ fn generate_king_table() -> Vec<u64> {
 }
 
 /// Generates a table mapping an input square to a mask of squares a pawn can push to from there
-fn generate_pawn_push_tables() -> [Vec<u64>; 2] {
-    let mut tables = [vec![0; 64], vec![0; 64]];
+fn generate_pawn_push_tables() -> [Vec<BitBoard>; 2] {
+    let mut tables = [vec![BitBoard::empty(); 64], vec![BitBoard::empty(); 64]];
 
     for square in 8..56 {
-        tables[White as usize][square as usize] = (1 << square) << 8;
-        tables[Black as usize][square as usize] = (1 << square) >> 8;
+        tables[White as usize][square as usize] = BitBoard::from((1 << square) << 8);
+        tables[Black as usize][square as usize] = BitBoard::from((1 << square) >> 8);
     }
 
     tables
 }
 
-fn generate_pawn_attack_tables() -> [Vec<u64>; 2] {
-    let mut tables = [vec![0; 64], vec![0; 64]];
+fn generate_pawn_attack_tables() -> [Vec<BitBoard>; 2] {
+    let mut tables = [vec![BitBoard::empty(); 64], vec![BitBoard::empty(); 64]];
 
     for square in 0..64 {
-        tables[White as usize][square as usize] =
-            ((1 << square << 7) & NOT_H_FILE) | ((1 << square << 9) & NOT_A_FILE);
-        tables[Black as usize][square as usize] =
-            ((1 << square >> 7) & NOT_A_FILE) | ((1 << square >> 9) & NOT_H_FILE);
+        tables[White as usize][square as usize] = (BitBoard::from(1 << square << 7) & NOT_H_FILE)
+            | (BitBoard::from(1 << square << 9) & NOT_A_FILE);
+        tables[Black as usize][square as usize] = (BitBoard::from(1 << square >> 7) & NOT_A_FILE)
+            | (BitBoard::from(1 << square >> 9) & NOT_H_FILE);
     }
 
     tables
@@ -250,13 +243,13 @@ fn generate_pawn_attack_tables() -> [Vec<u64>; 2] {
 #[derive(Copy, Clone)]
 pub struct MagicSquare {
     pub index: usize,
-    pub mask: u64,
+    pub mask: BitBoard,
     pub magic: u64,
     pub shift: u8,
 }
 
 /// Generates magic numbers/shifts to look up rook attacks from each square
-fn generate_rook_magics(attack_table: &mut Vec<u64>, use_pregen: bool) -> Vec<MagicSquare> {
+fn generate_rook_magics(attack_table: &mut Vec<BitBoard>, use_pregen: bool) -> Vec<MagicSquare> {
     let mut rook_magic = Vec::with_capacity(64);
 
     for square in 0..64 {
@@ -266,7 +259,7 @@ fn generate_rook_magics(attack_table: &mut Vec<u64>, use_pregen: bool) -> Vec<Ma
 }
 
 /// Generates magic numbers/shifts to look up bishop attacks from each square
-fn generate_bishop_magics(attack_table: &mut Vec<u64>, use_pregen: bool) -> Vec<MagicSquare> {
+fn generate_bishop_magics(attack_table: &mut Vec<BitBoard>, use_pregen: bool) -> Vec<MagicSquare> {
     let mut bishop_magic = Vec::with_capacity(64);
 
     for square in 0..64 {
@@ -278,7 +271,7 @@ fn generate_bishop_magics(attack_table: &mut Vec<u64>, use_pregen: bool) -> Vec<
 fn find_magic(
     square: usize,
     bishop: bool,
-    attack_table: &mut Vec<u64>,
+    attack_table: &mut Vec<BitBoard>,
     use_pregen: bool,
 ) -> Result<MagicSquare, String> {
     let mask = if bishop {
@@ -303,7 +296,7 @@ fn find_magic(
 
     let index = attack_table.len();
 
-    let mut used = vec![0; 1 << n];
+    let mut used = vec![BitBoard::empty(); 1 << n];
 
     for _ in 0..100000000 {
         let magic = if use_pregen {
@@ -318,12 +311,12 @@ fn find_magic(
 
         // reset the vec for the next attempt
         for x in used.iter_mut() {
-            *x = 0
+            *x = BitBoard::empty();
         }
         let mut failed = false;
         for i in 0..(1 << n) {
             let index = magic_hash(blocking_masks[i], magic, n);
-            if used[index] == 0 {
+            if used[index] == BitBoard::empty() {
                 used[index] = attack_masks[i];
             } else if used[index] != attack_masks[i] {
                 failed = true;
@@ -356,56 +349,56 @@ fn random_sparse_u64() -> u64 {
     rng.gen::<u64>() & rng.gen::<u64>() & rng.gen::<u64>()
 }
 
-fn magic_hash(blocking_mask: u64, magic: u64, shift: u8) -> usize {
-    ((blocking_mask.wrapping_mul(magic)) >> (64 - shift)) as usize
+fn magic_hash(blocking_mask: BitBoard, magic: u64, shift: u8) -> usize {
+    ((blocking_mask.as_u64().wrapping_mul(magic)) >> (64 - shift)) as usize
 }
 
-fn index_to_blocking_mask(index: usize, num_blockers: u8, mut mask: u64) -> u64 {
-    let mut result = 0;
+fn index_to_blocking_mask(index: usize, num_blockers: u8, mut mask: BitBoard) -> BitBoard {
+    let mut result = BitBoard::empty();
     for i in 0..num_blockers {
         // find the bit-index of the first blocker and clear that bit in the mask
-        let first_blocker = mask.trailing_zeros();
-        mask ^= 1 << first_blocker;
+        let first_blocker = mask.lsb_index();
+        mask.clear_lsb();
 
         if index & (1 << i) != 0 {
-            result |= 1 << first_blocker
+            result |= BitBoard::from(1 << first_blocker)
         }
     }
     result
 }
 
-fn rook_mask(square: usize) -> u64 {
+fn rook_mask(square: usize) -> BitBoard {
     let rank = (square / 8) as isize;
     let file = (square % 8) as isize;
 
-    let mut result = 0;
+    let mut result = BitBoard::empty();
 
     for y in (rank + 1)..7 {
-        result |= 1 << (file + y * 8);
+        result |= BitBoard::from(1 << (file + y * 8));
     }
     for y in 1..rank {
-        result |= 1 << (file + y * 8);
+        result |= BitBoard::from(1 << (file + y * 8));
     }
 
     for x in (file + 1)..7 {
-        result |= 1 << (x + rank * 8)
+        result |= BitBoard::from(1 << (x + rank * 8))
     }
     for x in 1..file {
-        result |= 1 << (x + rank * 8)
+        result |= BitBoard::from(1 << (x + rank * 8))
     }
 
     result
 }
-fn bishop_mask(square: usize) -> u64 {
+fn bishop_mask(square: usize) -> BitBoard {
     let rank = (square / 8) as isize;
     let file = (square % 8) as isize;
 
-    let mut result = 0;
+    let mut result = BitBoard::empty();
 
     let mut x = file + 1;
     let mut y = rank + 1;
     while x < 7 && y < 7 {
-        result |= 1 << (x + y * 8);
+        result |= BitBoard::from(1 << (x + y * 8));
         x += 1;
         y += 1;
     }
@@ -413,7 +406,7 @@ fn bishop_mask(square: usize) -> u64 {
     x = file - 1;
     y = rank + 1;
     while x > 0 && y < 7 {
-        result |= 1 << (x + y * 8);
+        result |= BitBoard::from(1 << (x + y * 8));
         x -= 1;
         y += 1;
     }
@@ -421,7 +414,7 @@ fn bishop_mask(square: usize) -> u64 {
     x = file - 1;
     y = rank - 1;
     while x > 0 && y > 0 {
-        result |= 1 << (x + y * 8);
+        result |= BitBoard::from(1 << (x + y * 8));
         x -= 1;
         y -= 1;
     }
@@ -429,40 +422,40 @@ fn bishop_mask(square: usize) -> u64 {
     x = file + 1;
     y = rank - 1;
     while x < 7 && y > 0 {
-        result |= 1 << (x + y * 8);
+        result |= BitBoard::from(1 << (x + y * 8));
         x += 1;
         y -= 1;
     }
     result
 }
 
-fn rook_attacks(square: usize, blocking_mask: u64) -> u64 {
+fn rook_attacks(square: usize, blocking_mask: BitBoard) -> BitBoard {
     let rank = (square / 8) as isize;
     let file = (square % 8) as isize;
 
-    let mut result = 0;
+    let mut result = BitBoard::empty();
 
     for y in (rank + 1)..8 {
-        result |= 1 << (file + y * 8);
-        if blocking_mask & (1 << (file + y * 8)) != 0 {
+        result |= BitBoard::from(1 << (file + y * 8));
+        if (blocking_mask & BitBoard::from(1 << (file + y * 8))).is_not_empty() {
             break;
         }
     }
     for y in (0..rank).rev() {
-        result |= 1 << (file + y * 8);
-        if blocking_mask & (1 << (file + y * 8)) != 0 {
+        result |= BitBoard::from(1 << (file + y * 8));
+        if (blocking_mask & BitBoard::from(1 << (file + y * 8))).is_not_empty() {
             break;
         }
     }
     for x in (file + 1)..8 {
-        result |= 1 << (x + rank * 8);
-        if blocking_mask & (1 << (x + rank * 8)) != 0 {
+        result |= BitBoard::from(1 << (x + rank * 8));
+        if (blocking_mask & BitBoard::from(1 << (x + rank * 8))).is_not_empty() {
             break;
         }
     }
     for x in (0..file).rev() {
-        result |= 1 << (x + rank * 8);
-        if blocking_mask & (1 << (x + rank * 8)) != 0 {
+        result |= BitBoard::from(1 << (x + rank * 8));
+        if (blocking_mask & BitBoard::from(1 << (x + rank * 8))).is_not_empty() {
             break;
         }
     }
@@ -470,17 +463,17 @@ fn rook_attacks(square: usize, blocking_mask: u64) -> u64 {
     result
 }
 
-fn bishop_attacks(square: usize, blocking_mask: u64) -> u64 {
+fn bishop_attacks(square: usize, blocking_mask: BitBoard) -> BitBoard {
     let rank = (square / 8) as isize;
     let file = (square % 8) as isize;
 
-    let mut result = 0;
+    let mut result = BitBoard::empty();
 
     let mut x = file + 1;
     let mut y = rank + 1;
     while x <= 7 && y <= 7 {
-        result |= 1 << (x + y * 8);
-        if blocking_mask & (1 << (x + y * 8)) != 0 {
+        result |= BitBoard::from(1 << (x + y * 8));
+        if (blocking_mask & BitBoard::from(1 << (x + y * 8))).is_not_empty() {
             break;
         }
         x += 1;
@@ -490,8 +483,8 @@ fn bishop_attacks(square: usize, blocking_mask: u64) -> u64 {
     x = file - 1;
     y = rank + 1;
     while x >= 0 && y <= 7 {
-        result |= 1 << (x + y * 8);
-        if blocking_mask & (1 << (x + y * 8)) != 0 {
+        result |= BitBoard::from(1 << (x + y * 8));
+        if (blocking_mask & BitBoard::from(1 << (x + y * 8))).is_not_empty() {
             break;
         }
         x -= 1;
@@ -501,8 +494,8 @@ fn bishop_attacks(square: usize, blocking_mask: u64) -> u64 {
     x = file - 1;
     y = rank - 1;
     while x >= 0 && y >= 0 {
-        result |= 1 << (x + y * 8);
-        if blocking_mask & (1 << (x + y * 8)) != 0 {
+        result |= BitBoard::from(1 << (x + y * 8));
+        if (blocking_mask & BitBoard::from(1 << (x + y * 8))).is_not_empty() {
             break;
         }
         x -= 1;
@@ -512,8 +505,8 @@ fn bishop_attacks(square: usize, blocking_mask: u64) -> u64 {
     x = file + 1;
     y = rank - 1;
     while x <= 7 && y >= 0 {
-        result |= 1 << (x + y * 8);
-        if blocking_mask & (1 << (x + y * 8)) != 0 {
+        result |= BitBoard::from(1 << (x + y * 8));
+        if (blocking_mask & BitBoard::from(1 << (x + y * 8))).is_not_empty() {
             break;
         }
         x += 1;

@@ -1,6 +1,6 @@
 use rand::prelude::*;
 
-use crate::types::{CastlingRights, ColorIndex, PieceIndex};
+use crate::{types::{CastlingRights, ColorIndex, PieceIndex}, bitboard::BitBoard};
 
 static mut ZOBRIST_NUMBERS: Vec<u64> = Vec::new();
 
@@ -34,8 +34,8 @@ pub fn zobrist_castling(rights: CastlingRights) -> u64 {
     unsafe { *ZOBRIST_NUMBERS.get_unchecked(64 * 6 * 2 + 1 + index) }
 }
 
-pub fn zobrist_enpassent(mask: u64) -> u64 {
+pub fn zobrist_enpassent(mask: BitBoard) -> u64 {
     unsafe {
-        *ZOBRIST_NUMBERS.get_unchecked(64 * 6 * 2 + 1 + 16 + mask.trailing_zeros() as usize % 8)
+        *ZOBRIST_NUMBERS.get_unchecked(64 * 6 * 2 + 1 + 16 + mask.lsb_index() as usize % 8)
     }
 }

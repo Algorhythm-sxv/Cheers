@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
 use crate::{
-    bitboards::BitBoards,
-    types::{CastlingRights, PieceIndex, PieceIndex::*},
+    chessgame::ChessGame,
+    types::{CastlingRights, PieceIndex, PieceIndex::*}, bitboard::BitBoard,
 };
 
 fn coord(square: u8) -> String {
@@ -100,7 +100,7 @@ impl Move {
         Self::new(0, 0, NoPiece, NoPiece, false, false, false, false)
     }
 
-    pub fn from_pair(boards: &BitBoards, xy: impl AsRef<str>) -> Self {
+    pub fn from_pair(boards: &ChessGame, xy: impl AsRef<str>) -> Self {
         let (x, yp) = xy.as_ref().trim().split_at(2);
         let mut p = Pawn;
 
@@ -251,7 +251,7 @@ pub struct UnMove {
     pub promotion: bool,
     pub capture: PieceIndex,
     pub en_passent: bool,
-    pub en_passent_mask: u64,
+    pub en_passent_mask: BitBoard,
     pub castling: bool,
     pub castling_rights: CastlingRights,
     pub halfmove_clock: u8,
@@ -265,7 +265,7 @@ impl UnMove {
         promotion: bool,
         capture: PieceIndex,
         en_passent: bool,
-        en_passent_mask: u64,
+        en_passent_mask: BitBoard,
         castling: bool,
         castling_rights: CastlingRights,
         halfmove_clock: u8,

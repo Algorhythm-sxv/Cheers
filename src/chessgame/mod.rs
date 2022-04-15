@@ -1,4 +1,5 @@
 use crate::{
+    bitboard::BitBoard,
     lookup_tables::*,
     moves::*,
     transposition_table::TranspositionTable,
@@ -16,40 +17,17 @@ use crate::{
 mod evaluate;
 mod piece_tables;
 mod search;
-pub use search::*;
 
-#[allow(dead_code)]
-fn print_bitboard(board: u64) {
-    let board_string = format!("{:064b}", board);
-    let ranks = board_string
-        .chars()
-        .rev()
-        .map(|c| if c == '0' { "." } else { "1" })
-        .collect::<Vec<_>>()
-        .chunks(8)
-        .map(|c| c.join(" "))
-        .rev()
-        .collect::<Vec<String>>();
-
-    println!("8  {}", ranks[0]);
-    println!("7  {}", ranks[1]);
-    println!("6  {}", ranks[2]);
-    println!("5  {}", ranks[3]);
-    println!("4  {}", ranks[4]);
-    println!("3  {}", ranks[5]);
-    println!("2  {}", ranks[6]);
-    println!("1  {}", ranks[7]);
-    println!("\n   a b c d e f g h")
-}
+pub use search::{NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 
 #[derive(Clone)]
-pub struct BitBoards {
+pub struct ChessGame {
     color_masks: ColorMasks,
     piece_masks: PieceMasks,
     piece_list: [PieceIndex; 64],
     current_player: ColorIndex,
     castling_rights: CastlingRights,
-    en_passent_mask: u64,
+    en_passent_mask: BitBoard,
     halfmove_clock: u8,
     hash: u64,
     position_history: Vec<u64>,
@@ -57,7 +35,7 @@ pub struct BitBoards {
     transposition_table: TranspositionTable,
 }
 
-impl BitBoards {
+impl ChessGame {
     pub fn new(tt: TranspositionTable) -> Self {
         let mut boards = Self {
             color_masks: ColorMasks::default(),
@@ -65,7 +43,7 @@ impl BitBoards {
             piece_list: [NoPiece; 64],
             current_player: ColorIndex::default(),
             castling_rights: CastlingRights::default(),
-            en_passent_mask: 0,
+            en_passent_mask: BitBoard::empty(),
             halfmove_clock: 0,
             hash: 0,
             position_history: Vec::new(),
@@ -85,7 +63,7 @@ impl BitBoards {
             piece_list: [NoPiece; 64],
             current_player: ColorIndex::default(),
             castling_rights: CastlingRights::default(),
-            en_passent_mask: 0,
+            en_passent_mask: BitBoard::empty(),
             halfmove_clock: 0,
             hash: 0,
             position_history: Vec::new(),
@@ -100,8 +78,8 @@ impl BitBoards {
         &mut self,
         fen: impl Into<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.piece_masks = PieceMasks([[0; 6]; 2]);
-        self.color_masks = ColorMasks([0; 2]);
+        self.piece_masks = PieceMasks([[BitBoard::empty(); 6]; 2]);
+        self.color_masks = ColorMasks([BitBoard::empty(); 2]);
         self.piece_list = [NoPiece; 64];
 
         let fen = fen.into();
@@ -112,63 +90,63 @@ impl BitBoards {
             for chr in line.chars() {
                 match chr {
                     'n' => {
-                        self.piece_masks[(Black, Knight)] |= 1 << index;
-                        self.color_masks[Black] |= 1 << index;
+                        self.piece_masks[(Black, Knight)] |= BitBoard::from(1 << index);
+                        self.color_masks[Black] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Knight;
                     }
                     'N' => {
-                        self.piece_masks[(White, Knight)] |= 1 << index;
-                        self.color_masks[White] |= 1 << index;
+                        self.piece_masks[(White, Knight)] |= BitBoard::from(1 << index);
+                        self.color_masks[White] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Knight;
                     }
                     'b' => {
-                        self.piece_masks[(Black, Bishop)] |= 1 << index;
-                        self.color_masks[Black] |= 1 << index;
+                        self.piece_masks[(Black, Bishop)] |= BitBoard::from(1 << index);
+                        self.color_masks[Black] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Bishop;
                     }
                     'B' => {
-                        self.piece_masks[(White, Bishop)] |= 1 << index;
-                        self.color_masks[White] |= 1 << index;
+                        self.piece_masks[(White, Bishop)] |= BitBoard::from(1 << index);
+                        self.color_masks[White] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Bishop;
                     }
                     'r' => {
-                        self.piece_masks[(Black, Rook)] |= 1 << index;
-                        self.color_masks[Black] |= 1 << index;
+                        self.piece_masks[(Black, Rook)] |= BitBoard::from(1 << index);
+                        self.color_masks[Black] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Rook;
                     }
                     'R' => {
-                        self.piece_masks[(White, Rook)] |= 1 << index;
-                        self.color_masks[White] |= 1 << index;
+                        self.piece_masks[(White, Rook)] |= BitBoard::from(1 << index);
+                        self.color_masks[White] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Rook;
                     }
                     'q' => {
-                        self.piece_masks[(Black, Queen)] |= 1 << index;
-                        self.color_masks[Black] |= 1 << index;
+                        self.piece_masks[(Black, Queen)] |= BitBoard::from(1 << index);
+                        self.color_masks[Black] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Queen;
                     }
                     'Q' => {
-                        self.piece_masks[(White, Queen)] |= 1 << index;
-                        self.color_masks[White] |= 1 << index;
+                        self.piece_masks[(White, Queen)] |= BitBoard::from(1 << index);
+                        self.color_masks[White] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Queen;
                     }
                     'k' => {
-                        self.piece_masks[(Black, King)] |= 1 << index;
-                        self.color_masks[Black] |= 1 << index;
+                        self.piece_masks[(Black, King)] |= BitBoard::from(1 << index);
+                        self.color_masks[Black] |= BitBoard::from(1 << index);
                         self.piece_list[index] = King;
                     }
                     'K' => {
-                        self.piece_masks[(White, King)] |= 1 << index;
-                        self.color_masks[White] |= 1 << index;
+                        self.piece_masks[(White, King)] |= BitBoard::from(1 << index);
+                        self.color_masks[White] |= BitBoard::from(1 << index);
                         self.piece_list[index] = King;
                     }
                     'p' => {
-                        self.piece_masks[(Black, Pawn)] |= 1 << index;
-                        self.color_masks[Black] |= 1 << index;
+                        self.piece_masks[(Black, Pawn)] |= BitBoard::from(1 << index);
+                        self.color_masks[Black] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Pawn;
                     }
                     'P' => {
-                        self.piece_masks[(White, Pawn)] |= 1 << index;
-                        self.color_masks[White] |= 1 << index;
+                        self.piece_masks[(White, Pawn)] |= BitBoard::from(1 << index);
+                        self.color_masks[White] |= BitBoard::from(1 << index);
                         self.piece_list[index] = Pawn;
                     }
                     digit @ '1'..='8' => index += digit.to_digit(10).unwrap() as usize - 1,
@@ -215,7 +193,7 @@ impl BitBoards {
             .next()
             .ok_or_else(|| String::from("Insufficient metadata for en passent square!"))?
         {
-            "-" => self.en_passent_mask = 0,
+            "-" => self.en_passent_mask = BitBoard::empty(),
             other => {
                 let mut square = 0;
                 match other
@@ -234,7 +212,7 @@ impl BitBoards {
                     rank @ b'1'..=b'8' => square += 8 * (rank - b'1'),
                     other => return Err(format!("Invalid en passent rank: {}", other).into()),
                 }
-                self.en_passent_mask = 1 << square;
+                self.en_passent_mask = BitBoard::from(1 << square);
             }
         }
 
@@ -250,7 +228,7 @@ impl BitBoards {
     }
 
     pub fn enpassent_square(&self) -> usize {
-        self.en_passent_mask.trailing_zeros() as usize
+        self.en_passent_mask.lsb_index() as usize
     }
 
     pub fn current_player(&self) -> ColorIndex {
@@ -273,14 +251,14 @@ impl BitBoards {
     }
 
     pub fn has_non_pawn_material(&self, color: ColorIndex) -> bool {
-        self.piece_masks[(color, Knight)]
+        !(self.piece_masks[(color, Knight)]
             | self.piece_masks[(color, Bishop)]
             | self.piece_masks[(color, Rook)]
-            | self.piece_masks[(color, Queen)]
-            != 0
+            | self.piece_masks[(color, Queen)])
+            .is_empty()
     }
 
-    fn pawn_attacks(&self, color: ColorIndex) -> u64 {
+    fn pawn_attacks(&self, color: ColorIndex) -> BitBoard {
         match color {
             White => {
                 let pawns = self.piece_masks[(White, Pawn)];
@@ -299,7 +277,7 @@ impl BitBoards {
         }
     }
 
-    pub fn pawn_front_spans(&self, color: ColorIndex) -> u64 {
+    pub fn pawn_front_spans(&self, color: ColorIndex) -> BitBoard {
         let mut spans = self.piece_masks[(color, Pawn)];
         if color == White {
             spans |= spans << 8;
@@ -313,60 +291,52 @@ impl BitBoards {
         spans
     }
 
-    fn knight_attacks(&self, color: ColorIndex) -> u64 {
-        let mut knights = self.piece_masks[(color, Knight)];
+    fn knight_attacks(&self, color: ColorIndex) -> BitBoard {
+        let knights = self.piece_masks[(color, Knight)];
 
-        let mut result = 0;
-        while knights != 0 {
-            let i = knights.trailing_zeros() as usize;
-            result |= lookup_knight(i);
-            knights ^= 1 << i;
+        let mut result = BitBoard::empty();
+        for i in knights {
+            result |= lookup_knight(i.into());
         }
         result
     }
 
-    fn bishop_attacks(&self, color: ColorIndex, blocking_mask: u64) -> u64 {
-        let mut bishops = self.piece_masks[(color, Bishop)];
+    fn bishop_attacks(&self, color: ColorIndex, blocking_mask: BitBoard) -> BitBoard {
+        let bishops = self.piece_masks[(color, Bishop)];
 
-        let mut result = 0;
-        while bishops != 0 {
-            let i = bishops.trailing_zeros() as usize;
-            result |= lookup_bishop(i, blocking_mask);
-            bishops ^= 1 << i;
+        let mut result = BitBoard::empty();
+        for i in bishops {
+            result |= lookup_bishop(i.into(), blocking_mask);
         }
         result
     }
 
-    fn rook_attacks(&self, color: ColorIndex, blocking_mask: u64) -> u64 {
-        let mut rooks = self.piece_masks[(color, Rook)];
+    fn rook_attacks(&self, color: ColorIndex, blocking_mask: BitBoard) -> BitBoard {
+        let rooks = self.piece_masks[(color, Rook)];
 
-        let mut result = 0;
-        while rooks != 0 {
-            let i = rooks.trailing_zeros() as usize;
-            result |= lookup_rook(i, blocking_mask);
-            rooks ^= 1 << i;
+        let mut result = BitBoard::empty();
+        for i in rooks {
+            result |= lookup_rook(i.into(), blocking_mask);
         }
         result
     }
 
-    fn queen_attacks(&self, color: ColorIndex, blocking_mask: u64) -> u64 {
-        let mut queens = self.piece_masks[(color, Queen)];
+    fn queen_attacks(&self, color: ColorIndex, blocking_mask: BitBoard) -> BitBoard {
+        let queens = self.piece_masks[(color, Queen)];
 
-        let mut result = 0;
-        while queens != 0 {
-            let i = queens.trailing_zeros() as usize;
-            result |= lookup_queen(i, blocking_mask);
-            queens ^= 1 << i;
+        let mut result = BitBoard::empty();
+        for i in queens {
+            result |= lookup_queen(i.into(), blocking_mask);
         }
         result
     }
 
-    fn king_attacks(&self, color: ColorIndex) -> u64 {
+    fn king_attacks(&self, color: ColorIndex) -> BitBoard {
         let king = self.piece_masks[(color, King)];
-        lookup_king(king.trailing_zeros() as usize)
+        lookup_king(king.lsb_index() as usize)
     }
 
-    fn all_attacks(&self, color: ColorIndex, blocking_mask: u64) -> u64 {
+    fn all_attacks(&self, color: ColorIndex, blocking_mask: BitBoard) -> BitBoard {
         self.pawn_attacks(color)
             | self.knight_attacks(color)
             | self.king_attacks(color)
@@ -376,9 +346,9 @@ impl BitBoards {
     }
 
     pub fn in_check(&self, color: ColorIndex) -> bool {
-        self.all_attacks(!color, self.color_masks[White] | self.color_masks[Black])
-            & self.piece_masks[(color, King)]
-            != 0
+        (self.all_attacks(!color, self.color_masks[White] | self.color_masks[Black])
+            & self.piece_masks[(color, King)])
+            .is_not_empty()
     }
 
     pub fn is_pseudolegal(&self, start: u8, target: u8) -> bool {
@@ -391,46 +361,47 @@ impl BitBoards {
                 let d = (target as i8 - start as i8).abs();
                 if d % 8 != 0 {
                     // captures
-                    self.pawn_attacks(color)
+                    (self.pawn_attacks(color)
                         & (self.color_masks[!color] | self.en_passent_mask)
-                        & (1 << target)
-                        != 0
+                        & BitBoard::from(1 << target))
+                    .is_not_empty()
                 } else {
                     // pushes
                     let push_one = lookup_pawn_push(start as usize, color)
-                        & !(self.color_masks[White] | self.color_masks[Black]);
-                    if d == 8 && push_one & (1 << target) != 0 {
+                        & (self.color_masks[White] | self.color_masks[Black]).inverse();
+                    if d == 8 && (push_one & BitBoard::from(1 << target)).is_not_empty() {
                         true
-                    } else if d == 16 && push_one != 0 {
-                        lookup_pawn_push(push_one.trailing_zeros() as usize, color)
-                            & !(self.color_masks[White] | self.color_masks[Black])
-                            & (1 << target)
-                            != 0
+                    } else if d == 16 && push_one.is_not_empty() {
+                        (lookup_pawn_push(push_one.lsb_index() as usize, color)
+                            & (self.color_masks[White] | self.color_masks[Black]).inverse()
+                            & BitBoard::from(1 << target))
+                        .is_not_empty()
                     } else {
                         false
                     }
                 }
             }
-            Knight => self.knight_attacks(color) & !self.color_masks[color] & (1 << target) != 0,
-            Bishop => {
-                self.bishop_attacks(color, self.color_masks[White] | self.color_masks[Black])
-                    & !self.color_masks[color]
-                    & (1 << target)
-                    != 0
-            }
-            Rook => {
-                self.rook_attacks(color, self.color_masks[White] | self.color_masks[Black])
-                    & !self.color_masks[color]
-                    & (1 << target)
-                    != 0
-            }
-            Queen => {
-                self.queen_attacks(color, self.color_masks[White] | self.color_masks[Black])
-                    & !self.color_masks[color]
-                    & (1 << target)
-                    != 0
-            }
-            King => self.king_attacks(color) & !self.color_masks[color] & (1 << target) != 0,
+            Knight => (self.knight_attacks(color)
+                & self.color_masks[color].inverse()
+                & BitBoard::from(1 << target))
+            .is_not_empty(),
+            Bishop => (self
+                .bishop_attacks(color, self.color_masks[White] | self.color_masks[Black])
+                & self.color_masks[color].inverse()
+                & BitBoard::from(1 << target))
+            .is_not_empty(),
+            Rook => (self.rook_attacks(color, self.color_masks[White] | self.color_masks[Black])
+                & self.color_masks[color].inverse()
+                & BitBoard::from(1 << target))
+            .is_not_empty(),
+            Queen => (self.queen_attacks(color, self.color_masks[White] | self.color_masks[Black])
+                & self.color_masks[color].inverse()
+                & BitBoard::from(1 << target))
+            .is_not_empty(),
+            King => (self.king_attacks(color)
+                & self.color_masks[color].inverse()
+                & BitBoard::from(1 << target))
+            .is_not_empty(),
             NoPiece => false,
         }
     }
@@ -439,19 +410,17 @@ impl BitBoards {
         let mut moves = Vec::with_capacity(50);
         let color = self.current_player;
 
-        let king_square = self.piece_masks[(color, King)].trailing_zeros() as usize;
+        let king_square = self.piece_masks[(color, King)].lsb_index() as usize;
 
         // King moves
         let kingless_blocking_mask =
             (self.color_masks[color] ^ self.piece_masks[(color, King)]) | self.color_masks[!color];
         let attacked_squares = self.all_attacks(!color, kingless_blocking_mask);
-        let mut king_moves =
-            self.king_attacks(color) & !(attacked_squares | self.color_masks[color]);
-        while king_moves != 0 {
-            let target = king_moves.trailing_zeros() as u8;
-            let capture = (1 << target) & self.color_masks[!color] != 0;
+        let king_moves =
+            self.king_attacks(color) & (attacked_squares | self.color_masks[color]).inverse();
+        for target in king_moves {
+            let capture = (BitBoard::from(1 << target) & self.color_masks[!color]).is_not_empty();
             moves.push(Move::king_move(king_square as u8, target, capture));
-            king_moves ^= 1 << target;
         }
 
         // Check evasions
@@ -474,14 +443,14 @@ impl BitBoards {
         }
 
         // mask of square a piece can capture on
-        let mut capture_mask = 0xFFFFFFFFFFFFFFFFu64;
+        let mut capture_mask = BitBoard::from(0xFFFFFFFFFFFFFFFFu64);
         // mask of squares a piece can move to
-        let mut push_mask = 0xFFFFFFFFFFFFFFFFu64;
+        let mut push_mask = BitBoard::from(0xFFFFFFFFFFFFFFFFu64);
         // - Single Check
         if num_checkers == 1 {
             capture_mask = checkers;
 
-            let checker_square = checkers.trailing_zeros() as usize;
+            let checker_square = checkers.lsb_index() as usize;
             if self.piece_at(checker_square).is_slider() {
                 // if the checking piece is a slider, we can push a piece to block it
                 let slider_rays;
@@ -489,30 +458,32 @@ impl BitBoards {
                     || (king_square / 8) == (checker_square / 8)
                 {
                     // orthogonal slider
-                    slider_rays = lookup_rook(king_square, 1 << checker_square);
-                    push_mask = lookup_rook(checker_square, 1 << king_square) & slider_rays;
+                    slider_rays = lookup_rook(king_square, BitBoard::from(1 << checker_square));
+                    push_mask =
+                        lookup_rook(checker_square, BitBoard::from(1 << king_square)) & slider_rays;
                 } else {
                     // diagonal slider
-                    slider_rays = lookup_bishop(king_square, 1 << checker_square);
-                    push_mask = lookup_bishop(checker_square, 1 << king_square) & slider_rays;
+                    slider_rays = lookup_bishop(king_square, BitBoard::from(1 << checker_square));
+                    push_mask = lookup_bishop(checker_square, BitBoard::from(1 << king_square))
+                        & slider_rays;
                 }
             } else {
                 // if the piece is not a slider, we can only capture
-                push_mask = 0u64;
+                push_mask = BitBoard::empty();
             }
         }
         // Pinned pieces
-        let mut pinned_pieces = 0u64;
+        let mut pinned_pieces = BitBoard::empty();
 
         let orthogonal_pin_rays = lookup_rook(king_square, self.color_masks[!color]);
-        let mut pinning_orthogonals = (self.piece_masks[(!color, Rook)]
+        let pinning_orthogonals = (self.piece_masks[(!color, Rook)]
             | self.piece_masks[(!color, Queen)])
             & orthogonal_pin_rays;
-        while pinning_orthogonals != 0 {
-            let pinner_square = pinning_orthogonals.trailing_zeros() as usize;
-            let pin_ray = (orthogonal_pin_rays & lookup_rook(pinner_square, 1 << king_square))
-                | (1 << pinner_square)
-                | (1 << king_square);
+        for pinner_square in pinning_orthogonals {
+            let pin_ray = (orthogonal_pin_rays
+                & lookup_rook(pinner_square.into(), BitBoard::from(1 << king_square)))
+                | BitBoard::from(1 << pinner_square)
+                | BitBoard::from(1 << king_square);
 
             if (pin_ray & self.color_masks[color]).count_ones() == 2 {
                 // there is only the king and one piece on this ray so there is a pin
@@ -520,18 +491,17 @@ impl BitBoards {
 
                 // add any pinned piece to the mask
                 pinned_pieces |=
-                    pin_ray & (self.color_masks[color] & !self.piece_masks[(color, King)]);
+                    pin_ray & (self.color_masks[color] & self.piece_masks[(color, King)].inverse());
 
                 let pinned_rook_or_queen =
                     pin_ray & (self.piece_masks[(color, Rook)] | self.piece_masks[(color, Queen)]);
-                if pinned_rook_or_queen != 0 {
-                    let rook_square = pinned_rook_or_queen.trailing_zeros() as u8;
-                    let mut rook_moves = pin_ray
+                if pinned_rook_or_queen.is_not_empty() {
+                    let rook_square = pinned_rook_or_queen.lsb_index() as u8;
+                    let rook_moves = pin_ray
                         & (push_mask | capture_mask)
-                        & !((1 << king_square) | pinned_rook_or_queen);
-                    while rook_moves != 0 {
-                        let target = rook_moves.trailing_zeros() as u8;
-                        let capture = target as usize == pinner_square;
+                        & (BitBoard::from(1 << king_square) | pinned_rook_or_queen).inverse();
+                    for target in rook_moves {
+                        let capture = target == pinner_square;
                         moves.push(Move::new(
                             rook_square,
                             target,
@@ -542,34 +512,30 @@ impl BitBoards {
                             false,
                             false,
                         ));
-                        rook_moves ^= 1 << target;
                     }
                 }
                 let pinned_pawn = pin_ray & self.piece_masks[(color, Pawn)];
-                if pinned_pawn != 0 {
-                    let pawn_square = pinned_pawn.trailing_zeros() as u8;
+                if pinned_pawn.is_not_empty() {
+                    let pawn_square = pinned_pawn.lsb_index() as u8;
                     let mut pawn_moves = lookup_pawn_push(pawn_square as usize, color)
                         & pin_ray
                         & push_mask
-                        & !(self.color_masks[color] | self.color_masks[!color]);
-                    pawn_moves |= if pawn_moves != 0
+                        & (self.color_masks[White] | self.color_masks[Black]).inverse();
+                    if pawn_moves.is_not_empty()
                         && ((color == White
                             && pawn_square / 8 == 1
-                            && (self.color_masks[White] | self.color_masks[Black])
-                                & 1 << (pawn_square + 16)
-                                == 0)
+                            && ((self.color_masks[White] | self.color_masks[Black])
+                                & BitBoard::from(1 << (pawn_square + 16)))
+                            .is_empty())
                             || (color == Black
                                 && pawn_square / 8 == 6
-                                && (self.color_masks[White] | self.color_masks[Black])
-                                    & 1 << (pawn_square - 16)
-                                    == 0))
+                                && ((self.color_masks[White] | self.color_masks[Black])
+                                    & BitBoard::from(1 << (pawn_square - 16)))
+                                .is_empty()))
                     {
-                        lookup_pawn_push(pawn_moves.trailing_zeros() as usize, color)
-                    } else {
-                        0
-                    };
-                    while pawn_moves != 0 {
-                        let target = pawn_moves.trailing_zeros() as u8;
+                        pawn_moves |= lookup_pawn_push(pawn_moves.lsb_index() as usize, color)
+                    }
+                    for target in pawn_moves {
                         moves.push(Move::new(
                             pawn_square,
                             target,
@@ -581,21 +547,19 @@ impl BitBoards {
                             false,
                             false,
                         ));
-                        pawn_moves ^= 1 << target;
                     }
                 }
             }
-            pinning_orthogonals ^= 1 << pinner_square;
         }
         let diagonal_pin_rays = lookup_bishop(king_square, self.color_masks[!color]);
-        let mut pinning_diagonals = (self.piece_masks[(!color, Bishop)]
+        let pinning_diagonals = (self.piece_masks[(!color, Bishop)]
             | self.piece_masks[(!color, Queen)])
             & diagonal_pin_rays;
-        while pinning_diagonals != 0 {
-            let pinner_square = pinning_diagonals.trailing_zeros() as usize;
-            let pin_ray = (diagonal_pin_rays & lookup_bishop(pinner_square, 1 << king_square))
-                | (1 << pinner_square)
-                | (1 << king_square);
+        for pinner_square in pinning_diagonals {
+            let pin_ray = (diagonal_pin_rays
+                & lookup_bishop(pinner_square.into(), BitBoard::from(1 << king_square)))
+                | BitBoard::from(1 << pinner_square)
+                | BitBoard::from(1 << king_square);
 
             if (pin_ray & self.color_masks[color]).count_ones() == 2 {
                 // there is only the king and one piece on this ray so there is a pin
@@ -603,18 +567,17 @@ impl BitBoards {
 
                 // add any pinned piece to the mask
                 pinned_pieces |=
-                    pin_ray & (self.color_masks[color] & !self.piece_masks[(color, King)]);
+                    pin_ray & (self.color_masks[color] & self.piece_masks[(color, King)].inverse());
 
                 let pinned_bishop_or_queen = pin_ray
                     & (self.piece_masks[(color, Bishop)] | self.piece_masks[(color, Queen)]);
-                if pinned_bishop_or_queen != 0 {
-                    let bishop_square = pinned_bishop_or_queen.trailing_zeros() as u8;
-                    let mut bishop_moves = pin_ray
+                if pinned_bishop_or_queen.is_not_empty() {
+                    let bishop_square = pinned_bishop_or_queen.lsb_index() as u8;
+                    let bishop_moves = pin_ray
                         & (push_mask | capture_mask)
-                        & !((1 << king_square) | pinned_bishop_or_queen);
-                    while bishop_moves != 0 {
-                        let target = bishop_moves.trailing_zeros() as u8;
-                        let capture = target as usize == pinner_square;
+                        & (BitBoard::from(1 << king_square) | pinned_bishop_or_queen).inverse();
+                    for target in bishop_moves {
+                        let capture = target == pinner_square;
                         moves.push(Move::new(
                             bishop_square,
                             target,
@@ -625,19 +588,17 @@ impl BitBoards {
                             false,
                             false,
                         ));
-                        bishop_moves ^= 1 << target;
                     }
                 }
 
                 let pinned_pawn = pin_ray & self.piece_masks[(color, Pawn)];
-                if pinned_pawn != 0 {
-                    let pawn_square = pinned_pawn.trailing_zeros() as u8;
-                    let mut pawn_moves = lookup_pawn_attack(pawn_square as usize, color)
+                if pinned_pawn.is_not_empty() {
+                    let pawn_square = pinned_pawn.lsb_index() as u8;
+                    let pawn_moves = lookup_pawn_attack(pawn_square as usize, color)
                         & pin_ray
                         & capture_mask
                         & (self.color_masks[!color] | self.en_passent_mask);
-                    while pawn_moves != 0 {
-                        let target = pawn_moves.trailing_zeros() as u8;
+                    for target in pawn_moves {
                         if target / 8 == !color as u8 * 7 {
                             // pinned pawn capture promotions
                             moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
@@ -653,15 +614,13 @@ impl BitBoards {
                                 true,
                                 false,
                                 // en passent capture
-                                target == self.en_passent_mask.trailing_zeros() as u8,
+                                target == self.en_passent_mask.lsb_index() as u8,
                                 false,
                             ));
                         }
-                        pawn_moves ^= 1 << target;
                     }
                 }
             }
-            pinning_diagonals ^= 1 << pinner_square;
         }
 
         // Other moves
@@ -669,38 +628,38 @@ impl BitBoards {
         if num_checkers == 0 {
             let king = self.piece_masks[(color, King)];
             if self.castling_rights[(color, Kingside)]
-                && (self.color_masks[White] | self.color_masks[Black]) & ((king << 1) | (king << 2))
-                    == 0
-                && attacked_squares & ((king << 1) | (king << 2)) == 0
+                && ((self.color_masks[White] | self.color_masks[Black]) & (king << 1 | king << 2))
+                    .is_empty()
+                && (attacked_squares & (king << 1 | king << 2)).is_empty()
             {
                 // generate castling kingside if rights remain, the way is clear and the squares aren't attacked
-                let start = king.trailing_zeros() as u8;
+                let start = king.lsb_index() as u8;
                 moves.push(Move::king_castle(start, start + 2));
             }
             if self.castling_rights[(color, Queenside)]
-                && (self.color_masks[White] | self.color_masks[Black])
-                    & ((king >> 1) | (king >> 2) | (king >> 3))
-                    == 0
-                && attacked_squares & ((king >> 1) | (king >> 2)) == 0
+                && ((self.color_masks[White] | self.color_masks[Black])
+                    & (king >> 1 | king >> 2 | king >> 3))
+                    .is_empty()
+                && (attacked_squares & (king >> 1 | king >> 2)).is_empty()
             {
                 // generate castling queenside if rights remain, the way is clear and the squares aren't attacked
-                let start = king.trailing_zeros() as u8;
+                let start = king.lsb_index() as u8;
                 moves.push(Move::king_castle(start, start - 2));
             }
         }
         // Pawn moves
-        let mut pawns = self.piece_masks[(color, Pawn)] & !pinned_pieces;
+        let pawns = self.piece_masks[(color, Pawn)] & pinned_pieces.inverse();
         if color == White {
             // white pawn moves
-            while pawns != 0 {
-                let pawn_square = pawns.trailing_zeros() as u8;
-                let pawn = 1 << pawn_square;
+            for pawn_square in pawns {
+                let pawn = BitBoard::from(1 << pawn_square);
 
                 // single pawn pushes
-                let pawn_push_one =
-                    (pawn << 8) & push_mask & !(self.color_masks[White] | self.color_masks[Black]);
-                if pawn_push_one != 0 {
-                    let target = pawn_push_one.trailing_zeros() as u8;
+                let pawn_push_one = (pawn << 8)
+                    & push_mask
+                    & (self.color_masks[White] | self.color_masks[Black]).inverse();
+                if pawn_push_one.is_not_empty() {
+                    let target = pawn_push_one.lsb_index() as u8;
                     // promotions
                     if target / 8 == 7 {
                         moves.push(Move::pawn_push_promotion(pawn_square, target, Knight));
@@ -714,63 +673,57 @@ impl BitBoards {
                 }
                 // double pawn pushes
                 let pawn_push_two = ((((pawn & SECOND_RANK) << 8)
-                    & !(self.color_masks[White] | self.color_masks[Black]))
+                    & (self.color_masks[White] | self.color_masks[Black]).inverse())
                     << 8)
-                    & !(self.color_masks[White] | self.color_masks[Black])
+                    & (self.color_masks[White] | self.color_masks[Black]).inverse()
                     & push_mask;
 
-                if pawn_push_two != 0 {
+                if pawn_push_two.is_not_empty() {
                     moves.push(Move::pawn_double_push(
                         pawn_square,
-                        pawn_push_two.trailing_zeros() as u8,
+                        pawn_push_two.lsb_index() as u8,
                     ));
                 }
                 // pawn captures
-                let mut pawn_captures = (((pawn & NOT_A_FILE) << 7) | ((pawn & NOT_H_FILE) << 9))
+                let pawn_captures = (((pawn & NOT_A_FILE) << 7) | ((pawn & NOT_H_FILE) << 9))
                     // if a double-pushed pawn is giving check, mark it as takeable by en passent
                     & (capture_mask | (self.en_passent_mask & (capture_mask << 8)))
                     & (self.color_masks[!color] | self.en_passent_mask);
-                while pawn_captures != 0 {
-                    let target = pawn_captures.trailing_zeros() as u8;
+                for target in pawn_captures {
                     if target / 8 == 7 {
                         // promotions
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Bishop));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Rook));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Queen));
-                    } else if 1 << target == self.en_passent_mask {
+                    } else if BitBoard::from(1 << target) == self.en_passent_mask {
                         // en passent capture
-                        if self.piece_masks[(color, King)].trailing_zeros() / 8 == 4 {
+                        if self.piece_masks[(color, King)].lsb_index() / 8 == 4 {
                             let mut en_passent_pinned = false;
                             let blocking_mask = (self.color_masks[White] | self.color_masks[Black])
-                                & !((1 << pawn_square) | (self.en_passent_mask >> 8));
-                            let mut attacking_rooks_or_queens = (self.piece_masks[(!color, Rook)]
+                                & (BitBoard::from(1 << pawn_square) | (self.en_passent_mask >> 8))
+                                    .inverse();
+                            let attacking_rooks_or_queens = (self.piece_masks[(!color, Rook)]
                                 | self.piece_masks[(!color, Queen)])
                                 & FIFTH_RANK;
-                            while attacking_rooks_or_queens != 0 {
-                                let rook_square =
-                                    attacking_rooks_or_queens.trailing_zeros() as usize;
-                                if lookup_rook(rook_square, blocking_mask)
-                                    & self.piece_masks[(color, King)]
-                                    != 0
+                            for rook_square in attacking_rooks_or_queens {
+                                if (lookup_rook(rook_square.into(), blocking_mask)
+                                    & self.piece_masks[(color, King)])
+                                    .is_not_empty()
                                 {
                                     en_passent_pinned = true;
                                     break;
                                 }
-                                attacking_rooks_or_queens ^= 1 << rook_square;
                             }
-                            let mut attacking_queens =
-                                self.piece_masks[(!color, Queen)] & FOURTH_RANK;
-                            while attacking_queens != 0 {
-                                let queen_square = attacking_queens.trailing_zeros() as usize;
-                                if lookup_queen(queen_square, blocking_mask)
-                                    & self.piece_masks[(color, King)]
-                                    != 0
+                            let attacking_queens = self.piece_masks[(!color, Queen)] & FOURTH_RANK;
+                            for queen_square in attacking_queens {
+                                if (lookup_queen(queen_square.into(), blocking_mask)
+                                    & self.piece_masks[(color, King)])
+                                    .is_not_empty()
                                 {
                                     en_passent_pinned = true;
                                     break;
                                 }
-                                attacking_queens ^= 1 << queen_square;
                             }
                             if !en_passent_pinned {
                                 moves.push(Move::pawn_enpassent_capture(pawn_square, target));
@@ -782,21 +735,19 @@ impl BitBoards {
                         // normal captures
                         moves.push(Move::pawn_capture(pawn_square, target));
                     }
-                    pawn_captures ^= 1 << target;
                 }
-                pawns ^= 1 << pawn_square;
             }
         } else {
             // black pawn moves
-            while pawns != 0 {
-                let pawn_square = pawns.trailing_zeros() as u8;
-                let pawn = 1 << pawn_square;
+            for pawn_square in pawns {
+                let pawn = BitBoard::from(1 << pawn_square);
 
                 // single pawn pushes
-                let pawn_push_one =
-                    (pawn >> 8) & push_mask & !(self.color_masks[White] | self.color_masks[Black]);
-                if pawn_push_one != 0 {
-                    let target = pawn_push_one.trailing_zeros() as u8;
+                let pawn_push_one = pawn >> 8
+                    & push_mask
+                    & (self.color_masks[White] | self.color_masks[Black]).inverse();
+                if pawn_push_one.is_not_empty() {
+                    let target = pawn_push_one.lsb_index() as u8;
                     // promotions
                     if target / 8 == 0 {
                         moves.push(Move::pawn_push_promotion(pawn_square, target, Knight));
@@ -810,49 +761,46 @@ impl BitBoards {
                 }
                 // double pawn pushes
                 let pawn_push_two = ((((pawn & SEVENTH_RANK) >> 8)
-                    & !(self.color_masks[White] | self.color_masks[Black]))
+                    & (self.color_masks[White] | self.color_masks[Black]).inverse())
                     >> 8)
-                    & !(self.color_masks[White] | self.color_masks[Black])
+                    & (self.color_masks[White] | self.color_masks[Black]).inverse()
                     & push_mask;
-                if pawn_push_two != 0 {
+                if pawn_push_two.is_not_empty() {
                     moves.push(Move::pawn_double_push(
                         pawn_square,
-                        pawn_push_two.trailing_zeros() as u8,
+                        pawn_push_two.lsb_index() as u8,
                     ));
                 }
                 // pawn captures
-                let mut pawn_captures = (((pawn & NOT_A_FILE) >> 9) | ((pawn & NOT_H_FILE) >> 7))
+                let pawn_captures = (((pawn & NOT_A_FILE) >> 9) | ((pawn & NOT_H_FILE) >> 7))
                     // if a double-pushed pawn is giving check, mark it as takeable by en passent
                     & (capture_mask | (self.en_passent_mask & (capture_mask >> 8)))
                     & (self.color_masks[!color] | self.en_passent_mask);
-                while pawn_captures != 0 {
-                    let target = pawn_captures.trailing_zeros() as u8;
+                for target in pawn_captures {
                     if target / 8 == 0 {
                         // promotions
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Bishop));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Rook));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Queen));
-                    } else if 1 << target == self.en_passent_mask {
+                    } else if BitBoard::from(1 << target) == self.en_passent_mask {
                         // en passent capture
-                        if self.piece_masks[(color, King)].trailing_zeros() / 8 == 3 {
+                        if self.piece_masks[(color, King)].lsb_index() / 8 == 3 {
                             let mut en_passent_pinned = false;
                             let blocking_mask = (self.color_masks[White] | self.color_masks[Black])
-                                & !((1 << pawn_square) | (self.en_passent_mask << 8));
-                            let mut attacking_rooks_or_queens = (self.piece_masks[(!color, Rook)]
+                                & (BitBoard::from(1 << pawn_square) | self.en_passent_mask << 8)
+                                    .inverse();
+                            let attacking_rooks_or_queens = (self.piece_masks[(!color, Rook)]
                                 | self.piece_masks[(!color, Queen)])
                                 & FOURTH_RANK;
-                            while attacking_rooks_or_queens != 0 {
-                                let rook_square =
-                                    attacking_rooks_or_queens.trailing_zeros() as usize;
-                                if lookup_rook(rook_square, blocking_mask)
-                                    & self.piece_masks[(color, King)]
-                                    != 0
+                            for rook_square in attacking_rooks_or_queens {
+                                if (lookup_rook(rook_square.into(), blocking_mask)
+                                    & self.piece_masks[(color, King)])
+                                    .is_not_empty()
                                 {
                                     en_passent_pinned = true;
                                     break;
                                 }
-                                attacking_rooks_or_queens ^= 1 << rook_square;
                             }
                             if !en_passent_pinned {
                                 moves.push(Move::pawn_enpassent_capture(pawn_square, target));
@@ -864,80 +812,66 @@ impl BitBoards {
                         // normal captures
                         moves.push(Move::pawn_capture(pawn_square, target));
                     }
-                    pawn_captures ^= 1 << target;
                 }
-                pawns ^= 1 << pawn_square;
             }
         }
 
         // Knight moves
-        let mut knights = self.piece_masks[(color, Knight)] & !pinned_pieces;
-        while knights != 0 {
-            let knight_square = knights.trailing_zeros() as usize;
-            let mut attacks = lookup_knight(knight_square)
-                & !self.color_masks[color]
+        let knights = self.piece_masks[(color, Knight)] & pinned_pieces.inverse();
+        for knight_square in knights {
+            let attacks = lookup_knight(knight_square.into())
+                & self.color_masks[color].inverse()
                 & (push_mask | capture_mask);
-            while attacks != 0 {
-                let target = attacks.trailing_zeros() as u8;
-                let capture = self.color_masks[!color] & (1 << target) != 0;
+            for target in attacks {
+                let capture =
+                    (self.color_masks[!color] & BitBoard::from(1 << target)).is_not_empty();
                 moves.push(Move::knight_move(knight_square as u8, target, capture));
-                attacks ^= 1 << target;
             }
-            knights ^= 1 << knight_square;
         }
 
         // Bishop moves
-        let mut bishops = self.piece_masks[(color, Bishop)] & !pinned_pieces;
-        while bishops != 0 {
-            let bishop_square = bishops.trailing_zeros() as usize;
-            let mut attacks = lookup_bishop(
-                bishop_square,
+        let bishops = self.piece_masks[(color, Bishop)] & pinned_pieces.inverse();
+        for bishop_square in bishops {
+            let attacks = lookup_bishop(
+                bishop_square.into(),
                 self.color_masks[White] | self.color_masks[Black],
-            ) & !self.color_masks[color]
+            ) & self.color_masks[color].inverse()
                 & (push_mask | capture_mask);
-            while attacks != 0 {
-                let target = attacks.trailing_zeros() as u8;
-                let capture = self.color_masks[!color] & (1 << target) != 0;
+            for target in attacks {
+                let capture =
+                    (self.color_masks[!color] & BitBoard::from(1 << target)).is_not_empty();
                 moves.push(Move::bishop_move(bishop_square as u8, target, capture));
-                attacks ^= 1 << target;
             }
-            bishops ^= 1 << bishop_square;
         }
 
         // Rook moves
-        let mut rooks = self.piece_masks[(color, Rook)] & !pinned_pieces;
-        while rooks != 0 {
-            let rook_square = rooks.trailing_zeros() as usize;
-            let mut attacks = lookup_rook(
-                rook_square,
+        let rooks = self.piece_masks[(color, Rook)] & pinned_pieces.inverse();
+        for rook_square in rooks {
+            let attacks = lookup_rook(
+                rook_square.into(),
                 self.color_masks[White] | self.color_masks[Black],
-            ) & !self.color_masks[color]
+            ) & self.color_masks[color].inverse()
                 & (push_mask | capture_mask);
-            while attacks != 0 {
-                let target = attacks.trailing_zeros() as u8;
-                let capture = self.color_masks[!color] & (1 << target) != 0;
+            for target in attacks {
+                let capture =
+                    (self.color_masks[!color] & BitBoard::from(1 << target)).is_not_empty();
                 moves.push(Move::rook_move(rook_square as u8, target, capture));
-                attacks ^= 1 << target;
             }
-            rooks ^= 1 << rook_square;
         }
 
         // queen moves
-        let mut queens = self.piece_masks[(color, Queen)] & !pinned_pieces;
-        while queens != 0 {
-            let queen_square = queens.trailing_zeros() as usize;
-            let mut attacks = lookup_queen(
-                queen_square,
+        let queens = self.piece_masks[(color, Queen)] & pinned_pieces.inverse();
+        for queen_square in queens {
+            let attacks = lookup_queen(
+                queen_square.into(),
                 self.color_masks[White] | self.color_masks[Black],
-            ) & !self.color_masks[color]
+            ) & self.color_masks[color].inverse()
                 & (push_mask | capture_mask);
-            while attacks != 0 {
-                let target = attacks.trailing_zeros() as u8;
-                let capture = self.color_masks[!color] & (1 << target) != 0;
+            for target in attacks {
+                let capture =
+                    (self.color_masks[!color] & BitBoard::from(1 << target)).is_not_empty();
                 moves.push(Move::queen_move(queen_square as u8, target, capture));
-                attacks ^= 1 << target;
             }
-            queens ^= 1 << queen_square;
         }
 
         moves
@@ -987,18 +921,22 @@ impl BitBoards {
 
             // update king position and hash
             self.hash ^= zobrist_piece(King, color, start) ^ zobrist_piece(King, color, target);
-            self.piece_masks[(color, King)] ^= (1 << target) | (1 << start);
+            self.piece_masks[(color, King)] ^=
+                BitBoard::from(1 << target) | BitBoard::from(1 << start);
             self.piece_list[start] = NoPiece;
             self.piece_list[target] = King;
             // update rook position and hash
             self.hash ^=
                 zobrist_piece(Rook, color, rook_start) ^ zobrist_piece(Rook, color, rook_target);
-            self.piece_masks[(color, Rook)] ^= (1 << rook_target) | (1 << rook_start);
+            self.piece_masks[(color, Rook)] ^=
+                BitBoard::from(1 << rook_target) | BitBoard::from(1 << rook_start);
             self.piece_list[rook_start] = NoPiece;
             self.piece_list[rook_target] = Rook;
             // update color masks
-            self.color_masks[color] ^=
-                (1 << start) | (1 << target) | (1 << rook_start) | (1 << rook_target);
+            self.color_masks[color] ^= BitBoard::from(1 << start)
+                | BitBoard::from(1 << target)
+                | BitBoard::from(1 << rook_start)
+                | BitBoard::from(1 << rook_target);
             // update castling rights
             self.hash ^= zobrist_castling(self.castling_rights);
             self.castling_rights[color] = [false, false];
@@ -1018,18 +956,18 @@ impl BitBoards {
             };
             // remove piece from target square
             self.hash ^= zobrist_piece(captured, !color, cap_square);
-            self.piece_masks[(!color, captured)] ^= 1 << cap_square;
+            self.piece_masks[(!color, captured)] ^= BitBoard::from(1 << cap_square);
             self.piece_list[cap_square] = NoPiece;
-            self.color_masks[!color] ^= 1 << cap_square;
+            self.color_masks[!color] ^= BitBoard::from(1 << cap_square);
 
             // reset halfmove clock
             self.halfmove_clock = 0;
         }
 
         // reset en passent square
-        if self.en_passent_mask != 0 {
+        if self.en_passent_mask.is_not_empty() {
             self.hash ^= zobrist_enpassent(self.en_passent_mask);
-            self.en_passent_mask = 0;
+            self.en_passent_mask = BitBoard::empty();
         }
 
         // update castling rights
@@ -1067,10 +1005,11 @@ impl BitBoards {
         // move the piece
         if !move_.castling() {
             self.hash ^= zobrist_piece(piece, color, start) ^ zobrist_piece(piece, color, target);
-            self.piece_masks[(color, piece)] ^= (1 << start) | (1 << target);
+            self.piece_masks[(color, piece)] ^=
+                BitBoard::from(1 << start) | BitBoard::from(1 << target);
             self.piece_list[start] = NoPiece;
             self.piece_list[target] = piece;
-            self.color_masks[color] ^= (1 << start) | (1 << target);
+            self.color_masks[color] ^= BitBoard::from(1 << start) | BitBoard::from(1 << target);
         }
 
         // pawn special cases
@@ -1083,8 +1022,8 @@ impl BitBoards {
                     target + 8
                 };
                 // only set the ep mask if the pawn can be taken
-                self.en_passent_mask = (1 << ep_square) & self.pawn_attacks(!color);
-                if self.en_passent_mask != 0 {
+                self.en_passent_mask = BitBoard::from(1 << ep_square) & self.pawn_attacks(!color);
+                if self.en_passent_mask.is_not_empty() {
                     self.hash ^= zobrist_enpassent(self.en_passent_mask);
                 }
             }
@@ -1092,9 +1031,9 @@ impl BitBoards {
             if move_.promotion() != NoPiece {
                 self.hash ^= zobrist_piece(Pawn, color, target)
                     ^ zobrist_piece(move_.promotion(), color, target);
-                self.piece_masks[(color, Pawn)] ^= 1 << target;
+                self.piece_masks[(color, Pawn)] ^= BitBoard::from(1 << target);
                 self.piece_list[target] = move_.promotion();
-                self.piece_masks[(color, move_.promotion())] |= 1 << target;
+                self.piece_masks[(color, move_.promotion())] |= BitBoard::from(1 << target);
             }
             // rule 50
             self.halfmove_clock = 0;
@@ -1116,9 +1055,9 @@ impl BitBoards {
 
         let mut piece = self.piece_list[target];
         if unmove.promotion {
-            self.piece_masks[(self.current_player, piece)] ^= 1 << target;
+            self.piece_masks[(self.current_player, piece)] ^= BitBoard::from(1 << target);
 
-            self.piece_masks[(self.current_player, Pawn)] ^= 1 << target;
+            self.piece_masks[(self.current_player, Pawn)] ^= BitBoard::from(1 << target);
             self.piece_list[target] = Pawn;
             piece = Pawn;
         }
@@ -1126,7 +1065,8 @@ impl BitBoards {
         if unmove.castling {
             if target % 8 == 2 {
                 // queenside
-                self.piece_masks[(self.current_player, King)] ^= (1 << start) | (1 << target);
+                self.piece_masks[(self.current_player, King)] ^=
+                    BitBoard::from(1 << start) | BitBoard::from(1 << target);
                 self.piece_list[start] = King;
                 self.piece_list[target] = NoPiece;
 
@@ -1134,15 +1074,18 @@ impl BitBoards {
                 let rook_target = target + 1;
 
                 self.piece_masks[(self.current_player, Rook)] ^=
-                    (1 << rook_start) | (1 << rook_target);
+                    BitBoard::from(1 << rook_start) | BitBoard::from(1 << rook_target);
                 self.piece_list[rook_start] = Rook;
                 self.piece_list[rook_target] = NoPiece;
 
-                self.color_masks[self.current_player] ^=
-                    (1 << start) | (1 << target) | (1 << rook_start) | (1 << rook_target);
+                self.color_masks[self.current_player] ^= BitBoard::from(1 << start)
+                    | BitBoard::from(1 << target)
+                    | BitBoard::from(1 << rook_start)
+                    | BitBoard::from(1 << rook_target);
             } else {
                 // kingside
-                self.piece_masks[(self.current_player, King)] ^= (1 << start) | (1 << target);
+                self.piece_masks[(self.current_player, King)] ^=
+                    BitBoard::from(1 << start) | BitBoard::from(1 << target);
                 self.piece_list[start] = King;
                 self.piece_list[target] = NoPiece;
 
@@ -1150,19 +1093,23 @@ impl BitBoards {
                 let rook_target = target - 1;
 
                 self.piece_masks[(self.current_player, Rook)] ^=
-                    (1 << rook_start) | (1 << rook_target);
+                    BitBoard::from(1 << rook_start) | BitBoard::from(1 << rook_target);
                 self.piece_list[rook_start] = Rook;
                 self.piece_list[rook_target] = NoPiece;
 
-                self.color_masks[self.current_player] ^=
-                    (1 << start) | (1 << target) | (1 << rook_start) | (1 << rook_target);
+                self.color_masks[self.current_player] ^= BitBoard::from(1 << start)
+                    | BitBoard::from(1 << target)
+                    | BitBoard::from(1 << rook_start)
+                    | BitBoard::from(1 << rook_target);
             }
         } else {
             // move piece back to start
-            self.piece_masks[(self.current_player, piece)] ^= (1 << start) | (1 << target);
+            self.piece_masks[(self.current_player, piece)] ^=
+                BitBoard::from(1 << start) | BitBoard::from(1 << target);
             self.piece_list[target] = NoPiece;
             self.piece_list[start] = piece;
-            self.color_masks[self.current_player] ^= (1 << start) | (1 << target);
+            self.color_masks[self.current_player] ^=
+                BitBoard::from(1 << start) | BitBoard::from(1 << target);
 
             if unmove.capture != NoPiece {
                 let mut cap_square = target;
@@ -1173,9 +1120,10 @@ impl BitBoards {
                     };
                 }
                 // replace captured piece
-                self.piece_masks[(!self.current_player, unmove.capture)] ^= 1 << cap_square;
+                self.piece_masks[(!self.current_player, unmove.capture)] ^=
+                    BitBoard::from(1 << cap_square);
                 self.piece_list[cap_square] = unmove.capture;
-                self.color_masks[!self.current_player] ^= 1 << cap_square;
+                self.color_masks[!self.current_player] ^= BitBoard::from(1 << cap_square);
             }
         }
 
@@ -1204,9 +1152,9 @@ impl BitBoards {
         self.unmove_history.push(unmove);
         self.position_history.push(self.hash);
 
-        if self.en_passent_mask != 0 {
+        if self.en_passent_mask.is_not_empty() {
             self.hash ^= zobrist_enpassent(self.en_passent_mask);
-            self.en_passent_mask = 0;
+            self.en_passent_mask = BitBoard::empty();
         }
 
         self.hash ^= zobrist_player();
@@ -1228,11 +1176,9 @@ impl BitBoards {
         // pieces
         for piece in [Pawn, Knight, Bishop, Rook, Queen, King] {
             for color in [White, Black] {
-                let mut pieces = self.piece_masks[(color, piece)];
-                while pieces != 0 {
-                    let square = pieces.trailing_zeros() as usize;
-                    hash ^= zobrist_piece(piece, color, square);
-                    pieces ^= 1 << square;
+                let pieces = self.piece_masks[(color, piece)];
+                for square in pieces {
+                    hash ^= zobrist_piece(piece, color, square.into());
                 }
             }
         }
@@ -1246,7 +1192,7 @@ impl BitBoards {
         hash ^= zobrist_castling(self.castling_rights);
 
         // en passent square
-        if self.en_passent_mask != 0 {
+        if self.en_passent_mask.is_not_empty() {
             hash ^= zobrist_enpassent(self.en_passent_mask);
         }
 

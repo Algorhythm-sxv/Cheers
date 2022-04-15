@@ -8,6 +8,8 @@ use std::fmt::Display;
 
 use ColorIndex::*;
 
+use crate::bitboard::BitBoard;
+
 impl Default for ColorIndex {
     fn default() -> Self {
         White
@@ -78,10 +80,10 @@ pub enum CastlingIndex {
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
-pub struct ColorMasks(pub [u64; 2]);
+pub struct ColorMasks(pub [BitBoard; 2]);
 
 impl std::ops::Index<ColorIndex> for ColorMasks {
-    type Output = u64;
+    type Output = BitBoard;
 
     fn index(&self, index: ColorIndex) -> &Self::Output {
         &self.0[index as usize]
@@ -95,9 +97,9 @@ impl std::ops::IndexMut<ColorIndex> for ColorMasks {
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
-pub struct PieceMasks(pub [[u64; 6]; 2]);
+pub struct PieceMasks(pub [[BitBoard; 6]; 2]);
 impl std::ops::Index<(ColorIndex, PieceIndex)> for PieceMasks {
-    type Output = u64;
+    type Output = BitBoard;
 
     fn index(&self, index: (ColorIndex, PieceIndex)) -> &Self::Output {
         &self.0[index.0 as usize][index.1 as usize]
