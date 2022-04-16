@@ -15,6 +15,7 @@ pub struct LookupTables {
     pawn_push_one_tables: [Vec<BitBoard>; 2],
     pawn_attack_tables: [Vec<BitBoard>; 2],
     sliding_attack_table: Vec<BitBoard>,
+    between: Vec<[BitBoard; 64]>,
     rook_magics: Vec<MagicSquare>,
     bishop_magics: Vec<MagicSquare>,
 }
@@ -27,6 +28,7 @@ impl LookupTables {
             pawn_push_one_tables: [Vec::new(), Vec::new()],
             pawn_attack_tables: [Vec::new(), Vec::new()],
             sliding_attack_table: Vec::new(),
+            between: Vec::new(),
             rook_magics: Vec::new(),
             bishop_magics: Vec::new(),
         }
@@ -45,6 +47,7 @@ impl LookupTables {
                     pawn_push_one_tables: generate_pawn_push_tables(),
                     pawn_attack_tables: generate_pawn_attack_tables(),
                     sliding_attack_table,
+                    between: generate_between_table(),
                     rook_magics,
                     bishop_magics,
                 }
@@ -140,6 +143,15 @@ pub fn lookup_queen(square: usize, blocking_mask: BitBoard) -> BitBoard {
     }
 }
 
+pub fn lookup_between(start: u8, target: u8) -> BitBoard {
+    unsafe {
+        *LOOKUP_TABLES
+            .between
+            .get_unchecked(start as usize)
+            .get_unchecked(target as usize)
+    }
+}
+
 // masks to prevent A-H file wrapping
 #[allow(dead_code)]
 mod consts {
@@ -174,6 +186,60 @@ mod consts {
     pub const EIGHTH_RANK: BitBoard = BitBoard::from(0xFF00000000000000);
 }
 pub use consts::*;
+
+// is t between a and b?
+fn between(a: i8, t: i8, b: i8) -> bool {
+    if a < b {
+        a < t && t < b
+    } else {
+        b < t && t < a
+    }
+}
+
+fn generate_between_table() -> Vec<[BitBoard; 64]> {
+    let mut result = vec![[BitBoard::empty(); 64]; 64];
+
+    for start in 0i8..64 {
+        for target in 0i8..64 {
+            let start_rank = start / 8;
+            let start_file = start % 8;
+            let target_rank = target / 8;
+            let target_file = target % 8;
+
+            result[start as usize][target as usize] = (0i8..64)
+                .filter(|&square| {
+                    let rank = square / 8;
+                    let file = square % 8;
+
+                    // diagonals
+                    if target != start
+                        && target_rank.abs_diff(start_rank) == target_file.abs_diff(start_file)
+                    {
+                        rank.abs_diff(start_rank) == file.abs_diff(start_file)
+                            && rank.abs_diff(target_rank) == file.abs_diff(target_file)
+                            && between(start_rank, rank, target_rank)
+                    }
+                    // orthogonals
+                    else if target != start
+                        && (target_rank == start_rank || target_file == start_file)
+                    {
+                        rank == start_rank
+                            && rank == target_rank
+                            && between(start_file, file, target_file)
+                            || (file == start_file
+                                && file == target_file
+                                && between(start_rank, rank, target_rank))
+                    } else {
+                        false
+                    }
+                })
+                .fold(BitBoard::empty(), |board, square| {
+                    board | BitBoard::from(1 << square)
+                });
+        }
+    }
+    result
+}
 
 /// Generates a table mapping an input square to a mask of all squares a knight attacks from there
 fn generate_knight_table() -> Vec<BitBoard> {
