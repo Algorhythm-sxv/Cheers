@@ -77,16 +77,17 @@ impl Debug for BitBoard {
             .map(|c| c.join(" "))
             .rev()
             .collect::<Vec<String>>();
-
-        write!(f, "8  {}", ranks[0])?;
-        write!(f, "7  {}", ranks[1])?;
-        write!(f, "6  {}", ranks[2])?;
-        write!(f, "5  {}", ranks[3])?;
-        write!(f, "4  {}", ranks[4])?;
-        write!(f, "3  {}", ranks[5])?;
-        write!(f, "2  {}", ranks[6])?;
-        write!(f, "1  {}", ranks[7])?;
-        write!(f, "\n   a b c d e f g h")
+        
+        writeln!(f)?;
+        writeln!(f, "8  {}", ranks[0])?;
+        writeln!(f, "7  {}", ranks[1])?;
+        writeln!(f, "6  {}", ranks[2])?;
+        writeln!(f, "5  {}", ranks[3])?;
+        writeln!(f, "4  {}", ranks[4])?;
+        writeln!(f, "3  {}", ranks[5])?;
+        writeln!(f, "2  {}", ranks[6])?;
+        writeln!(f, "1  {}", ranks[7])?;
+        writeln!(f, "\n   a b c d e f g h")
     }
 }
 
