@@ -33,13 +33,13 @@ impl LookupTables {
             bishop_magics: Vec::new(),
         }
     }
-    pub fn generate_all() {
+    pub fn generate_all(use_pregen: bool) {
         unsafe {
             LOOKUP_TABLES = {
                 let mut sliding_attack_table = Vec::with_capacity(10000);
 
-                let rook_magics = generate_rook_magics(&mut sliding_attack_table, false);
-                let bishop_magics = generate_bishop_magics(&mut sliding_attack_table, false);
+                let rook_magics = generate_rook_magics(&mut sliding_attack_table, use_pregen);
+                let bishop_magics = generate_bishop_magics(&mut sliding_attack_table, use_pregen);
 
                 LookupTables {
                     knight_table: generate_knight_table(),
