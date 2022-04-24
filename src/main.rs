@@ -1,10 +1,4 @@
-mod bitboard;
-mod chessgame;
-mod lookup_tables;
-mod moves;
-mod transposition_table;
-mod types;
-mod zobrist;
+use cheers_lib::*;
 
 use std::{
     error::Error,
@@ -22,7 +16,7 @@ use transposition_table::{TranspositionTable, TT_DEFAULT_SIZE};
 use crate::lookup_tables::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    LookupTables::generate_all();
+    LookupTables::generate_all(true);
     zobrist::initialise_zobrist_numbers();
 
     let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
@@ -179,7 +173,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"magics") => {
                 let start = Instant::now();
-                LookupTables::generate_all();
+                LookupTables::generate_all(false);
                 let end = Instant::now();
                 println!("Generated magics in {:.3}s", (end - start).as_secs_f32());
                 unsafe { LOOKUP_TABLES.print_magics() };
