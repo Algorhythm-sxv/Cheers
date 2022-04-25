@@ -1,8 +1,9 @@
 use std::fmt::Display;
 
 use crate::{
+    bitboard::BitBoard,
     chessgame::ChessGame,
-    types::{CastlingRights, PieceIndex, PieceIndex::*}, bitboard::BitBoard,
+    types::{CastlingRights, PieceIndex, PieceIndex::*},
 };
 
 fn coord(square: u8) -> String {
@@ -58,18 +59,16 @@ pub fn square(coord: &str) -> u8 {
     result
 }
 
-#[derive(Clone, Copy)]
-pub struct Move {
-    start: u8,
-    target: u8,
-    piece: PieceIndex,
-    promotion: PieceIndex,
-    capture: bool,
-    double_pawn_push: bool,
-    enpassent_capture: bool,
-    castling: bool,
-    pub sort_score: i32,
-}
+// start: 0-7
+// target: 8-15
+// piece: 16-18
+// promotion: 19-21
+// capture: 22
+// double_pawn_push: 23
+// enpassent_capture: 24
+// castling: 25
+#[derive(Copy, Clone)]
+pub struct Move(u32);
 
 impl Move {
     #[allow(clippy::too_many_arguments)]
@@ -83,17 +82,17 @@ impl Move {
         enpassent_capture: bool,
         castling: bool,
     ) -> Self {
-        Self {
-            start,
-            target,
-            piece,
-            promotion,
-            capture,
-            double_pawn_push,
-            enpassent_capture,
-            castling,
-            sort_score: 0,
-        }
+        let mut res = 0u32;
+        res |= start as u32
+            | (target as u32) << 8
+            | (piece as u32) << (8 + 8)
+            | (promotion as u32) << (8 + 8 + 3)
+            | (capture as u32) << (8 + 8 + 3 + 3)
+            | (double_pawn_push as u32) << (8 + 8 + 3 + 3 + 1)
+            | (enpassent_capture as u32) << (8 + 8 + 3 + 3 + 1 + 1)
+            | (castling as u32) << (8 + 8 + 3 + 3 + 1 + 1 + 1);
+
+        Self(res)
     }
 
     pub fn null() -> Self {
@@ -175,42 +174,42 @@ impl Move {
     }
 
     pub fn start(&self) -> u8 {
-        self.start
+        (self.0 & 0xff) as u8
     }
 
     pub fn target(&self) -> u8 {
-        self.target
+        ((self.0 >> 8) & 0xff) as u8
     }
 
     pub fn piece(&self) -> PieceIndex {
-        self.piece
+        PieceIndex::from_u8(((self.0 >> (8 + 8)) & 0b111) as u8)
     }
 
     pub fn promotion(&self) -> PieceIndex {
-        self.promotion
+        PieceIndex::from_u8(((self.0 >> (8 + 8 + 3)) & 0b111) as u8)
     }
 
     pub fn capture(&self) -> bool {
-        self.capture
-    }
-
-    pub fn en_passent(&self) -> bool {
-        self.enpassent_capture
-    }
-
-    pub fn castling(&self) -> bool {
-        self.castling
+        ((self.0 >> (8 + 8 + 3 + 3)) & 0x1) == 1
     }
 
     pub fn double_pawn_push(&self) -> bool {
-        self.double_pawn_push
+        ((self.0 >> (8 + 8 + 3 + 3 + 1)) & 0x1) == 1
+    }
+
+    pub fn en_passent(&self) -> bool {
+        ((self.0 >> (8 + 8 + 3 + 3 + 1 + 1)) & 0x1) == 1
+    }
+
+    pub fn castling(&self) -> bool {
+        ((self.0 >> (8 + 8 + 3 + 3 + 1 + 1 + 1)) & 0x1) == 1
     }
 
     pub fn coords(&self) -> String {
         format!(
             "{}{}{}",
-            coord(self.start),
-            coord(self.target),
+            coord(self.start()),
+            coord(self.target()),
             match self.promotion() {
                 Knight => "n",
                 Bishop => "b",
@@ -232,14 +231,14 @@ impl Display for Move {
         Ok(write!(
             f,
             "{}{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}",
-            coord(self.start),
-            coord(self.target),
-            self.piece,
-            self.promotion,
-            self.capture,
-            self.double_pawn_push,
-            self.enpassent_capture,
-            self.castling
+            coord(self.start()),
+            coord(self.target()),
+            self.piece(),
+            self.promotion(),
+            self.capture(),
+            self.double_pawn_push(),
+            self.en_passent(),
+            self.castling()
         )?)
     }
 }
@@ -284,11 +283,11 @@ impl UnMove {
     }
 }
 
-pub fn pick_move(move_list: &mut [Move], current_index: usize) {
+pub fn pick_move(move_list: &mut [(Move, i32)], current_index: usize) {
     let mut best_index = current_index;
 
     for i in (current_index + 1)..move_list.len() {
-        if move_list[i].sort_score > move_list[best_index].sort_score {
+        if move_list[i].1 > move_list[best_index].1 {
             best_index = i;
         }
     }

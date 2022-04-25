@@ -107,7 +107,7 @@ impl ChessGame {
             }
         }
 
-        let mut moves = self.legal_moves();
+        let moves = self.legal_moves();
 
         if moves.is_empty() {
             if self.in_check(self.current_player) {
@@ -126,35 +126,38 @@ impl ChessGame {
             depth
         };
 
-        moves.iter_mut().for_each(|m| {
-            m.sort_score = {
-                let mut score = 0i32;
-                // try the transposition table move early
-                if m.start() == tt_move.start() && m.target() == tt_move.target() {
-                    score += 1000;
-                }
-                if m.capture() {
-                    // try recaptures first
-                    if last_move.capture() && m.target() == last_move.target() {
-                        score += 1001;
+        let mut moves = moves
+            .into_iter()
+            .map(|m| {
+                (m, {
+                    let mut score = 0i32;
+                    // try the transposition table move early
+                    if m.start() == tt_move.start() && m.target() == tt_move.target() {
+                        score += 1000;
                     }
-                    // order captures before quiet moves, MVV-LVA
-                    if !m.en_passent() {
-                        score += PIECE_VALUES[self.piece_at(m.target() as usize)]
-                            - PIECE_VALUES[m.piece()] / 10;
-                    } else {
-                        score += 90;
+                    if m.capture() {
+                        // try recaptures first
+                        if last_move.capture() && m.target() == last_move.target() {
+                            score += 1001;
+                        }
+                        // order captures before quiet moves, MVV-LVA
+                        if !m.en_passent() {
+                            score += PIECE_VALUES[self.piece_at(m.target() as usize)]
+                                - PIECE_VALUES[m.piece()] / 10;
+                        } else {
+                            score += 90;
+                        }
                     }
-                }
-                score
-            }
-        });
+                    score
+                })
+            })
+            .collect::<Vec<(Move, i32)>>();
         // moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
-        let mut best_move = *moves.first().unwrap();
+        let mut best_move = moves.first().unwrap().0;
 
         for i in 0..moves.len() {
             pick_move(&mut moves, i);
-            let move_ = moves[i];
+            let move_ = moves[i].0;
             // Late move reduction on non-captures and non-queen-promotions
             let mut score = if i >= 3
                 && depth >= 3
@@ -200,12 +203,12 @@ impl ChessGame {
         }
         alpha = alpha.max(stand_pat_score);
 
-        let mut moves: Vec<Move> = self
+        let mut moves: Vec<(Move, i32)> = self
             .legal_moves()
             .into_iter()
             .filter(|m| m.capture())
-            .map(|mut m| {
-                m.sort_score = {
+            .map(|m| {
+                (m, {
                     let mut score = 0i32;
                     // try recaptures first
                     if last_move.capture() && m.target() == last_move.target() {
@@ -220,15 +223,14 @@ impl ChessGame {
                     }
 
                     score
-                };
-                m
+                })
             })
             .collect();
-        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
+        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
 
-        for &move_ in moves.iter() {
-            self.make_move(move_);
-            let score = -self.quiesce(-beta, -alpha, move_);
+        for (move_, _) in moves.iter() {
+            self.make_move(*move_);
+            let score = -self.quiesce(-beta, -alpha, *move_);
             self.unmake_move();
             if score >= beta {
                 return beta;
