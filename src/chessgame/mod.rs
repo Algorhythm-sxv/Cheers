@@ -91,52 +91,52 @@ impl ChessGame {
             for chr in line.chars() {
                 match chr {
                     'n' => {
-                        self.piece_masks[(Black, Knight)] |= BitBoard::from(1 << index);
-                        self.color_masks[Black] |= BitBoard::from(1 << index);
+                        self.piece_masks[(Black, Knight)] |= BitBoard(1 << index);
+                        self.color_masks[Black] |= BitBoard(1 << index);
                     }
                     'N' => {
-                        self.piece_masks[(White, Knight)] |= BitBoard::from(1 << index);
-                        self.color_masks[White] |= BitBoard::from(1 << index);
+                        self.piece_masks[(White, Knight)] |= BitBoard(1 << index);
+                        self.color_masks[White] |= BitBoard(1 << index);
                     }
                     'b' => {
-                        self.piece_masks[(Black, Bishop)] |= BitBoard::from(1 << index);
-                        self.color_masks[Black] |= BitBoard::from(1 << index);
+                        self.piece_masks[(Black, Bishop)] |= BitBoard(1 << index);
+                        self.color_masks[Black] |= BitBoard(1 << index);
                     }
                     'B' => {
-                        self.piece_masks[(White, Bishop)] |= BitBoard::from(1 << index);
-                        self.color_masks[White] |= BitBoard::from(1 << index);
+                        self.piece_masks[(White, Bishop)] |= BitBoard(1 << index);
+                        self.color_masks[White] |= BitBoard(1 << index);
                     }
                     'r' => {
-                        self.piece_masks[(Black, Rook)] |= BitBoard::from(1 << index);
-                        self.color_masks[Black] |= BitBoard::from(1 << index);
+                        self.piece_masks[(Black, Rook)] |= BitBoard(1 << index);
+                        self.color_masks[Black] |= BitBoard(1 << index);
                     }
                     'R' => {
-                        self.piece_masks[(White, Rook)] |= BitBoard::from(1 << index);
-                        self.color_masks[White] |= BitBoard::from(1 << index);
+                        self.piece_masks[(White, Rook)] |= BitBoard(1 << index);
+                        self.color_masks[White] |= BitBoard(1 << index);
                     }
                     'q' => {
-                        self.piece_masks[(Black, Queen)] |= BitBoard::from(1 << index);
-                        self.color_masks[Black] |= BitBoard::from(1 << index);
+                        self.piece_masks[(Black, Queen)] |= BitBoard(1 << index);
+                        self.color_masks[Black] |= BitBoard(1 << index);
                     }
                     'Q' => {
-                        self.piece_masks[(White, Queen)] |= BitBoard::from(1 << index);
-                        self.color_masks[White] |= BitBoard::from(1 << index);
+                        self.piece_masks[(White, Queen)] |= BitBoard(1 << index);
+                        self.color_masks[White] |= BitBoard(1 << index);
                     }
                     'k' => {
-                        self.piece_masks[(Black, King)] |= BitBoard::from(1 << index);
-                        self.color_masks[Black] |= BitBoard::from(1 << index);
+                        self.piece_masks[(Black, King)] |= BitBoard(1 << index);
+                        self.color_masks[Black] |= BitBoard(1 << index);
                     }
                     'K' => {
-                        self.piece_masks[(White, King)] |= BitBoard::from(1 << index);
-                        self.color_masks[White] |= BitBoard::from(1 << index);
+                        self.piece_masks[(White, King)] |= BitBoard(1 << index);
+                        self.color_masks[White] |= BitBoard(1 << index);
                     }
                     'p' => {
-                        self.piece_masks[(Black, Pawn)] |= BitBoard::from(1 << index);
-                        self.color_masks[Black] |= BitBoard::from(1 << index);
+                        self.piece_masks[(Black, Pawn)] |= BitBoard(1 << index);
+                        self.color_masks[Black] |= BitBoard(1 << index);
                     }
                     'P' => {
-                        self.piece_masks[(White, Pawn)] |= BitBoard::from(1 << index);
-                        self.color_masks[White] |= BitBoard::from(1 << index);
+                        self.piece_masks[(White, Pawn)] |= BitBoard(1 << index);
+                        self.color_masks[White] |= BitBoard(1 << index);
                     }
                     digit @ '1'..='8' => index += digit.to_digit(10).unwrap() as usize - 1,
                     other => eprintln!("Unexpected character in FEN: {}", other),
@@ -201,7 +201,7 @@ impl ChessGame {
                     rank @ b'1'..=b'8' => square += 8 * (rank - b'1'),
                     other => return Err(format!("Invalid en passent rank: {}", other).into()),
                 }
-                self.en_passent_mask = BitBoard::from(1 << square);
+                self.en_passent_mask = BitBoard(1 << square);
             }
         }
 
@@ -227,7 +227,7 @@ impl ChessGame {
 
     #[inline]
     pub fn piece_at(&self, square: usize) -> PieceIndex {
-        let test = BitBoard::from(1 << square as u64);
+        let test = BitBoard(1 << square as u64);
         if (self.combined & test).is_empty() {
             NoPiece
         } else {
@@ -366,18 +366,18 @@ impl ChessGame {
                     // captures
                     (self.pawn_attacks(color)
                         & (self.color_masks[!color] | self.en_passent_mask)
-                        & BitBoard::from(1 << target))
+                        & BitBoard(1 << target))
                     .is_not_empty()
                 } else {
                     // pushes
                     let push_one =
                         lookup_pawn_push(start as usize, color) & (self.combined).inverse();
-                    if d == 8 && (push_one & BitBoard::from(1 << target)).is_not_empty() {
+                    if d == 8 && (push_one & BitBoard(1 << target)).is_not_empty() {
                         true
                     } else if d == 16 && push_one.is_not_empty() {
                         (lookup_pawn_push(push_one.lsb_index() as usize, color)
                             & (self.combined).inverse()
-                            & BitBoard::from(1 << target))
+                            & BitBoard(1 << target))
                         .is_not_empty()
                     } else {
                         false
@@ -386,23 +386,23 @@ impl ChessGame {
             }
             Knight => (self.knight_attacks(color)
                 & self.color_masks[color].inverse()
-                & BitBoard::from(1 << target))
+                & BitBoard(1 << target))
             .is_not_empty(),
             Bishop => (self.bishop_attacks(color, self.combined)
                 & self.color_masks[color].inverse()
-                & BitBoard::from(1 << target))
+                & BitBoard(1 << target))
             .is_not_empty(),
             Rook => (self.rook_attacks(color, self.combined)
                 & self.color_masks[color].inverse()
-                & BitBoard::from(1 << target))
+                & BitBoard(1 << target))
             .is_not_empty(),
             Queen => (self.queen_attacks(color, self.combined)
                 & self.color_masks[color].inverse()
-                & BitBoard::from(1 << target))
+                & BitBoard(1 << target))
             .is_not_empty(),
             King => (self.king_attacks(color)
                 & self.color_masks[color].inverse()
-                & BitBoard::from(1 << target))
+                & BitBoard(1 << target))
             .is_not_empty(),
             NoPiece => false,
         }
@@ -421,7 +421,7 @@ impl ChessGame {
         let king_moves =
             self.king_attacks(color) & (attacked_squares | self.color_masks[color]).inverse();
         for target in king_moves {
-            let capture = (BitBoard::from(1 << target) & self.color_masks[!color]).is_not_empty();
+            let capture = (BitBoard(1 << target) & self.color_masks[!color]).is_not_empty();
             moves.push(Move::king_move(king_square as u8, target, capture));
         }
 
@@ -441,9 +441,9 @@ impl ChessGame {
         }
 
         // mask of square a piece can capture on
-        let mut capture_mask = BitBoard::from(0xFFFFFFFFFFFFFFFFu64);
+        let mut capture_mask = BitBoard(0xFFFFFFFFFFFFFFFFu64);
         // mask of squares a piece can move to
-        let mut push_mask = BitBoard::from(0xFFFFFFFFFFFFFFFFu64);
+        let mut push_mask = BitBoard(0xFFFFFFFFFFFFFFFFu64);
         // - Single Check
         if num_checkers == 1 {
             capture_mask = checkers;
@@ -456,13 +456,13 @@ impl ChessGame {
                     || (king_square / 8) == (checker_square / 8)
                 {
                     // orthogonal slider
-                    slider_rays = lookup_rook(king_square, BitBoard::from(1 << checker_square));
+                    slider_rays = lookup_rook(king_square, BitBoard(1 << checker_square));
                     push_mask =
-                        lookup_rook(checker_square, BitBoard::from(1 << king_square)) & slider_rays;
+                        lookup_rook(checker_square, BitBoard(1 << king_square)) & slider_rays;
                 } else {
                     // diagonal slider
-                    slider_rays = lookup_bishop(king_square, BitBoard::from(1 << checker_square));
-                    push_mask = lookup_bishop(checker_square, BitBoard::from(1 << king_square))
+                    slider_rays = lookup_bishop(king_square, BitBoard(1 << checker_square));
+                    push_mask = lookup_bishop(checker_square, BitBoard(1 << king_square))
                         & slider_rays;
                 }
             } else {
@@ -491,7 +491,7 @@ impl ChessGame {
                     pin_ray & (self.piece_masks[(color, Rook)] | self.piece_masks[(color, Queen)]);
                 if pinned_rook_or_queen.is_not_empty() {
                     let rook_square = pinned_rook_or_queen.lsb_index() as u8;
-                    let rook_moves = (pin_ray | BitBoard::from(1 << pinner_square))
+                    let rook_moves = (pin_ray | BitBoard(1 << pinner_square))
                         & (push_mask | capture_mask)
                         & pinned_rook_or_queen.inverse();
                     for target in rook_moves {
@@ -518,11 +518,11 @@ impl ChessGame {
                     if pawn_moves.is_not_empty()
                         && ((color == White
                             && pawn_square / 8 == 1
-                            && ((self.combined) & BitBoard::from(1 << (pawn_square + 16)))
+                            && ((self.combined) & BitBoard(1 << (pawn_square + 16)))
                                 .is_empty())
                             || (color == Black
                                 && pawn_square / 8 == 6
-                                && ((self.combined) & BitBoard::from(1 << (pawn_square - 16)))
+                                && ((self.combined) & BitBoard(1 << (pawn_square - 16)))
                                     .is_empty()))
                     {
                         pawn_moves |= lookup_pawn_push(pawn_moves.lsb_index() as usize, color)
@@ -561,7 +561,7 @@ impl ChessGame {
                     & (self.piece_masks[(color, Bishop)] | self.piece_masks[(color, Queen)]);
                 if pinned_bishop_or_queen.is_not_empty() {
                     let bishop_square = pinned_bishop_or_queen.lsb_index() as u8;
-                    let bishop_moves = (pin_ray | BitBoard::from(1 << pinner_square))
+                    let bishop_moves = (pin_ray | BitBoard(1 << pinner_square))
                         & (push_mask | capture_mask)
                         & pinned_bishop_or_queen.inverse();
                     for target in bishop_moves {
@@ -583,7 +583,7 @@ impl ChessGame {
                 if pinned_pawn.is_not_empty() {
                     let pawn_square = pinned_pawn.lsb_index() as u8;
                     let pawn_moves = lookup_pawn_attack(pawn_square as usize, color)
-                        & BitBoard::from(1 << pinner_square)
+                        & BitBoard(1 << pinner_square)
                         & capture_mask
                         & (self.color_masks[!color] | self.en_passent_mask);
                     for target in pawn_moves {
@@ -637,7 +637,7 @@ impl ChessGame {
         if color == White {
             // white pawn moves
             for pawn_square in pawns {
-                let pawn = BitBoard::from(1 << pawn_square);
+                let pawn = BitBoard(1 << pawn_square);
 
                 // single pawn pushes
                 let pawn_push_one = (pawn << 8) & push_mask & (self.combined).inverse();
@@ -678,12 +678,12 @@ impl ChessGame {
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Bishop));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Rook));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Queen));
-                    } else if BitBoard::from(1 << target) == self.en_passent_mask {
+                    } else if BitBoard(1 << target) == self.en_passent_mask {
                         // en passent capture
                         if self.piece_masks[(color, King)].lsb_index() / 8 == 4 {
                             let mut en_passent_pinned = false;
                             let blocking_mask = (self.combined)
-                                & (BitBoard::from(1 << pawn_square) | (self.en_passent_mask >> 8))
+                                & (BitBoard(1 << pawn_square) | (self.en_passent_mask >> 8))
                                     .inverse();
                             let attacking_rooks_or_queens = (self.piece_masks[(!color, Rook)]
                                 | self.piece_masks[(!color, Queen)])
@@ -722,7 +722,7 @@ impl ChessGame {
         } else {
             // black pawn moves
             for pawn_square in pawns {
-                let pawn = BitBoard::from(1 << pawn_square);
+                let pawn = BitBoard(1 << pawn_square);
 
                 // single pawn pushes
                 let pawn_push_one = pawn >> 8 & push_mask & (self.combined).inverse();
@@ -762,12 +762,12 @@ impl ChessGame {
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Bishop));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Rook));
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Queen));
-                    } else if BitBoard::from(1 << target) == self.en_passent_mask {
+                    } else if BitBoard(1 << target) == self.en_passent_mask {
                         // en passent capture
                         if self.piece_masks[(color, King)].lsb_index() / 8 == 3 {
                             let mut en_passent_pinned = false;
                             let blocking_mask = (self.combined)
-                                & (BitBoard::from(1 << pawn_square) | self.en_passent_mask << 8)
+                                & (BitBoard(1 << pawn_square) | self.en_passent_mask << 8)
                                     .inverse();
                             let attacking_rooks_or_queens = (self.piece_masks[(!color, Rook)]
                                 | self.piece_masks[(!color, Queen)])
@@ -803,7 +803,7 @@ impl ChessGame {
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture =
-                    (self.color_masks[!color] & BitBoard::from(1 << target)).is_not_empty();
+                    (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
                 moves.push(Move::knight_move(knight_square as u8, target, capture));
             }
         }
@@ -816,7 +816,7 @@ impl ChessGame {
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture =
-                    (self.color_masks[!color] & BitBoard::from(1 << target)).is_not_empty();
+                    (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
                 moves.push(Move::bishop_move(bishop_square as u8, target, capture));
             }
         }
@@ -829,7 +829,7 @@ impl ChessGame {
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture =
-                    (self.color_masks[!color] & BitBoard::from(1 << target)).is_not_empty();
+                    (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
                 moves.push(Move::rook_move(rook_square as u8, target, capture));
             }
         }
@@ -842,7 +842,7 @@ impl ChessGame {
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture =
-                    (self.color_masks[!color] & BitBoard::from(1 << target)).is_not_empty();
+                    (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
                 moves.push(Move::queen_move(queen_square as u8, target, capture));
             }
         }
@@ -895,17 +895,17 @@ impl ChessGame {
             // update king position and hash
             self.hash ^= zobrist_piece(King, color, start) ^ zobrist_piece(King, color, target);
             self.piece_masks[(color, King)] ^=
-                BitBoard::from(1 << target) | BitBoard::from(1 << start);
+                BitBoard(1 << target) | BitBoard(1 << start);
             // update rook position and hash
             self.hash ^=
                 zobrist_piece(Rook, color, rook_start) ^ zobrist_piece(Rook, color, rook_target);
             self.piece_masks[(color, Rook)] ^=
-                BitBoard::from(1 << rook_target) | BitBoard::from(1 << rook_start);
+                BitBoard(1 << rook_target) | BitBoard(1 << rook_start);
             // update color masks
-            self.color_masks[color] ^= BitBoard::from(1 << start)
-                | BitBoard::from(1 << target)
-                | BitBoard::from(1 << rook_start)
-                | BitBoard::from(1 << rook_target);
+            self.color_masks[color] ^= BitBoard(1 << start)
+                | BitBoard(1 << target)
+                | BitBoard(1 << rook_start)
+                | BitBoard(1 << rook_target);
             // update castling rights
             self.hash ^= zobrist_castling(self.castling_rights);
             self.castling_rights[color] = [false, false];
@@ -925,8 +925,8 @@ impl ChessGame {
             };
             // remove piece from target square
             self.hash ^= zobrist_piece(captured, !color, cap_square);
-            self.piece_masks[(!color, captured)] ^= BitBoard::from(1 << cap_square);
-            self.color_masks[!color] ^= BitBoard::from(1 << cap_square);
+            self.piece_masks[(!color, captured)] ^= BitBoard(1 << cap_square);
+            self.color_masks[!color] ^= BitBoard(1 << cap_square);
 
             // reset halfmove clock
             self.halfmove_clock = 0;
@@ -974,8 +974,8 @@ impl ChessGame {
         if !move_.castling() {
             self.hash ^= zobrist_piece(piece, color, start) ^ zobrist_piece(piece, color, target);
             self.piece_masks[(color, piece)] ^=
-                BitBoard::from(1 << start) | BitBoard::from(1 << target);
-            self.color_masks[color] ^= BitBoard::from(1 << start) | BitBoard::from(1 << target);
+                BitBoard(1 << start) | BitBoard(1 << target);
+            self.color_masks[color] ^= BitBoard(1 << start) | BitBoard(1 << target);
         }
 
         // pawn special cases
@@ -988,7 +988,7 @@ impl ChessGame {
                     target + 8
                 };
                 // only set the ep mask if the pawn can be taken
-                self.en_passent_mask = BitBoard::from(1 << ep_square) & self.pawn_attacks(!color);
+                self.en_passent_mask = BitBoard(1 << ep_square) & self.pawn_attacks(!color);
                 if self.en_passent_mask.is_not_empty() {
                     self.hash ^= zobrist_enpassent(self.en_passent_mask);
                 }
@@ -997,8 +997,8 @@ impl ChessGame {
             if move_.promotion() != NoPiece {
                 self.hash ^= zobrist_piece(Pawn, color, target)
                     ^ zobrist_piece(move_.promotion(), color, target);
-                self.piece_masks[(color, Pawn)] ^= BitBoard::from(1 << target);
-                self.piece_masks[(color, move_.promotion())] |= BitBoard::from(1 << target);
+                self.piece_masks[(color, Pawn)] ^= BitBoard(1 << target);
+                self.piece_masks[(color, move_.promotion())] |= BitBoard(1 << target);
             }
             // rule 50
             self.halfmove_clock = 0;
@@ -1023,9 +1023,9 @@ impl ChessGame {
 
         let mut piece = self.piece_at(target);
         if unmove.promotion {
-            self.piece_masks[(self.current_player, piece)] ^= BitBoard::from(1 << target);
+            self.piece_masks[(self.current_player, piece)] ^= BitBoard(1 << target);
 
-            self.piece_masks[(self.current_player, Pawn)] ^= BitBoard::from(1 << target);
+            self.piece_masks[(self.current_player, Pawn)] ^= BitBoard(1 << target);
             piece = Pawn;
         }
 
@@ -1033,40 +1033,40 @@ impl ChessGame {
             if target % 8 == 2 {
                 // queenside
                 self.piece_masks[(self.current_player, King)] ^=
-                    BitBoard::from(1 << start) | BitBoard::from(1 << target);
+                    BitBoard(1 << start) | BitBoard(1 << target);
 
                 let rook_start = target - 2;
                 let rook_target = target + 1;
 
                 self.piece_masks[(self.current_player, Rook)] ^=
-                    BitBoard::from(1 << rook_start) | BitBoard::from(1 << rook_target);
+                    BitBoard(1 << rook_start) | BitBoard(1 << rook_target);
 
-                self.color_masks[self.current_player] ^= BitBoard::from(1 << start)
-                    | BitBoard::from(1 << target)
-                    | BitBoard::from(1 << rook_start)
-                    | BitBoard::from(1 << rook_target);
+                self.color_masks[self.current_player] ^= BitBoard(1 << start)
+                    | BitBoard(1 << target)
+                    | BitBoard(1 << rook_start)
+                    | BitBoard(1 << rook_target);
             } else {
                 // kingside
                 self.piece_masks[(self.current_player, King)] ^=
-                    BitBoard::from(1 << start) | BitBoard::from(1 << target);
+                    BitBoard(1 << start) | BitBoard(1 << target);
 
                 let rook_start = target + 1;
                 let rook_target = target - 1;
 
                 self.piece_masks[(self.current_player, Rook)] ^=
-                    BitBoard::from(1 << rook_start) | BitBoard::from(1 << rook_target);
+                    BitBoard(1 << rook_start) | BitBoard(1 << rook_target);
 
-                self.color_masks[self.current_player] ^= BitBoard::from(1 << start)
-                    | BitBoard::from(1 << target)
-                    | BitBoard::from(1 << rook_start)
-                    | BitBoard::from(1 << rook_target);
+                self.color_masks[self.current_player] ^= BitBoard(1 << start)
+                    | BitBoard(1 << target)
+                    | BitBoard(1 << rook_start)
+                    | BitBoard(1 << rook_target);
             }
         } else {
             // move piece back to start
             self.piece_masks[(self.current_player, piece)] ^=
-                BitBoard::from(1 << start) | BitBoard::from(1 << target);
+                BitBoard(1 << start) | BitBoard(1 << target);
             self.color_masks[self.current_player] ^=
-                BitBoard::from(1 << start) | BitBoard::from(1 << target);
+                BitBoard(1 << start) | BitBoard(1 << target);
 
             if unmove.capture != NoPiece {
                 let mut cap_square = target;
@@ -1078,8 +1078,8 @@ impl ChessGame {
                 }
                 // replace captured piece
                 self.piece_masks[(!self.current_player, unmove.capture)] ^=
-                    BitBoard::from(1 << cap_square);
-                self.color_masks[!self.current_player] ^= BitBoard::from(1 << cap_square);
+                    BitBoard(1 << cap_square);
+                self.color_masks[!self.current_player] ^= BitBoard(1 << cap_square);
             }
         }
 

@@ -6,7 +6,7 @@ use std::{
 use overload::overload;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
-pub struct BitBoard(u64);
+pub struct BitBoard(pub u64);
 
 impl BitBoard {
     #[inline]
@@ -24,10 +24,6 @@ impl BitBoard {
     #[inline]
     pub fn as_u64(&self) -> u64 {
         self.0
-    }
-    #[inline]
-    pub const fn from(n: u64) -> Self {
-        Self(n)
     }
     #[inline]
     pub fn inverse(&self) -> Self {
