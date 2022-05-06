@@ -1,0 +1,14 @@
+[package]
+name = "cheers_lib"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "cheers_lib"
+path = "src/lib.rs"
+
+[dependencies]
+overload = "0.1.1"
+rand = "0.8.5"
+
+

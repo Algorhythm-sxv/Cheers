@@ -1,32 +1,6 @@
-[package]
-name = "cheers"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-name = "cheers_lib"
-path = "src/lib.rs"
-
-[[bin]]
-name = "cheers"
-path = "src/main.rs"
-
-[dependencies]
-rand = "0.8"
-overload = "0.1.1"
-
-[dev-dependencies]
-pprof = { version = "0.8", features = ["flamegraph", "criterion"] }
-criterion = "0.3"
-
-[[bench]]
-name = "perft_speed_test"
-harness = false
-
-[profile.bench]
-opt-level = 3
-debug = true
-
-[profile.test]
-opt-level = 3
-debug = true
+[workspace]
+members = [
+    "cheers_lib",
+    "cheers",
+    "cheers_tuning",
+]

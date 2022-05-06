@@ -1,0 +1,13 @@
+[package]
+name = "cheers"
+version = "0.1.0"
+authors = ["Sebastian Venter <sebastian.venter@gmail.com>"]
+edition = "2021"
+
+[[bin]]
+name = "cheers"
+path = "src/main.rs"
+
+[dependencies.cheers_lib]
+path = "../cheers_lib"
+
