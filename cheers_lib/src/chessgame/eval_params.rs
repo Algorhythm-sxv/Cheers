@@ -9,6 +9,38 @@ pub struct EvalParams {
     pub double_pawn_penalty: i32,
 }
 
+impl EvalParams {
+    pub fn to_vec(&self) -> Vec<i32> {
+        use PieceIndex::*;
+        let mut params = Vec::with_capacity(std::mem::size_of::<Self>() / 2);
+        params.push(self.piece_values[Pawn]);
+        params.push(self.piece_values[Knight]);
+        params.push(self.piece_values[Bishop]);
+        params.push(self.piece_values[Rook]);
+        params.push(self.piece_values[Queen]);
+        params.push(self.pawn_shield_1);
+        params.push(self.pawn_shield_2);
+        params.push(self.passed_pawn_bonus);
+        params.push(self.double_pawn_penalty);
+
+        params
+    }
+    pub fn from_params(params: &[i32]) -> Self {
+        assert!(params.len() == 9);
+        let mut eval_params = EVAL_PARAMS;
+        let piece_values = PieceValues([
+            params[0], params[1], params[2], params[3], params[4], 20_000,
+        ]);
+        eval_params.piece_values = piece_values;
+        eval_params.pawn_shield_1 = params[5];
+        eval_params.pawn_shield_2 = params[6];
+        eval_params.passed_pawn_bonus = params[7];
+        eval_params.double_pawn_penalty = params[8];
+
+        eval_params
+    }
+}
+
 pub const EVAL_PARAMS: EvalParams = EvalParams {
     piece_values: PIECE_VALUES,
     pawn_shield_1: PAWN_SHIELD_1,

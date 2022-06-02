@@ -63,7 +63,7 @@ impl ChessGame {
 
         // quiescence search at full depth
         if depth == 0 {
-            let score = self.quiesce(alpha, beta, last_move);
+            let score = self.quiesce(alpha, beta, last_move, EVAL_PARAMS);
             self.transposition_table
                 .set(self.hash, Move::null(), depth as u8, score, Exact);
             return (score, Move::null());
@@ -198,8 +198,8 @@ impl ChessGame {
         (alpha, best_move)
     }
 
-    pub fn quiesce(&mut self, mut alpha: i32, beta: i32, last_move: Move) -> i32 {
-        let stand_pat_score = self.evaluate(&EVAL_PARAMS);
+    pub fn quiesce(&mut self, mut alpha: i32, beta: i32, last_move: Move, eval_params: EvalParams) -> i32 {
+        let stand_pat_score = self.evaluate(&eval_params);
 
         if stand_pat_score >= beta {
             return beta;
@@ -233,7 +233,7 @@ impl ChessGame {
 
         for (move_, _) in moves.iter() {
             self.make_move(*move_);
-            let score = -self.quiesce(-beta, -alpha, *move_);
+            let score = -self.quiesce(-beta, -alpha, *move_, eval_params);
             self.unmake_move();
             if score >= beta {
                 return beta;

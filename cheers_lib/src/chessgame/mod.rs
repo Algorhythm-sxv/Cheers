@@ -20,7 +20,7 @@ mod search;
 
 pub use self::search::{NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 
-use self::eval_params::{EvalParams, EVAL_PARAMS};
+pub use self::eval_params::{EvalParams, EVAL_PARAMS};
 
 #[derive(Clone)]
 pub struct ChessGame {
