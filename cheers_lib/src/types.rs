@@ -16,6 +16,16 @@ impl Default for ColorIndex {
     }
 }
 
+impl From<u8> for ColorIndex {
+    fn from(color: u8) -> Self {
+        match color {
+            0 => White,
+            1 => Black,
+            _ => unreachable!()
+        }
+    }
+}
+
 impl std::ops::Not for ColorIndex {
     type Output = Self;
     fn not(self) -> Self::Output {

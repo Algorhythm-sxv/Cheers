@@ -8,7 +8,8 @@ name = "cheers_lib"
 path = "src/lib.rs"
 
 [dependencies]
-overload = "0.1.1"
-rand = "0.8.5"
+bytemuck = { version = "1.9", features = ["min_const_generics", "derive"] }
+overload = "0.1"
+rand = "0.8"
 
 

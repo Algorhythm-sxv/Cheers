@@ -5,6 +5,8 @@ use std::{
 
 use overload::overload;
 
+use crate::types::ColorIndex;
+
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub struct BitBoard(pub u64);
 
@@ -112,3 +114,8 @@ overload!((a: &mut BitBoard) ^= (b: ?BitBoard) {a.0 ^= b.0});
 
 overload!((a: ?BitBoard) << (b: ?u64) -> BitBoard {BitBoard(a.0 << b)});
 overload!((a: ?BitBoard) >> (b: ?u64) -> BitBoard {BitBoard(a.0 >> b)});
+
+#[inline]
+pub fn relative_board_index(i: u8, color: ColorIndex) -> u8 {
+    i ^ (56 * color as u8)
+}

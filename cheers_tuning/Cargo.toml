@@ -13,6 +13,6 @@ path = "../cheers_lib"
 
 [dependencies]
 clap = { version = "3.1", features = ["derive"] }
+indicatif = { version = "0.16.2", features = ["rayon"] }
 pgn-reader = "0.20"
-argmin = "0.5"
 rayon = "1.5"
