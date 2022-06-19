@@ -17,11 +17,11 @@ use crate::{
 mod eval_params;
 mod evaluate;
 mod search;
+mod eval_types;
 
 pub use self::search::{NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 
 pub use self::eval_params::*;
-pub use self::evaluate::{NoTracing, Tracing, TracingType};
 
 #[derive(Clone)]
 pub struct ChessGame {
@@ -429,7 +429,7 @@ impl ChessGame {
 
         let mut result = BitBoard::empty();
         for i in knights {
-            result |= lookup_knight(i.into());
+            result |= lookup_knight(i);
         }
         result
     }
@@ -439,7 +439,7 @@ impl ChessGame {
 
         let mut result = BitBoard::empty();
         for i in bishops {
-            result |= lookup_bishop(i.into(), blocking_mask);
+            result |= lookup_bishop(i, blocking_mask);
         }
         result
     }
@@ -449,7 +449,7 @@ impl ChessGame {
 
         let mut result = BitBoard::empty();
         for i in rooks {
-            result |= lookup_rook(i.into(), blocking_mask);
+            result |= lookup_rook(i, blocking_mask);
         }
         result
     }
@@ -459,7 +459,7 @@ impl ChessGame {
 
         let mut result = BitBoard::empty();
         for i in queens {
-            result |= lookup_queen(i.into(), blocking_mask);
+            result |= lookup_queen(i, blocking_mask);
         }
         result
     }
@@ -476,8 +476,8 @@ impl ChessGame {
         let rooks = self.piece_masks[(!color, Rook)] & rook_attacks.inverse();
         let bishops = self.piece_masks[(!color, Bishop)] & bishop_attacks.inverse();
 
-        return (rooks & lookup_rook(square, self.combined & rook_attacks.inverse()))
-            | (bishops & lookup_bishop(square, self.combined & bishop_attacks.inverse()));
+        (rooks & lookup_rook(square, self.combined & rook_attacks.inverse()))
+            | (bishops & lookup_bishop(square, self.combined & bishop_attacks.inverse()))
     }
 
     fn all_attacks(&self, color: ColorIndex, blocking_mask: BitBoard) -> BitBoard {
@@ -561,7 +561,7 @@ impl ChessGame {
             self.king_attacks(color) & (attacked_squares | self.color_masks[color]).inverse();
         for target in king_moves {
             let capture = (BitBoard(1 << target) & self.color_masks[!color]).is_not_empty();
-            moves.push(Move::king_move(king_square as u8, target, capture));
+            moves.push(Move::king_move(king_square as u8, target as u8, capture));
         }
 
         // Check evasions
@@ -617,7 +617,7 @@ impl ChessGame {
             | self.piece_masks[(!color, Queen)])
             & orthogonal_pin_rays;
         for pinner_square in pinning_orthogonals {
-            let pin_ray = lookup_between(king_square as u8, pinner_square);
+            let pin_ray = lookup_between(king_square as u8, pinner_square as u8);
 
             if (pin_ray & self.color_masks[color]).count_ones() == 1 {
                 // there is only one piece on this ray so there is a pin
@@ -637,7 +637,7 @@ impl ChessGame {
                         let capture = target == pinner_square;
                         moves.push(Move::new(
                             rook_square,
-                            target,
+                            target as u8,
                             self.piece_at(rook_square as usize),
                             NoPiece,
                             capture,
@@ -668,7 +668,7 @@ impl ChessGame {
                     for target in pawn_moves {
                         moves.push(Move::new(
                             pawn_square,
-                            target,
+                            target as u8,
                             Pawn,
                             NoPiece,
                             false,
@@ -686,7 +686,7 @@ impl ChessGame {
             | self.piece_masks[(!color, Queen)])
             & diagonal_pin_rays;
         for pinner_square in pinning_diagonals {
-            let pin_ray = lookup_between(king_square as u8, pinner_square);
+            let pin_ray = lookup_between(king_square as u8, pinner_square as u8);
 
             if (pin_ray & self.color_masks[color]).count_ones() == 1 {
                 // there is only the king and one piece on this ray so there is a pin
@@ -706,7 +706,7 @@ impl ChessGame {
                         let capture = target == pinner_square;
                         moves.push(Move::new(
                             bishop_square,
-                            target,
+                            target as u8,
                             self.piece_at(bishop_square as usize),
                             NoPiece,
                             capture,
@@ -725,6 +725,7 @@ impl ChessGame {
                         & capture_mask
                         & (self.color_masks[!color] | self.en_passent_mask);
                     for target in pawn_moves {
+                        let target = target as u8;
                         if target / 8 == !color as u8 * 7 {
                             // pinned pawn capture promotions
                             moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
@@ -775,6 +776,7 @@ impl ChessGame {
         if color == White {
             // white pawn moves
             for pawn_square in pawns {
+                let pawn_square = pawn_square as u8;
                 let pawn = BitBoard(1 << pawn_square);
 
                 // single pawn pushes
@@ -810,6 +812,7 @@ impl ChessGame {
                     & (capture_mask | (self.en_passent_mask & (capture_mask << 8)))
                     & (self.color_masks[!color] | self.en_passent_mask);
                 for target in pawn_captures {
+                    let target = target as u8;
                     if target / 8 == 7 {
                         // promotions
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
@@ -827,7 +830,7 @@ impl ChessGame {
                                 | self.piece_masks[(!color, Queen)])
                                 & FIFTH_RANK;
                             for rook_square in attacking_rooks_or_queens {
-                                if (lookup_rook(rook_square.into(), blocking_mask)
+                                if (lookup_rook(rook_square, blocking_mask)
                                     & self.piece_masks[(color, King)])
                                     .is_not_empty()
                                 {
@@ -837,7 +840,7 @@ impl ChessGame {
                             }
                             let attacking_queens = self.piece_masks[(!color, Queen)] & FOURTH_RANK;
                             for queen_square in attacking_queens {
-                                if (lookup_queen(queen_square.into(), blocking_mask)
+                                if (lookup_queen(queen_square, blocking_mask)
                                     & self.piece_masks[(color, King)])
                                     .is_not_empty()
                                 {
@@ -860,6 +863,7 @@ impl ChessGame {
         } else {
             // black pawn moves
             for pawn_square in pawns {
+                let pawn_square = pawn_square as u8;
                 let pawn = BitBoard(1 << pawn_square);
 
                 // single pawn pushes
@@ -894,6 +898,7 @@ impl ChessGame {
                     & (capture_mask | (self.en_passent_mask & (capture_mask >> 8)))
                     & (self.color_masks[!color] | self.en_passent_mask);
                 for target in pawn_captures {
+                    let target = target as u8;
                     if target / 8 == 0 {
                         // promotions
                         moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
@@ -911,7 +916,7 @@ impl ChessGame {
                                 | self.piece_masks[(!color, Queen)])
                                 & FOURTH_RANK;
                             for rook_square in attacking_rooks_or_queens {
-                                if (lookup_rook(rook_square.into(), blocking_mask)
+                                if (lookup_rook(rook_square, blocking_mask)
                                     & self.piece_masks[(color, King)])
                                     .is_not_empty()
                                 {
@@ -936,48 +941,48 @@ impl ChessGame {
         // Knight moves
         let knights = self.piece_masks[(color, Knight)] & pinned_pieces.inverse();
         for knight_square in knights {
-            let attacks = lookup_knight(knight_square.into())
+            let attacks = lookup_knight(knight_square)
                 & self.color_masks[color].inverse()
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture = (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
-                moves.push(Move::knight_move(knight_square as u8, target, capture));
+                moves.push(Move::knight_move(knight_square as u8, target as u8, capture));
             }
         }
 
         // Bishop moves
         let bishops = self.piece_masks[(color, Bishop)] & pinned_pieces.inverse();
         for bishop_square in bishops {
-            let attacks = lookup_bishop(bishop_square.into(), self.combined)
+            let attacks = lookup_bishop(bishop_square, self.combined)
                 & self.color_masks[color].inverse()
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture = (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
-                moves.push(Move::bishop_move(bishop_square as u8, target, capture));
+                moves.push(Move::bishop_move(bishop_square as u8, target as u8, capture));
             }
         }
 
         // Rook moves
         let rooks = self.piece_masks[(color, Rook)] & pinned_pieces.inverse();
         for rook_square in rooks {
-            let attacks = lookup_rook(rook_square.into(), self.combined)
+            let attacks = lookup_rook(rook_square, self.combined)
                 & self.color_masks[color].inverse()
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture = (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
-                moves.push(Move::rook_move(rook_square as u8, target, capture));
+                moves.push(Move::rook_move(rook_square as u8, target as u8, capture));
             }
         }
 
         // queen moves
         let queens = self.piece_masks[(color, Queen)] & pinned_pieces.inverse();
         for queen_square in queens {
-            let attacks = lookup_queen(queen_square.into(), self.combined)
+            let attacks = lookup_queen(queen_square, self.combined)
                 & self.color_masks[color].inverse()
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture = (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
-                moves.push(Move::queen_move(queen_square as u8, target, capture));
+                moves.push(Move::queen_move(queen_square as u8, target as u8, capture));
             }
         }
 
@@ -1267,7 +1272,7 @@ impl ChessGame {
             for color in [White, Black] {
                 let pieces = self.piece_masks[(color, piece)];
                 for square in pieces {
-                    hash ^= zobrist_piece(piece, color, square.into());
+                    hash ^= zobrist_piece(piece, color, square);
                 }
             }
         }

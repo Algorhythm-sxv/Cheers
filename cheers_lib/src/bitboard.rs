@@ -54,7 +54,7 @@ impl BitBoard {
 }
 
 impl Iterator for BitBoard {
-    type Item = u8;
+    type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.0 == 0 {
@@ -62,7 +62,7 @@ impl Iterator for BitBoard {
         } else {
             let i = self.lsb_index();
             self.clear_lsb();
-            Some(i as u8)
+            Some(i as usize)
         }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -116,6 +116,6 @@ overload!((a: ?BitBoard) << (b: ?u64) -> BitBoard {BitBoard(a.0 << b)});
 overload!((a: ?BitBoard) >> (b: ?u64) -> BitBoard {BitBoard(a.0 >> b)});
 
 #[inline]
-pub fn relative_board_index(i: u8, color: ColorIndex) -> u8 {
-    i ^ (56 * color as u8)
+pub fn relative_board_index(i: usize, color: ColorIndex) -> usize {
+    i ^ (56 * color as usize)
 }

@@ -1,8 +1,7 @@
 use std::sync::atomic::*;
 
+use super::{*, eval_types::{GamePhase, TraceTarget}};
 use GamePhase::*;
-
-use super::{evaluate::TraceTarget, *};
 use crate::transposition_table::NodeType::*;
 
 pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);

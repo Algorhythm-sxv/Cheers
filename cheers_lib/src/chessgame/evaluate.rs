@@ -1,83 +1,9 @@
-use std::ops::{Add, AddAssign, Sub};
-
 use crate::bitboard::relative_board_index;
 
 pub use self::eval_params::*;
 use self::GamePhase::*;
 
-use super::*;
-
-pub struct EvalInfo {
-    mobility_area: [BitBoard; 2],
-    behind_pawns: [BitBoard; 2],
-    outposts: [BitBoard; 2],
-    seventh_rank: [BitBoard; 2],
-}
-
-#[derive(Copy, Clone)]
-pub struct EvalScore {
-    pub mg: i32,
-    pub eg: i32,
-}
-
-impl EvalScore {
-    pub fn zero() -> Self {
-        Self { mg: 0, eg: 0 }
-    }
-}
-
-impl Add<EvalScore> for EvalScore {
-    type Output = Self;
-
-    fn add(self, rhs: EvalScore) -> Self::Output {
-        Self {
-            mg: self.mg + rhs.mg,
-            eg: self.eg + rhs.eg,
-        }
-    }
-}
-
-impl AddAssign<EvalScore> for EvalScore {
-    fn add_assign(&mut self, rhs: EvalScore) {
-        self.mg += rhs.mg;
-        self.eg += rhs.eg;
-    }
-}
-
-impl Sub<EvalScore> for EvalScore {
-    type Output = Self;
-
-    fn sub(self, rhs: EvalScore) -> Self::Output {
-        Self {
-            mg: self.mg - rhs.mg,
-            eg: self.eg - rhs.eg,
-        }
-    }
-}
-
-pub trait TraceTarget {
-    fn term(&mut self, _term: impl FnMut(&mut EvalTrace)) {}
-}
-
-impl TraceTarget for EvalTrace {
-    fn term(&mut self, mut term: impl FnMut(&mut EvalTrace)) {
-        term(self)
-    }
-}
-impl TraceTarget for () {}
-
-pub trait TracingType {
-    const TRACING: bool;
-}
-pub struct Tracing;
-pub struct NoTracing;
-
-impl TracingType for Tracing {
-    const TRACING: bool = true;
-}
-impl TracingType for NoTracing {
-    const TRACING: bool = false;
-}
+use super::{eval_types::*, *};
 
 pub struct EvalContext<'g, T> {
     game: &'g ChessGame,
@@ -95,6 +21,9 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
 
         let phase = self.game.game_phase();
 
+        let white_king_square = self.game.piece_masks()[(White, King)].lsb_index() as i32;
+        let black_king_square = self.game.piece_masks()[(Black, King)].lsb_index() as i32;
+
         // initialise eval info
         let info = EvalInfo {
             mobility_area: [
@@ -110,6 +39,11 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
                 self.game.pawn_attacks(White).inverse(),
             ],
             seventh_rank: [SEVENTH_RANK, SECOND_RANK],
+            king_square: [white_king_square, black_king_square],
+            king_area: [
+                lookup_king(white_king_square as usize),
+                lookup_king(black_king_square as usize),
+            ],
         };
 
         eval += self.evaluate_knights(self.game.current_player(), &info, self.params)
@@ -152,49 +86,47 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let knights_behind_pawns = (self.game.piece_masks()[(color, Knight)]
             & info.behind_pawns[color as usize])
             .count_ones() as i32;
-        eval.mg += params.knight_behind_pawn[Midgame as usize] * knights_behind_pawns;
-        eval.eg += params.knight_behind_pawn[Endgame as usize] * knights_behind_pawns;
+        eval.mg += params.knight_behind_pawn[Midgame] * knights_behind_pawns;
+        eval.eg += params.knight_behind_pawn[Endgame] * knights_behind_pawns;
         self.trace
-            .term(|t| t.knights_behind_pawns[color as usize] = knights_behind_pawns);
+            .term(|t| t.knights_behind_pawns[color] = knights_behind_pawns);
 
         for knight in self.game.piece_masks()[(color, Knight)] {
             let relative_knight = relative_board_index(knight, color);
             // placement
-            eval.mg += params.piece_tables[(Midgame, Knight, relative_knight as u8)];
-            eval.eg += params.piece_tables[(Endgame, Knight, relative_knight as u8)];
+            eval.mg += params.piece_tables[(Midgame, Knight, relative_knight)];
+            eval.eg += params.piece_tables[(Endgame, Knight, relative_knight)];
             self.trace
-                .term(|t| t.knight_placement[relative_knight as usize][color as usize] += 1);
+                .term(|t| t.knight_placement[relative_knight][color] += 1);
 
             // king distance
-            let king = self.game.piece_masks()[(color, King)].lsb_index() as i32;
+            let king = info.king_square[color];
             let distance = (king % 8 - knight as i32 % 8)
                 .abs()
-                .max((king / 8 - knight as i32 / 8).abs());
+                .max((king / 8 - knight as i32 / 8).abs()) as usize;
             if distance >= 4 {
-                eval.mg += params.knight_king_distance[distance as usize - 4][Midgame as usize];
-                eval.eg += params.knight_king_distance[distance as usize - 4][Endgame as usize];
+                eval.mg += params.knight_king_distance[distance - 4][Midgame];
+                eval.eg += params.knight_king_distance[distance - 4][Endgame];
                 self.trace
-                    .term(|t| t.knight_king_distance[distance as usize - 4][color as usize] += 1);
+                    .term(|t| t.knight_king_distance[distance - 4][color] += 1);
             }
 
             // outposts
-            if (BitBoard(1 << knight) & info.outposts[color as usize]).is_not_empty() {
-                let defended = (lookup_pawn_attack(knight as usize, !color)
+            if (BitBoard(1 << knight) & info.outposts[color]).is_not_empty() {
+                let defended = (lookup_pawn_attack(knight, !color)
                     & self.game.piece_masks()[(color, Pawn)])
-                    .is_not_empty();
-                eval.mg += params.knight_outpost[defended as usize][Midgame as usize];
-                eval.eg += params.knight_outpost[defended as usize][Endgame as usize];
-                self.trace
-                    .term(|t| t.knight_outposts[defended as usize][color as usize] += 1);
+                    .is_not_empty() as usize;
+                eval.mg += params.knight_outpost[defended][Midgame];
+                eval.eg += params.knight_outpost[defended][Endgame];
+                self.trace.term(|t| t.knight_outposts[defended][color] += 1);
             }
 
             // mobility
-            let attacks = lookup_knight(knight.into());
-            let mobility = (attacks & info.mobility_area[color as usize]).count_ones() as usize;
-            eval.mg += params.knight_mobility[mobility][Midgame as usize];
-            eval.eg += params.knight_mobility[mobility][Endgame as usize];
-            self.trace
-                .term(|t| t.knight_mobility[mobility][color as usize] += 1);
+            let attacks = lookup_knight(knight);
+            let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
+            eval.mg += params.knight_mobility[mobility][Midgame];
+            eval.eg += params.knight_mobility[mobility][Endgame];
+            self.trace.term(|t| t.knight_mobility[mobility][color] += 1);
         }
         eval
     }
@@ -212,72 +144,70 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let count = self.game.piece_masks()[(color, Bishop)].count_ones() as i32;
         eval.mg += params.piece_values[(Midgame, Bishop)] * count;
         eval.eg += params.piece_values[(Endgame, Bishop)] * count;
-        self.trace.term(|t| t.bishop_count[color as usize] = count);
+        self.trace.term(|t| t.bishop_count[color] = count);
 
         // bishops behind pawns
         let bishops_behind_pawns = (self.game.piece_masks()[(color, Bishop)]
-            & info.behind_pawns[color as usize])
+            & info.behind_pawns[color])
             .count_ones() as i32;
-        eval.mg += params.bishop_behind_pawn[Midgame as usize] * bishops_behind_pawns;
-        eval.eg += params.bishop_behind_pawn[Endgame as usize] * bishops_behind_pawns;
+        eval.mg += params.bishop_behind_pawn[Midgame] * bishops_behind_pawns;
+        eval.eg += params.bishop_behind_pawn[Endgame] * bishops_behind_pawns;
         self.trace
-            .term(|t| t.bishops_behind_pawns[color as usize] = bishops_behind_pawns);
+            .term(|t| t.bishops_behind_pawns[color] = bishops_behind_pawns);
 
         // bishop pair
         if (self.game.piece_masks()[(color, Bishop)] & LIGHT_SQUARES).count_ones() >= 1
             && (self.game.piece_masks()[(color, Bishop)] & DARK_SQUARES).count_ones() >= 1
         {
-            eval.mg += params.bishop_pair[Midgame as usize];
-            eval.eg += params.bishop_pair[Endgame as usize];
-            self.trace.term(|t| t.bishop_pair[color as usize] += 1);
+            eval.mg += params.bishop_pair[Midgame];
+            eval.eg += params.bishop_pair[Endgame];
+            self.trace.term(|t| t.bishop_pair[color] += 1);
         }
 
         // long diagonals
         let bishop_long_diagonals =
             (self.game.piece_masks()[(color, Bishop)] & LONG_DIAGONALS).count_ones() as i32;
-        eval.mg += params.bishop_long_diagonal[Midgame as usize] * bishop_long_diagonals;
-        eval.eg += params.bishop_long_diagonal[Endgame as usize] * bishop_long_diagonals;
+        eval.mg += params.bishop_long_diagonal[Midgame] * bishop_long_diagonals;
+        eval.eg += params.bishop_long_diagonal[Endgame] * bishop_long_diagonals;
         self.trace
-            .term(|t| t.bishop_long_diagonals[color as usize] = bishop_long_diagonals);
+            .term(|t| t.bishop_long_diagonals[color] = bishop_long_diagonals);
 
         for bishop in self.game.piece_masks()[(color, Bishop)] {
             // placement
             let relative_bishop = relative_board_index(bishop, color);
-            eval.mg += params.piece_tables[(Midgame, Bishop, relative_bishop as u8)];
-            eval.eg += params.piece_tables[(Endgame, Bishop, relative_bishop as u8)];
+            eval.mg += params.piece_tables[(Midgame, Bishop, relative_bishop)];
+            eval.eg += params.piece_tables[(Endgame, Bishop, relative_bishop)];
             self.trace
-                .term(|t| t.bishop_placement[relative_bishop as usize][color as usize] += 1);
+                .term(|t| t.bishop_placement[relative_bishop][color] += 1);
 
             // king distance
-            let king = self.game.piece_masks()[(color, King)].lsb_index() as i32;
+            let king = info.king_square[color];
             let distance = (king % 8 - bishop as i32 % 8)
                 .abs()
-                .max((king / 8 - bishop as i32 / 8).abs());
+                .max((king / 8 - bishop as i32 / 8).abs()) as usize;
             if distance >= 4 {
-                eval.mg += params.bishop_king_distance[distance as usize - 4][Midgame as usize];
-                eval.eg += params.bishop_king_distance[distance as usize - 4][Endgame as usize];
+                eval.mg += params.bishop_king_distance[distance - 4][Midgame];
+                eval.eg += params.bishop_king_distance[distance - 4][Endgame];
                 self.trace
-                    .term(|t| t.bishop_king_distance[distance as usize - 4][color as usize] += 1);
+                    .term(|t| t.bishop_king_distance[distance - 4][color] += 1);
             }
 
             // outposts
-            if (BitBoard(1 << bishop) & info.outposts[color as usize]).is_not_empty() {
-                let defended = (lookup_pawn_attack(bishop as usize, !color)
+            if (BitBoard(1 << bishop) & info.outposts[color]).is_not_empty() {
+                let defended = (lookup_pawn_attack(bishop, !color)
                     & self.game.piece_masks()[(color, Pawn)])
-                    .is_not_empty();
-                eval.mg += params.bishop_outpost[defended as usize][Midgame as usize];
-                eval.eg += params.bishop_outpost[defended as usize][Endgame as usize];
-                self.trace
-                    .term(|t| t.bishop_outposts[defended as usize][color as usize] += 1);
+                    .is_not_empty() as usize;
+                eval.mg += params.bishop_outpost[defended][Midgame];
+                eval.eg += params.bishop_outpost[defended][Endgame];
+                self.trace.term(|t| t.bishop_outposts[defended][color] += 1);
             }
 
             // mobility
             let attacks = lookup_bishop(bishop as usize, self.game.combined());
-            let mobility = (attacks & info.mobility_area[color as usize]).count_ones() as usize;
-            eval.mg += params.bishop_mobility[mobility][Midgame as usize];
-            eval.eg += params.bishop_mobility[mobility][Endgame as usize];
-            self.trace
-                .term(|t| t.bishop_mobility[mobility][color as usize] += 1);
+            let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
+            eval.mg += params.bishop_mobility[mobility][Midgame];
+            eval.eg += params.bishop_mobility[mobility][Endgame];
+            self.trace.term(|t| t.bishop_mobility[mobility][color] += 1);
         }
         eval
     }
@@ -309,28 +239,26 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         for rook in self.game.piece_masks()[(color, Rook)] {
             // placement
             let relative_rook = relative_board_index(rook, color);
-            eval.mg += params.piece_tables[(Midgame, Rook, relative_rook as u8)];
-            eval.eg += params.piece_tables[(Endgame, Rook, relative_rook as u8)];
+            eval.mg += params.piece_tables[(Midgame, Rook, relative_rook)];
+            eval.eg += params.piece_tables[(Endgame, Rook, relative_rook)];
             self.trace
-                .term(|t| t.rook_placement[relative_rook as usize][color as usize] += 1);
+                .term(|t| t.rook_placement[relative_rook][color] += 1);
 
             // open files
-            if (self.game.piece_masks()[(color, Pawn)] & FILES[rook as usize % 8]).is_empty() {
-                let open = (self.game.piece_masks()[(!color, Pawn)] & FILES[rook as usize % 8])
-                    .is_empty() as usize;
-                eval.mg += params.rook_open_file[open][Midgame as usize];
-                eval.eg += params.rook_open_file[open][Endgame as usize];
-                self.trace
-                    .term(|t| t.rook_open_files[open][color as usize] += 1);
+            if (self.game.piece_masks()[(color, Pawn)] & FILES[rook % 8]).is_empty() {
+                let open =
+                    (self.game.piece_masks()[(!color, Pawn)] & FILES[rook % 8]).is_empty() as usize;
+                eval.mg += params.rook_open_file[open][Midgame];
+                eval.eg += params.rook_open_file[open][Endgame];
+                self.trace.term(|t| t.rook_open_files[open][color] += 1);
             }
 
             // mobility
             let attacks = lookup_rook(rook as usize, self.game.combined());
-            let mobility = (attacks & info.mobility_area[color as usize]).count_ones() as usize;
-            eval.mg += params.rook_mobility[mobility][Midgame as usize];
-            eval.eg += params.rook_mobility[mobility][Endgame as usize];
-            self.trace
-                .term(|t| t.rook_mobility[mobility][color as usize] += 1);
+            let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
+            eval.mg += params.rook_mobility[mobility][Midgame];
+            eval.eg += params.rook_mobility[mobility][Endgame];
+            self.trace.term(|t| t.rook_mobility[mobility][color] += 1);
         }
         eval
     }
@@ -348,15 +276,15 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let count = self.game.piece_masks()[(color, Queen)].count_ones() as i32;
         eval.mg += params.piece_values[(Midgame, Queen)] * count;
         eval.eg += params.piece_values[(Endgame, Queen)] * count;
-        self.trace.term(|t| t.queen_count[color as usize] = count);
+        self.trace.term(|t| t.queen_count[color] = count);
 
         for queen in self.game.piece_masks()[(color, Queen)] {
             // placement
             let relative_queen = relative_board_index(queen, color);
-            eval.mg += params.piece_tables[(Midgame, Queen, relative_queen as u8)];
-            eval.eg += params.piece_tables[(Endgame, Queen, relative_queen as u8)];
+            eval.mg += params.piece_tables[(Midgame, Queen, relative_queen)];
+            eval.eg += params.piece_tables[(Endgame, Queen, relative_queen)];
             self.trace
-                .term(|t| t.queen_placement[relative_queen as usize][color as usize] += 1);
+                .term(|t| t.queen_placement[relative_queen][color] += 1);
 
             // discovery risk
             if self
@@ -364,17 +292,17 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
                 .discovered_attacks(queen as usize, color)
                 .is_not_empty()
             {
-                eval.mg += params.queen_discovery_risk[Midgame as usize];
-                eval.eg += params.queen_discovery_risk[Endgame as usize];
-                self.trace.term(|t| t.queen_discovery_risks[color as usize] += 1);
+                eval.mg += params.queen_discovery_risk[Midgame];
+                eval.eg += params.queen_discovery_risk[Endgame];
+                self.trace.term(|t| t.queen_discovery_risks[color] += 1);
             }
 
             // mobility
             let attacks = lookup_queen(queen as usize, self.game.combined());
-            let mobility = (attacks & info.mobility_area[color as usize]).count_ones() as usize;
-            eval.mg += params.queen_mobility[mobility][Midgame as usize];
-            eval.eg += params.queen_mobility[mobility][Endgame as usize];
-            self.trace.term(|t| t.queen_mobility[mobility as usize][color as usize] += 1);
+            let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
+            eval.mg += params.queen_mobility[mobility][Midgame];
+            eval.eg += params.queen_mobility[mobility][Endgame];
+            self.trace.term(|t| t.queen_mobility[mobility][color] += 1);
         }
         eval
     }
@@ -383,16 +311,16 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
     pub fn evaluate_king(
         &mut self,
         color: ColorIndex,
-        _info: &EvalInfo,
+        info: &EvalInfo,
         params: &EvalParams,
     ) -> EvalScore {
         let mut eval = EvalScore::zero();
 
         // placement
-        let king = relative_board_index(self.game.piece_masks()[(color, King)].lsb_index() as u8, color);
-        eval.mg += params.piece_tables[(Midgame, King, king as u8)];
-        eval.eg += params.piece_tables[(Endgame, King, king as u8)];
-        self.trace.term(|t| t.king_placement[king as usize][color as usize] += 1);
+        let king = relative_board_index(info.king_square[color] as usize, color);
+        eval.mg += params.piece_tables[(Midgame, King, king)];
+        eval.eg += params.piece_tables[(Endgame, King, king)];
+        self.trace.term(|t| t.king_placement[king][color] += 1);
 
         eval
     }
@@ -410,17 +338,17 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let count = self.game.piece_masks()[(color, Pawn)].count_ones() as i32;
         eval.mg += params.piece_values[(Midgame, Pawn)] * count;
         eval.eg += params.piece_values[(Endgame, Pawn)] * count;
-        self.trace.term(|t| t.pawn_count[color as usize] = count);
+        self.trace.term(|t| t.pawn_count[color] = count);
 
         // passed pawns
         let front_spans = self.game.pawn_front_spans(!color);
         let all_front_spans =
             front_spans | (front_spans & NOT_H_FILE) << 1 | (front_spans & NOT_A_FILE) >> 1;
-        let passers =
-            (self.game.piece_masks()[(color, Pawn)] & all_front_spans.inverse()).count_ones() as i32;
-        eval.mg += params.passed_pawn[Midgame as usize] * passers;
-        eval.eg += params.passed_pawn[Endgame as usize] * passers;
-        self.trace.term(|t| t.passed_pawns[color as usize] = passers);
+        let passers = (self.game.piece_masks()[(color, Pawn)] & all_front_spans.inverse())
+            .count_ones() as i32;
+        eval.mg += params.passed_pawn[Midgame] * passers;
+        eval.eg += params.passed_pawn[Endgame] * passers;
+        self.trace.term(|t| t.passed_pawns[color] = passers);
 
         // unsupported double pawns
         let pawns = self.game.piece_masks()[(color, Pawn)];
@@ -432,29 +360,30 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let double_pawns =
             (pawns & shifted & ((pawns & NOT_H_FILE) << 1 | (pawns & NOT_A_FILE >> 1)).inverse())
                 .count_ones() as i32;
-        eval.mg += params.double_pawn[Midgame as usize] * double_pawns;
-        eval.eg += params.double_pawn[Endgame as usize] * double_pawns;
-        self.trace.term(|t| t.double_pawns[color as usize] = double_pawns);
+        eval.mg += params.double_pawn[Midgame] * double_pawns;
+        eval.eg += params.double_pawn[Endgame] * double_pawns;
+        self.trace.term(|t| t.double_pawns[color] = double_pawns);
 
         for pawn in self.game.piece_masks()[(color, Pawn)] {
             // placement
             let relative_pawn = relative_board_index(pawn, color);
-            eval.mg += params.piece_tables[(Midgame, Pawn, relative_pawn as u8)];
-            eval.eg += params.piece_tables[(Endgame, Pawn, relative_pawn as u8)];
-            self.trace.term(|t| t.pawn_placement[relative_pawn as usize][color as usize] += 1);
+            eval.mg += params.piece_tables[(Midgame, Pawn, relative_pawn)];
+            eval.eg += params.piece_tables[(Endgame, Pawn, relative_pawn)];
+            self.trace
+                .term(|t| t.pawn_placement[relative_pawn][color] += 1);
 
             let board = BitBoard(1 << pawn);
             let attacks = match color {
                 White => ((board & NOT_H_FILE) << 9) | ((board & NOT_A_FILE) << 7),
                 Black => ((board & NOT_A_FILE) >> 9) | ((board & NOT_H_FILE) >> 7),
             };
-            let neighbors = self.game.piece_masks()[(color, Pawn)] & adjacent_files(pawn as usize % 8);
+            let neighbors = self.game.piece_masks()[(color, Pawn)] & adjacent_files(pawn % 8);
 
             // isolated pawns
             if attacks.is_empty() && neighbors.is_empty() {
-                eval.mg += params.isolated_pawn[pawn as usize % 8][Midgame as usize];
-                eval.eg += params.isolated_pawn[pawn as usize % 8][Endgame as usize];
-                self.trace.term(|t| t.isolated_pawns[pawn as usize % 8][color as usize] += 1);
+                eval.mg += params.isolated_pawn[pawn % 8][Midgame];
+                eval.eg += params.isolated_pawn[pawn % 8][Endgame];
+                self.trace.term(|t| t.isolated_pawns[pawn % 8][color] += 1);
             }
         }
 

@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 
-use crate::types::PieceIndex;
+use super::eval_types::{PieceTables, PieceValues};
 
 #[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 #[repr(C)]
@@ -106,41 +106,8 @@ impl Default for EvalTrace {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
-#[repr(C)]
-pub struct PieceValues(pub [[i32; 2]; 6]);
-
-impl std::ops::Index<(GamePhase, PieceIndex)> for PieceValues {
-    type Output = i32;
-    fn index(&self, index: (GamePhase, PieceIndex)) -> &Self::Output {
-        &self.0[index.1 as usize][index.0 as usize]
-    }
-}
-
 pub const CHECKMATE_SCORE: i32 = 20000;
 pub const DRAW_SCORE: i32 = 0;
-
-#[derive(Clone, Copy, Debug)]
-pub enum GamePhase {
-    Midgame = 0,
-    Endgame = 1,
-}
-
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-#[repr(C)]
-pub struct PieceTables([[[i32; 2]; 64]; 6]);
-impl std::ops::Index<(GamePhase, PieceIndex, u8)> for PieceTables {
-    type Output = i32;
-    fn index(&self, index: (GamePhase, PieceIndex, u8)) -> &Self::Output {
-        &self.0[index.1 as usize][index.2 as usize][index.0 as usize]
-    }
-}
-
-impl Default for PieceTables {
-    fn default() -> Self {
-        PieceTables([[[0; 2]; 64]; 6])
-    }
-}
 
 pub const EVAL_PARAMS: EvalParams = EvalParams {
     piece_values: PieceValues([
