@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some(&"uci") => {
                 println!("id name cheers");
                 println!("id author Algorhythm");
-                println!("option name Hash type spin default 64");
+                println!("option name Hash type spin default 64 min 1");
                 println!("uciok");
             }
             Some(&"quit") => break,
@@ -39,8 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("readyok");
             }
             Some(&"position") => {
-                let moves_index;
-                match words.get(1) {
+                let moves_index = match words.get(1) {
                     Some(&"fen") => {
                         let mut test_boards = ChessGame::new(tt.clone());
                         let fen = words[2..=7].join(" ");
@@ -49,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         // position is valid
                         position.set_from_fen(fen)?;
-                        moves_index = 9
+                        9
                     }
                     Some(&"startpos") => {
                         position.reset();
@@ -59,10 +58,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 continue;
                             };
                         }
-                        moves_index = 3
+                        3
                     }
                     _ => unreachable!(),
-                }
+                };
                 if words.get(moves_index).is_some() {
                     words[moves_index..].iter().for_each(|xy| {
                         let move_ = Move::from_pair(&position, xy);
@@ -147,8 +146,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let option_name = words
                     .iter()
                     .position(|&w| w == "name")
-                    .map(|i| words.get(i + 1).map(|w| w.to_lowercase()))
-                    .flatten();
+                    .and_then(|i| words.get(i + 1).map(|w| w.to_lowercase()));
 
                 if let Some(option) = option_name {
                     match option.as_ref() {
@@ -156,11 +154,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                             let option_value = words
                                 .iter()
                                 .position(|&w| w == "value")
-                                .map(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
-                                .flatten()
+                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
                                 .flatten();
                             if let Some(val) = option_value {
-                                tt.set_size(val);
+                                if val >= 1 {
+                                    tt.set_size(val);
+                                } else {
+                                    println!("Hash table size must be greater than 1MB")
+                                }
                             } else {
                                 println!("Invalid value for hash table size");
                             }
