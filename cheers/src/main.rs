@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some(&"uci") => {
                 println!("id name cheers");
                 println!("id author Algorhythm");
-                println!("option name Hash type spin default 64 min 1");
+                println!("option name Hash type spin default 64 min 1 max 32768");
                 println!("uciok");
             }
             Some(&"quit") => break,
