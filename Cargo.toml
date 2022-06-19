@@ -5,3 +5,7 @@ members = [
     "cheers_tuning",
 ]
 
+[profile.test]
+opt-level = 3
+debug = true
+

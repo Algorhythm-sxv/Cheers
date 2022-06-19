@@ -2,7 +2,7 @@ use std::sync::atomic::*;
 
 use GamePhase::*;
 
-use super::*;
+use super::{evaluate::TraceTarget, *};
 use crate::transposition_table::NodeType::*;
 
 pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
@@ -146,10 +146,11 @@ impl ChessGame {
                         }
                         // order captures before quiet moves, MVV-LVA
                         if !m.en_passent() {
-                            score += PIECE_VALUES[(Midgame, self.piece_at(m.target() as usize))]
-                                - PIECE_VALUES[(Midgame, m.piece())] / 10;
+                            score += EVAL_PARAMS.piece_values
+                                [(Midgame, self.piece_at(m.target() as usize))]
+                                - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
                         } else {
-                            score += 90;
+                            score += (EVAL_PARAMS.piece_values[(Midgame, Pawn)] * 9) / 10;
                         }
                     }
                     score
@@ -206,18 +207,17 @@ impl ChessGame {
         last_move: Move,
         eval_params: EvalParams,
     ) -> i32 {
-        self._quiesce::<NoTracing>(alpha, beta, last_move, eval_params)
-            .0
+        self._quiesce::<()>(alpha, beta, last_move, eval_params).0
     }
 
-    pub fn _quiesce<T: TracingType>(
+    pub fn _quiesce<T: TraceTarget + Default>(
         &mut self,
         mut alpha: i32,
         beta: i32,
         last_move: Move,
         eval_params: EvalParams,
-    ) -> (i32, EvalTrace) {
-        let (stand_pat_score, mut best_trace) = self._evaluate::<T>(&eval_params);
+    ) -> (i32, T) {
+        let (stand_pat_score, mut best_trace) = self.evaluate::<T>();
 
         if stand_pat_score >= beta {
             return (beta, best_trace);
@@ -237,10 +237,11 @@ impl ChessGame {
                     }
                     // order captures before quiet moves, MVV-LVA
                     if !m.en_passent() {
-                        score += PIECE_VALUES[(Midgame, self.piece_at(m.target() as usize))]
-                            - PIECE_VALUES[(Midgame, m.piece())] / 10;
+                        score += EVAL_PARAMS.piece_values
+                            [(Midgame, self.piece_at(m.target() as usize))]
+                            - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
                     } else {
-                        score += (PIECE_VALUES[(Midgame, Pawn)] * 9) / 10;
+                        score += (EVAL_PARAMS.piece_values[(Midgame, Pawn)] * 9) / 10;
                     }
 
                     score

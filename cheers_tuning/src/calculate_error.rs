@@ -1,10 +1,9 @@
 use rayon::prelude::*;
 
 use cheers_lib::{
-    chessgame::{ChessGame, EvalParams, Tracing, EVAL_PARAMS},
+    chessgame::{ChessGame, EvalParams, EvalTrace, EVAL_PARAMS},
     moves::Move,
     transposition_table::TranspositionTable,
-    types::ColorIndex,
 };
 
 use crate::data_extraction::GameResult;
@@ -18,10 +17,10 @@ pub struct TuningTuple {
 
 #[derive(Clone)]
 pub struct TuningEntry {
-    phase: u8,
-    static_score: i16,
-    score: i16,
-    turn: ColorIndex,
+    phase: u16,
+    //static_score: i16,
+    //score: i16,
+    // turn: ColorIndex,
     result: GameResult,
     tuples: Vec<TuningTuple>,
 }
@@ -39,11 +38,11 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
 
     game.set_from_fen(position).unwrap();
 
-    let (mut score, trace) =
-        game._quiesce::<Tracing>(i32::MIN + 1, i32::MAX - 1, Move::null(), EVAL_PARAMS);
-    if game.current_player() == ColorIndex::Black {
-        score = -score;
-    }
+    let (_, trace) =
+        game._quiesce::<EvalTrace>(i32::MIN + 1, i32::MAX - 1, Move::null(), EVAL_PARAMS);
+    // if game.current_player() == ColorIndex::Black {
+    //     score = -score;
+    // }
     let tuples = trace
         .to_array()
         .chunks_exact(2)
@@ -61,41 +60,40 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
         + 4 * trace.queen_count.into_iter().sum::<i32>();
     let phase = (256 * (24 - material)) / 24;
 
-    let mut static_score = game.evaluate();
+    // let mut static_score = game.evaluate::<()>().0;
 
-    let turn = game.current_player();
-    if turn == ColorIndex::Black {
-        static_score = -static_score;
-        score = -score
-    }
+    // let turn = game.current_player();
+    // if turn == ColorIndex::Black {
+    //     static_score = -static_score;
+    //     score = -score
+    // }
 
     TuningEntry {
-        phase: phase as u8,
-        static_score: static_score as i16,
-        score: score as i16,
-        turn,
+        phase: phase as u16,
+        //static_score: static_score as i16,
+        //score: score as i16,
+        // turn,
         result: GameResult::from_f64(result),
         tuples,
     }
 }
 
-pub fn linear_evaluation(entry: &TuningEntry, eval_params: &EvalParams) -> i32 {
-    let params = eval_params.as_array();
-    let mut mg = 0i32;
-    let mut eg = 0i32;
+pub fn linear_evaluation(entry: &TuningEntry, params: &[f64; EvalParams::LEN]) -> f64 {
+    let mut mg = 0f64;
+    let mut eg = 0f64;
     for tuple in entry.tuples.iter() {
         let mg_weight = params[tuple.index];
         let eg_weight = params[tuple.index + 1];
 
-        mg += mg_weight * (tuple.white_coeff - tuple.black_coeff);
-        eg += eg_weight * (tuple.white_coeff - tuple.black_coeff);
+        mg += mg_weight * (tuple.white_coeff - tuple.black_coeff) as f64;
+        eg += eg_weight * (tuple.white_coeff - tuple.black_coeff) as f64;
     }
-    ((256 - entry.phase as i32) * mg + entry.phase as i32 * eg) / 256
+    ((256.0 - entry.phase as f64) * mg + entry.phase as f64 * eg) / 256.0
 }
 
 pub fn calculate_error(
     data: &[TuningEntry],
-    eval_params: &EvalParams,
+    eval_params: &[f64; EvalParams::LEN],
     k: f64,
     count: usize,
 ) -> f64 {
@@ -109,32 +107,36 @@ pub fn calculate_error(
         / count as f64
 }
 
-pub fn calculate_error_static(data: &[TuningEntry], k: f64, count: usize) -> f64 {
-    data.par_iter()
-        .take(count)
-        .map(|e| (e.result.into_f64() - sigmoid(e.static_score as f64, k)).powf(2.0))
-        .sum::<f64>()
-        / count as f64
-}
+//pub fn calculate_error_static(data: &[TuningEntry], k: f64, count: usize) -> f64 {
+//    data.par_iter()
+//        .take(count)
+//        .map(|e| (e.result.into_f64() - sigmoid(e.static_score as f64, k)).powf(2.0))
+//        .sum::<f64>()
+//        / count as f64
+//}
 
 pub fn calculate_gradient(
     data: &[TuningEntry],
-    eval_params: &EvalParams,
+    eval_params: &[f64; EvalParams::LEN],
     k: f64,
 ) -> [f64; EvalParams::LEN] {
-    *data
+    let par_score = data
         .par_iter()
         .fold(
             || Box::new([0f64; EvalParams::LEN]),
             |mut a: Box<[f64; EvalParams::LEN]>, b: &TuningEntry| {
                 let eval = linear_evaluation(b, eval_params);
                 let s = sigmoid(eval as f64, k);
-                let base = (b.result.into_f64()- s) * s * (1.0 - s);
+                let base = (b.result.into_f64() - s) * s * (1.0 - s);
 
                 for tuple in &b.tuples {
                     let i = tuple.index;
-                    a[i] = base * (tuple.white_coeff - tuple.black_coeff) as f64;
-                    a[i + 1] = base * (tuple.white_coeff - tuple.black_coeff) as f64;
+                    a[i] += base
+                        * (((256 - b.phase) as f64) / 256.0)
+                        * (tuple.white_coeff - tuple.black_coeff) as f64;
+                    a[i + 1] += base
+                        * (b.phase as f64 / 256.0)
+                        * (tuple.white_coeff - tuple.black_coeff) as f64;
                 }
                 a
             },
@@ -147,7 +149,9 @@ pub fn calculate_gradient(
                 }
                 a
             },
-        )
+        );
+
+    *par_score
 }
 
 // #[cfg(test)]

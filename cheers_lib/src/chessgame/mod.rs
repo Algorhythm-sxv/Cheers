@@ -21,7 +21,7 @@ mod search;
 pub use self::search::{NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 
 pub use self::eval_params::*;
-pub use self::evaluate::{TracingType, Tracing, NoTracing};
+pub use self::evaluate::{NoTracing, Tracing, TracingType};
 
 #[derive(Clone)]
 pub struct ChessGame {
@@ -410,6 +410,20 @@ impl ChessGame {
         spans
     }
 
+    pub fn pawn_attack_spans(&self, color: ColorIndex) -> BitBoard {
+        let mut spans = self.pawn_attacks(color);
+        if color == White {
+            spans |= spans << 8;
+            spans |= spans << 16;
+            spans |= spans << 32;
+        } else {
+            spans |= spans >> 8;
+            spans |= spans >> 16;
+            spans |= spans >> 32;
+        }
+        spans
+    }
+
     fn knight_attacks(&self, color: ColorIndex) -> BitBoard {
         let knights = self.piece_masks[(color, Knight)];
 
@@ -453,6 +467,17 @@ impl ChessGame {
     fn king_attacks(&self, color: ColorIndex) -> BitBoard {
         let king = self.piece_masks[(color, King)];
         lookup_king(king.lsb_index() as usize)
+    }
+
+    fn discovered_attacks(&self, square: usize, color: ColorIndex) -> BitBoard {
+        let rook_attacks = lookup_rook(square, self.combined);
+        let bishop_attacks = lookup_bishop(square, self.combined);
+
+        let rooks = self.piece_masks[(!color, Rook)] & rook_attacks.inverse();
+        let bishops = self.piece_masks[(!color, Bishop)] & bishop_attacks.inverse();
+
+        return (rooks & lookup_rook(square, self.combined & rook_attacks.inverse()))
+            | (bishops & lookup_bishop(square, self.combined & bishop_attacks.inverse()));
     }
 
     fn all_attacks(&self, color: ColorIndex, blocking_mask: BitBoard) -> BitBoard {
@@ -523,7 +548,7 @@ impl ChessGame {
     }
 
     pub fn legal_moves(&self) -> Vec<Move> {
-        let mut moves = Vec::with_capacity(50);
+        let mut moves = Vec::with_capacity(64);
         let color = self.current_player;
 
         let king_square = self.piece_masks[(color, King)].lsb_index() as usize;
@@ -1306,5 +1331,27 @@ impl ChessGame {
             );
         }
         println!("Moves: {}, Nodes: {}\n", move_count, node_count);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        chessgame::ChessGame,
+        lookup_tables::LookupTables,
+        transposition_table::{TranspositionTable, TT_DEFAULT_SIZE},
+        zobrist::initialise_zobrist_numbers,
+    };
+
+    #[test]
+    fn search_speed() -> Result<(), ()> {
+        LookupTables::generate_all(true);
+        initialise_zobrist_numbers();
+        let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
+        let game = ChessGame::new(tt);
+
+        game.search(Some(6), true);
+
+        Ok(())
     }
 }

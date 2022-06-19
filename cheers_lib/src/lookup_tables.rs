@@ -183,11 +183,30 @@ mod consts {
     pub const SIXTH_RANK: BitBoard = BitBoard(0x0000FF0000000000);
     pub const SEVENTH_RANK: BitBoard = BitBoard(0x00FF000000000000);
     pub const EIGHTH_RANK: BitBoard = BitBoard(0xFF00000000000000);
+
+    pub const LIGHT_SQUARES: BitBoard = BitBoard(0x5555555555555555);
+    pub const DARK_SQUARES: BitBoard = BitBoard(0xAAAAAAAAAAAAAAAA);
+
+    pub const LONG_DIAGONALS: BitBoard = BitBoard(0x8142241818244281);
 }
 pub use self::consts::*;
 
+pub fn adjacent_files(file: usize) -> BitBoard {
+    match file {
+        0 => B_FILE,
+        1 => A_FILE | C_FILE,
+        2 => B_FILE | D_FILE,
+        3 => C_FILE | E_FILE,
+        4 => D_FILE | F_FILE,
+        5 => E_FILE | G_FILE,
+        6 => F_FILE | H_FILE,
+        7 => G_FILE,
+        _ => unreachable!(),
+    }
+}
+
 // is t between a and b?
-fn between(a: i8, t: i8, b: i8) -> bool {
+pub fn between(a: i8, t: i8, b: i8) -> bool {
     if a < b {
         a < t && t < b
     } else {
@@ -296,10 +315,10 @@ fn generate_pawn_attack_tables() -> [Vec<BitBoard>; 2] {
     let mut tables = [vec![BitBoard::empty(); 64], vec![BitBoard::empty(); 64]];
 
     for square in 0..64 {
-        tables[White as usize][square as usize] = (BitBoard(1 << square << 7) & NOT_H_FILE)
-            | (BitBoard(1 << square << 9) & NOT_A_FILE);
-        tables[Black as usize][square as usize] = (BitBoard(1 << square >> 7) & NOT_A_FILE)
-            | (BitBoard(1 << square >> 9) & NOT_H_FILE);
+        tables[White as usize][square as usize] =
+            (BitBoard(1 << square << 7) & NOT_H_FILE) | (BitBoard(1 << square << 9) & NOT_A_FILE);
+        tables[Black as usize][square as usize] =
+            (BitBoard(1 << square >> 7) & NOT_A_FILE) | (BitBoard(1 << square >> 9) & NOT_H_FILE);
     }
 
     tables
