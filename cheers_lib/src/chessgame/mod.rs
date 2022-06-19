@@ -494,13 +494,17 @@ impl ChessGame {
     }
 
     pub fn is_pseudolegal(&self, start: u8, target: u8) -> bool {
+        // null move
+        if start == target {
+            return false;
+        }
+
         let piece = self.piece_at(start as usize);
         let color = self.current_player;
 
         match piece {
             Pawn => {
-                // TODO: replace with abs_diff
-                let d = (target as i8 - start as i8).abs();
+                let d = target.abs_diff(start);
                 if d % 8 != 0 {
                     // captures
                     (self.pawn_attacks(color)

@@ -39,7 +39,7 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
     game.set_from_fen(position).unwrap();
 
     let (_, trace) =
-        game._quiesce::<EvalTrace>(i32::MIN + 1, i32::MAX - 1, Move::null(), EVAL_PARAMS);
+        game._quiesce::<EvalTrace>(i32::MIN + 1, i32::MAX - 1, -1, Move::null(), EVAL_PARAMS);
     // if game.current_player() == ColorIndex::Black {
     //     score = -score;
     // }

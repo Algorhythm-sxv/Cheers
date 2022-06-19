@@ -24,7 +24,7 @@ impl NodeType {
 
 pub struct TTEntry {
     pub score: i32,
-    pub depth: u8,
+    pub depth: i8,
     pub move_start: u8,
     pub move_target: u8,
     pub promotion: PieceIndex,
@@ -38,7 +38,7 @@ impl TTEntry {
     pub fn from_data(data: u64) -> Self {
         Self {
             score: (data & 0xFFFFFFFF) as i32,
-            depth: ((data >> 32) & 0xFF) as u8,
+            depth: ((data >> 32) & 0xFF) as i8,
             move_start: ((data >> (32 + 8)) & 0xFF) as u8,
             move_target: ((data >> (32 + 8 + 8)) & 0xFF) as u8,
             promotion: PieceIndex::from_u8(((data >> (32 + 8 + 8 + 8)) & 0b111) as u8),
@@ -77,7 +77,7 @@ impl TranspositionTable {
         self.table.write().unwrap().resize_with(capacity, Entry::default);
     }
 
-    pub fn set(&self, hash: u64, best_move: Move, depth: u8, score: i32, node_type: NodeType) {
+    pub fn set(&self, hash: u64, best_move: Move, depth: i8, score: i32, node_type: NodeType) {
         use self::Ordering::*;
         let table = self.table.read().unwrap();
         let index = hash as usize % table.len();
@@ -89,7 +89,7 @@ impl TranspositionTable {
 
         let mut data = 0u64;
         data |= score as u32 as u64;
-        data |= (depth as u64) << 32;
+        data |= ((depth as u8) as u64) << 32;
         data |= (best_move.start() as u64) << (32 + 8);
         data |= (best_move.target() as u64) << (32 + 8 + 8);
         data |= (best_move.promotion() as u64) << (32 + 8 + 8 + 8);

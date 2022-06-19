@@ -1,8 +1,11 @@
 use std::sync::atomic::*;
 
-use super::{*, eval_types::{GamePhase, TraceTarget}};
-use GamePhase::*;
+use super::{
+    eval_types::{GamePhase, TraceTarget},
+    *,
+};
 use crate::transposition_table::NodeType::*;
+use GamePhase::*;
 
 pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -15,7 +18,7 @@ impl ChessGame {
         let mut best_move = Move::null();
         let mut boards = self.clone();
         for i in 0.. {
-            let result = boards.negamax(i32::MIN + 1, i32::MAX - 1, i, Move::null());
+            let result = boards.negamax(i32::MIN + 1, i32::MAX - 1, i as i32, Move::null());
             if !RUN_SEARCH.load(Ordering::Relaxed) {
                 // can't trust results from a partial search
                 break;
@@ -40,7 +43,7 @@ impl ChessGame {
         (score, best_move)
     }
 
-    fn negamax(&mut self, mut alpha: i32, beta: i32, depth: usize, last_move: Move) -> (i32, Move) {
+    fn negamax(&mut self, mut alpha: i32, beta: i32, depth: i32, last_move: Move) -> (i32, Move) {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
 
@@ -63,9 +66,9 @@ impl ChessGame {
 
         // quiescence search at full depth
         if depth == 0 {
-            let score = self.quiesce(alpha, beta, last_move, EVAL_PARAMS);
+            let score = self.quiesce(alpha, beta, -1, last_move, EVAL_PARAMS);
             self.transposition_table
-                .set(self.hash, Move::null(), depth as u8, score, Exact);
+                .set(self.hash, Move::null(), depth as i8, score, Exact);
             return (score, Move::null());
         }
 
@@ -86,7 +89,7 @@ impl ChessGame {
                     tt_entry.castling,
                 );
                 // prune on exact score/beta cutoff with pseudolegal move and equal/higher depth
-                if tt_entry.depth as usize >= depth
+                if tt_entry.depth as i32 >= depth
                     && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound)
                     && tt_entry.score >= beta
                 {
@@ -185,7 +188,7 @@ impl ChessGame {
                 self.unmake_move();
                 if score >= beta {
                     self.transposition_table
-                        .set(self.hash, move_, depth as u8, beta, LowerBound);
+                        .set(self.hash, move_, depth as i8, beta, LowerBound);
                     return (beta, move_);
                 }
                 if score > alpha {
@@ -195,7 +198,7 @@ impl ChessGame {
             }
         }
         self.transposition_table
-            .set(self.hash, best_move, depth as u8, alpha, UpperBound);
+            .set(self.hash, best_move, depth as i8, alpha, UpperBound);
         (alpha, best_move)
     }
 
@@ -203,16 +206,19 @@ impl ChessGame {
         &mut self,
         alpha: i32,
         beta: i32,
+        depth: i32,
         last_move: Move,
         eval_params: EvalParams,
     ) -> i32 {
-        self._quiesce::<()>(alpha, beta, last_move, eval_params).0
+        self._quiesce::<()>(alpha, beta, depth, last_move, eval_params)
+            .0
     }
 
     pub fn _quiesce<T: TraceTarget + Default>(
         &mut self,
         mut alpha: i32,
         beta: i32,
+        depth: i32,
         last_move: Move,
         eval_params: EvalParams,
     ) -> (i32, T) {
@@ -223,6 +229,23 @@ impl ChessGame {
         }
         alpha = alpha.max(stand_pat_score);
 
+        // transposition table lookup
+        let mut tt_move = Move::null();
+        if let Some(tt_entry) = self.transposition_table.get(self.hash) {
+            if self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target) {
+                tt_move = Move::new(
+                    tt_entry.move_start,
+                    tt_entry.move_target,
+                    self.piece_at(tt_entry.move_start as usize),
+                    tt_entry.promotion,
+                    tt_entry.en_passent_capture
+                        || self.piece_at(tt_entry.move_target as usize) != NoPiece,
+                    tt_entry.double_pawn_push,
+                    tt_entry.en_passent_capture,
+                    tt_entry.castling,
+                );
+            }
+        }
         let mut moves: Vec<(Move, i32)> = self
             .legal_moves()
             .into_iter()
@@ -230,6 +253,13 @@ impl ChessGame {
             .map(|m| {
                 (m, {
                     let mut score = 0i32;
+                    // try the transposition table move early
+                    if m.start() == tt_move.start()
+                        && m.target() == tt_move.target()
+                        && tt_move.capture()
+                    {
+                        score += 1000;
+                    }
                     // try recaptures first
                     if last_move.capture() && m.target() == last_move.target() {
                         score += 1001;
@@ -249,19 +279,26 @@ impl ChessGame {
             .collect();
         moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
 
+        let mut best_move = Move::null();
         for (move_, _) in moves.iter() {
             self.make_move(*move_);
-            let (mut score, trace) = self._quiesce::<T>(-beta, -alpha, *move_, eval_params);
+            let (mut score, trace) =
+                self._quiesce::<T>(-beta, -alpha, depth - 1, *move_, eval_params);
             score = -score;
             self.unmake_move();
             if score >= beta {
+                self.transposition_table
+                    .set(self.hash, *move_, depth as i8, beta, LowerBound);
                 return (beta, trace);
             }
             if score > alpha {
                 alpha = score;
                 best_trace = trace;
+                best_move = *move_;
             }
         }
+        self.transposition_table
+            .set(self.hash, best_move, depth as i8, alpha, UpperBound);
         (alpha, best_trace)
     }
 }

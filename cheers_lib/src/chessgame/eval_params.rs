@@ -26,6 +26,8 @@ pub struct EvalParams {
     pub queen_mobility: [[i32; 2]; 28],
     pub queen_discovery_risk: [i32; 2],
 
+    pub king_defenders: [[i32; 2]; 9],
+
     pub passed_pawn: [i32; 2],
     pub double_pawn: [i32; 2],
     pub isolated_pawn: [[i32; 2]; 8],
@@ -75,6 +77,8 @@ pub struct EvalTrace {
 
     pub queen_mobility: [[i32; 2]; 28],
     pub queen_discovery_risks: [i32; 2],
+
+    pub king_defenders: [[i32; 2]; 9],
 
     pub passed_pawns: [i32; 2],
     pub double_pawns: [i32; 2],
@@ -203,6 +207,7 @@ pub const EVAL_PARAMS: EvalParams = EvalParams {
         [-18, -93],
     ],
     queen_discovery_risk: [-11, 3],
+    king_defenders: [[0; 2]; 9],
     passed_pawn: [-19, 15],
     double_pawn: [-42, -95],
     isolated_pawn: [
