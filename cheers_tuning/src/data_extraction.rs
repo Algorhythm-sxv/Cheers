@@ -14,13 +14,13 @@ impl GameResult {
         }
     }
     pub fn from_f64(n: f64) -> Self {
-        return if n.abs() < 0.01 {
+        if n.abs() < 0.01 {
             BlackWin
         } else if (n - 1.0).abs() < 0.01 {
             WhiteWin
         } else {
             Draw
-        };
+        }
     }
 }
 use cheers_lib::{
