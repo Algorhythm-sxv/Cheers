@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Index};
 
 use crate::{
     bitboard::BitBoard,
@@ -67,7 +67,7 @@ pub fn square(coord: &str) -> u8 {
 // double_pawn_push: 23
 // enpassent_capture: 24
 // castling: 25
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Move(u32);
 
 impl Move {
@@ -225,6 +225,12 @@ impl Move {
     }
 }
 
+impl Default for Move {
+    fn default() -> Self {
+        Self::null()
+    }
+}
+
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "\ns/e\t\tpiece\t\tprom\t\tcapture\t\tdp\t\tep\t\tcastle")?;
@@ -293,4 +299,36 @@ pub fn pick_move(move_list: &mut [(Move, i32)], current_index: usize) {
     }
 
     move_list.swap(current_index, best_index);
+}
+
+#[derive(Copy, Clone)]
+pub struct KillerMoves<const N: usize>([[Move; N]; 128]);
+
+impl<const N: usize> KillerMoves<N> {
+    pub fn new() -> Self {
+        Self([[Move::null(); N]; 128])
+    }
+    pub fn push(&mut self, m: Move, ply: usize) {
+        let mut moves = self.0[ply];
+        if !moves.contains(&m) {
+            for i in (1..N).rev() {
+                moves[i] = moves[i-1];
+            }
+            moves[0] = m;
+        }
+    }
+}
+
+impl<const N: usize> Index<usize> for KillerMoves<N> {
+    type Output = [Move; N];
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+impl<const N: usize> Default for KillerMoves<N> {
+    fn default() -> Self {
+        Self::new()
+    }
 }

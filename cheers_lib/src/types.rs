@@ -189,3 +189,4 @@ impl std::ops::IndexMut<ColorIndex> for CastlingRights {
         &mut self.0[index as usize]
     }
 }
+

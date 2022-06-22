@@ -36,6 +36,7 @@ pub struct ChessGame {
     position_history: Vec<u64>,
     unmove_history: Vec<UnMove>,
     transposition_table: TranspositionTable,
+    killer_moves: KillerMoves<2>,
     eval_params: EvalParams,
 }
 
@@ -53,6 +54,7 @@ impl ChessGame {
             position_history: Vec::new(),
             unmove_history: Vec::new(),
             transposition_table: tt,
+            killer_moves: KillerMoves::new(),
             eval_params: EVAL_PARAMS,
         };
         boards.combined = boards.color_masks[White] | boards.color_masks[Black];
@@ -76,6 +78,7 @@ impl ChessGame {
             position_history: Vec::new(),
             unmove_history: Vec::new(),
             transposition_table: self.transposition_table.clone(),
+            killer_moves: KillerMoves::new(),
             eval_params: params,
         };
         self.combined = self.color_masks[White] | self.color_masks[Black];

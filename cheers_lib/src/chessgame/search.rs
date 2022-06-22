@@ -18,7 +18,7 @@ impl ChessGame {
         let mut best_move = Move::null();
         let mut boards = self.clone();
         for i in 0.. {
-            let result = boards.negamax(i32::MIN + 1, i32::MAX - 1, i as i32, Move::null());
+            let result = boards.negamax(i32::MIN + 1, i32::MAX - 1, i as i32, 0, Move::null());
             if !RUN_SEARCH.load(Ordering::Relaxed) {
                 // can't trust results from a partial search
                 break;
@@ -43,7 +43,14 @@ impl ChessGame {
         (score, best_move)
     }
 
-    fn negamax(&mut self, mut alpha: i32, beta: i32, depth: i32, last_move: Move) -> (i32, Move) {
+    fn negamax(
+        &mut self,
+        mut alpha: i32,
+        beta: i32,
+        depth: i32,
+        ply: usize,
+        last_move: Move,
+    ) -> (i32, Move) {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
 
@@ -105,7 +112,9 @@ impl ChessGame {
             && self.has_non_pawn_material(self.current_player)
         {
             self.make_null_move();
-            let null_score = -self.negamax(-beta, -beta + 1, depth - 3, Move::null()).0;
+            let null_score = -self
+                .negamax(-beta, -beta + 1, depth - 3, ply + 1, Move::null())
+                .0;
             self.unmake_null_move();
 
             if null_score >= beta {
@@ -139,27 +148,30 @@ impl ChessGame {
                     let mut score = 0i32;
                     // try the transposition table move early
                     if m.start() == tt_move.start() && m.target() == tt_move.target() {
-                        score += 1000;
-                    }
-                    if m.capture() {
-                        // try recaptures first
+                        score += 100_000;
+                    } else if m.capture() {
+                        score += 2000;
+
+                        // try recaptures first, least valuable piece first
                         if last_move.capture() && m.target() == last_move.target() {
-                            score += 1001;
+                            score += 10_000 - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
                         }
-                        // order captures before quiet moves, MVV-LVA
+                        // order all captures before quiet moves, MVV-LVA
                         if !m.en_passent() {
                             score += EVAL_PARAMS.piece_values
                                 [(Midgame, self.piece_at(m.target() as usize))]
-                                - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
-                        } else {
-                            score += (EVAL_PARAMS.piece_values[(Midgame, Pawn)] * 9) / 10;
+                                - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
                         }
+                    // quiet killer moves get sorted after captures but before other quiet moves
+                    } else if self.killer_moves[ply].contains(&m) {
+                        score += 500;
                     }
                     score
                 })
             })
             .collect::<Vec<(Move, i32)>>();
         // moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
+        // make sure the reported best move is at least legal
         let mut best_move = moves.first().unwrap().0;
 
         for i in 0..moves.len() {
@@ -174,7 +186,9 @@ impl ChessGame {
             {
                 self.make_move(move_);
                 // search with a null window; we only care whether it fails low or not
-                let score = -self.negamax(-alpha - 1, -alpha, depth - 2, move_).0;
+                let score = -self
+                    .negamax(-alpha - 1, -alpha, depth - 2, ply + 1, move_)
+                    .0;
                 self.unmake_move();
                 score
             } else {
@@ -184,11 +198,14 @@ impl ChessGame {
             // search at full depth, if a reduced move improves alpha it is searched again
             if score > alpha {
                 self.make_move(move_);
-                score = -self.negamax(-beta, -alpha, depth - 1, move_).0;
+                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_).0;
                 self.unmake_move();
                 if score >= beta {
                     self.transposition_table
                         .set(self.hash, move_, depth as i8, beta, LowerBound);
+                    if !move_.capture() && move_.promotion() == NoPiece {
+                        self.killer_moves.push(move_, ply);
+                    }
                     return (beta, move_);
                 }
                 if score > alpha {
@@ -258,21 +275,18 @@ impl ChessGame {
                         && m.target() == tt_move.target()
                         && tt_move.capture()
                     {
-                        score += 1000;
+                        score += 10_000;
                     }
                     // try recaptures first
                     if last_move.capture() && m.target() == last_move.target() {
-                        score += 1001;
+                        score += 2000;
                     }
                     // order captures before quiet moves, MVV-LVA
                     if !m.en_passent() {
                         score += EVAL_PARAMS.piece_values
                             [(Midgame, self.piece_at(m.target() as usize))]
-                            - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
-                    } else {
-                        score += (EVAL_PARAMS.piece_values[(Midgame, Pawn)] * 9) / 10;
-                    }
-
+                            - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
+                    } 
                     score
                 })
             })
