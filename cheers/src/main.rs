@@ -22,6 +22,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
     let mut position = ChessGame::new(tt.clone());
 
+    if std::env::args().nth(1) == Some(String::from("bench")) {
+        let bench_game = position.clone();
+        let start = Instant::now();
+        bench_game.search(Some(7), true);
+        let end = Instant::now();
+        let time = end - start;
+
+        let nodes = NODE_COUNT.load(Ordering::Relaxed);
+        let nps = (nodes as f64 / time.as_secs_f64()) as usize;
+        println!("nodes {nodes} nps {nps}");
+        return Ok(());
+    }
+
     for line in stdin().lock().lines() {
         let line = line?;
 
