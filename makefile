@@ -1,4 +1,3 @@
-EXE = cheers
-
 rule:
-	cargo rustc --release -p cheers -- --C target-cpu=native
+	RUSTFLAGS="-Ctarget-cpu=native" cargo build --release
+	cp target/release/cheers $(EXE)
