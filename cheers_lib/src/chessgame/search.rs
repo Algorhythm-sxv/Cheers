@@ -19,7 +19,7 @@ impl ChessGame {
         let mut boards = self.clone();
         for i in 0.. {
             let result = boards.negamax(i32::MIN + 1, i32::MAX - 1, i as i32, Move::null());
-            if !RUN_SEARCH.load(Ordering::Relaxed) {
+            if !RUN_SEARCH.load(Ordering::Relaxed) && i > 1 {
                 // can't trust results from a partial search
                 break;
             }
@@ -48,7 +48,7 @@ impl ChessGame {
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
 
         // terminate search early
-        if !RUN_SEARCH.load(Ordering::Relaxed) {
+        if !RUN_SEARCH.load(Ordering::Relaxed) && depth > 1 {
             return (0, Move::null());
         }
 
