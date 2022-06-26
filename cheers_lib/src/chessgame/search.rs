@@ -165,6 +165,10 @@ impl ChessGame {
                     // quiet killer moves get sorted after captures but before other quiet moves
                     } else if self.killer_moves[ply].contains(&m) {
                         score += 500;
+                    // quiet moves get ordered by their history heuristic
+                    } else {
+                        score += self.history_tables[self.current_player()][m.piece()]
+                            [m.target() as usize];
                     }
                     score
                 })
@@ -203,8 +207,12 @@ impl ChessGame {
                 if score >= beta {
                     self.transposition_table
                         .set(self.hash, move_, depth as i8, beta, LowerBound);
-                    if !move_.capture() && move_.promotion() == NoPiece {
-                        self.killer_moves.push(move_, ply);
+                    if !move_.capture() {
+                        self.history_tables[self.current_player][move_.piece()]
+                            [move_.target() as usize] += depth * depth;
+                        if move_.promotion() == NoPiece {
+                            self.killer_moves.push(move_, ply);
+                        }
                     }
                     return (beta, move_);
                 }
@@ -286,7 +294,7 @@ impl ChessGame {
                         score += EVAL_PARAMS.piece_values
                             [(Midgame, self.piece_at(m.target() as usize))]
                             - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
-                    } 
+                    }
                     score
                 })
             })

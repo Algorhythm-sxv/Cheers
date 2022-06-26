@@ -15,9 +15,9 @@ use crate::{
 };
 
 mod eval_params;
+mod eval_types;
 mod evaluate;
 mod search;
-mod eval_types;
 
 pub use self::search::{NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 
@@ -37,7 +37,7 @@ pub struct ChessGame {
     unmove_history: Vec<UnMove>,
     transposition_table: TranspositionTable,
     killer_moves: KillerMoves<2>,
-    eval_params: EvalParams,
+    history_tables: [[[i32; 64]; 6]; 2],
 }
 
 impl ChessGame {
@@ -55,7 +55,7 @@ impl ChessGame {
             unmove_history: Vec::new(),
             transposition_table: tt,
             killer_moves: KillerMoves::new(),
-            eval_params: EVAL_PARAMS,
+            history_tables: [[[0; 64]; 6]; 2],
         };
         boards.combined = boards.color_masks[White] | boards.color_masks[Black];
         boards
@@ -65,23 +65,6 @@ impl ChessGame {
     }
 
     pub fn reset(&mut self) {
-        let params = self.eval_params;
-        *self = Self {
-            color_masks: ColorMasks::default(),
-            combined: BitBoard::empty(),
-            piece_masks: PieceMasks::default(),
-            current_player: ColorIndex::default(),
-            castling_rights: CastlingRights::default(),
-            en_passent_mask: BitBoard::empty(),
-            halfmove_clock: 0,
-            hash: 0,
-            position_history: Vec::new(),
-            unmove_history: Vec::new(),
-            transposition_table: self.transposition_table.clone(),
-            killer_moves: KillerMoves::new(),
-            eval_params: params,
-        };
-        self.combined = self.color_masks[White] | self.color_masks[Black];
         self.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
             .unwrap()
     }
@@ -103,7 +86,7 @@ impl ChessGame {
             unmove_history: Vec::new(),
             transposition_table: self.transposition_table.clone(),
             killer_moves: KillerMoves::new(),
-            eval_params: self.eval_params,
+            history_tables: [[[0; 64]; 6]; 2],
         };
 
         self.piece_masks = PieceMasks([[BitBoard::empty(); 6]; 2]);
@@ -325,14 +308,6 @@ impl ChessGame {
         fen.push_str(&(self.position_history.len() / 2).to_string());
 
         fen
-    }
-
-    pub fn set_eval_params(&mut self, params: EvalParams) {
-        self.eval_params = params;
-    }
-
-    pub fn eval_params(&self) -> EvalParams {
-        self.eval_params
     }
 
     pub fn piece_masks(&self) -> PieceMasks {
@@ -969,7 +944,11 @@ impl ChessGame {
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture = (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
-                moves.push(Move::knight_move(knight_square as u8, target as u8, capture));
+                moves.push(Move::knight_move(
+                    knight_square as u8,
+                    target as u8,
+                    capture,
+                ));
             }
         }
 
@@ -981,7 +960,11 @@ impl ChessGame {
                 & (push_mask | capture_mask);
             for target in attacks {
                 let capture = (self.color_masks[!color] & BitBoard(1 << target)).is_not_empty();
-                moves.push(Move::bishop_move(bishop_square as u8, target as u8, capture));
+                moves.push(Move::bishop_move(
+                    bishop_square as u8,
+                    target as u8,
+                    capture,
+                ));
             }
         }
 
