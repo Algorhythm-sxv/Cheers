@@ -102,6 +102,7 @@ impl ChessGame {
             position_history: Vec::new(),
             unmove_history: Vec::new(),
             transposition_table: self.transposition_table.clone(),
+            killer_moves: KillerMoves::new(),
             eval_params: self.eval_params,
         };
 
