@@ -162,6 +162,10 @@ impl ChessGame {
                                 [(Midgame, self.piece_at(m.target() as usize))]
                                 - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
                         }
+                    // order queen and rook promotions ahead of quiet moves
+                    else if m.promotion() == Queen || m.promotion() == Rook {
+                        score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
+                    }
                     // quiet killer moves get sorted after captures but before other quiet moves
                     } else if self.killer_moves[ply].contains(&m) {
                         score += 500;
