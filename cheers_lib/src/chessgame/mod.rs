@@ -87,6 +87,21 @@ impl ChessGame {
         &mut self,
         fen: impl Into<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        *self = Self {
+            color_masks: ColorMasks::default(),
+            combined: BitBoard::empty(),
+            piece_masks: PieceMasks::default(),
+            current_player: ColorIndex::default(),
+            castling_rights: CastlingRights::default(),
+            en_passent_mask: BitBoard::empty(),
+            halfmove_clock: 0,
+            hash: 0,
+            position_history: Vec::new(),
+            unmove_history: Vec::new(),
+            transposition_table: self.transposition_table.clone(),
+            eval_params: self.eval_params,
+        };
+
         self.piece_masks = PieceMasks([[BitBoard::empty(); 6]; 2]);
         self.color_masks = ColorMasks([BitBoard::empty(); 2]);
 
