@@ -24,6 +24,9 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let white_king_square = self.game.piece_masks()[(White, King)].lsb_index() as i32;
         let black_king_square = self.game.piece_masks()[(Black, King)].lsb_index() as i32;
 
+        let white_king_attacks = lookup_king(white_king_square as usize);
+        let black_king_attacks = lookup_king(black_king_square as usize);
+
         // initialise eval info
         let info = EvalInfo {
             mobility_area: [
@@ -41,8 +44,8 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
             seventh_rank: [SEVENTH_RANK, SECOND_RANK],
             king_square: [white_king_square, black_king_square],
             king_area: [
-                lookup_king(white_king_square as usize),
-                lookup_king(black_king_square as usize),
+                white_king_attacks | (white_king_attacks << 8),
+                black_king_attacks | (black_king_attacks >> 8),
             ],
         };
 
@@ -321,6 +324,16 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         eval.mg += params.piece_tables[(Midgame, King, king)];
         eval.eg += params.piece_tables[(Endgame, King, king)];
         self.trace.term(|t| t.king_placement[king][color] += 1);
+
+        // pawn and minor piece defenders
+        let defenders = (info.king_area[color]
+            & (self.game.piece_masks()[(color, Pawn)]
+                | self.game.piece_masks()[(color, Knight)]
+                | self.game.piece_masks()[(color, Bishop)]))
+            .count_ones() as usize;
+        eval.mg += params.king_defenders[defenders][Midgame];
+        eval.eg += params.king_defenders[defenders][Endgame];
+        self.trace.term(|t| t.king_defenders[defenders][color] += 1);
 
         eval
     }
