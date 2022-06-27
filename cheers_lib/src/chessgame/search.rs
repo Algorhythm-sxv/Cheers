@@ -256,19 +256,21 @@ impl ChessGame {
 
         // transposition table lookup
         let mut tt_move = Move::null();
-        if let Some(tt_entry) = self.transposition_table.get(self.hash) {
-            if self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target) {
-                tt_move = Move::new(
-                    tt_entry.move_start,
-                    tt_entry.move_target,
-                    self.piece_at(tt_entry.move_start as usize),
-                    tt_entry.promotion,
-                    tt_entry.en_passent_capture
-                        || self.piece_at(tt_entry.move_target as usize) != NoPiece,
-                    tt_entry.double_pawn_push,
-                    tt_entry.en_passent_capture,
-                    tt_entry.castling,
-                );
+        if !T::TRACING {
+            if let Some(tt_entry) = self.transposition_table.get(self.hash) {
+                if self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target) {
+                    tt_move = Move::new(
+                        tt_entry.move_start,
+                        tt_entry.move_target,
+                        self.piece_at(tt_entry.move_start as usize),
+                        tt_entry.promotion,
+                        tt_entry.en_passent_capture
+                            || self.piece_at(tt_entry.move_target as usize) != NoPiece,
+                        tt_entry.double_pawn_push,
+                        tt_entry.en_passent_capture,
+                        tt_entry.castling,
+                    );
+                }
             }
         }
         let mut moves: Vec<(Move, i32)> = self
@@ -309,8 +311,10 @@ impl ChessGame {
             score = -score;
             self.unmake_move();
             if score >= beta {
-                self.transposition_table
-                    .set(self.hash, *move_, depth as i8, beta, LowerBound);
+                if !T::TRACING {
+                    self.transposition_table
+                        .set(self.hash, *move_, depth as i8, beta, LowerBound);
+                }
                 return (beta, trace);
             }
             if score > alpha {
@@ -319,8 +323,10 @@ impl ChessGame {
                 best_move = *move_;
             }
         }
-        self.transposition_table
-            .set(self.hash, best_move, depth as i8, alpha, UpperBound);
+        if !T::TRACING {
+            self.transposition_table
+                .set(self.hash, best_move, depth as i8, alpha, UpperBound);
+        }
         (alpha, best_trace)
     }
 }

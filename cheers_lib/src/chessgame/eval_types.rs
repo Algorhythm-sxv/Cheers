@@ -67,10 +67,12 @@ impl Sub<EvalScore> for EvalScore {
 }
 
 pub trait TraceTarget {
+    const TRACING: bool = false;
     fn term(&mut self, _term: impl FnMut(&mut EvalTrace)) {}
 }
 
 impl TraceTarget for EvalTrace {
+    const TRACING: bool = true;
     fn term(&mut self, mut term: impl FnMut(&mut EvalTrace)) {
         term(self)
     }
