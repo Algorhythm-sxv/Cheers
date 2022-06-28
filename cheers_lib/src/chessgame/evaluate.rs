@@ -390,10 +390,11 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
                 White => ((board & NOT_H_FILE) << 9) | ((board & NOT_A_FILE) << 7),
                 Black => ((board & NOT_A_FILE) >> 9) | ((board & NOT_H_FILE) >> 7),
             };
+            let threats = attacks & self.game.piece_masks()[(!color, Pawn)];
             let neighbors = self.game.piece_masks()[(color, Pawn)] & adjacent_files(pawn % 8);
 
             // isolated pawns
-            if attacks.is_empty() && neighbors.is_empty() {
+            if threats.is_empty() && neighbors.is_empty() {
                 eval.mg += params.isolated_pawn[pawn % 8][Midgame];
                 eval.eg += params.isolated_pawn[pawn % 8][Endgame];
                 self.trace.term(|t| t.isolated_pawns[pawn % 8][color] += 1);

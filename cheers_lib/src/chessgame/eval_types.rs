@@ -99,7 +99,7 @@ impl<T, const N: usize> IndexMut<GamePhase> for [T;N] {
     }
 }
 
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable, PartialEq, Eq)]
 #[repr(C)]
 pub struct PieceTables(pub [[[i32; 2]; 64]; 6]);
 impl std::ops::Index<(GamePhase, PieceIndex, usize)> for PieceTables {
@@ -115,7 +115,7 @@ impl Default for PieceTables {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(C)]
 pub struct PieceValues(pub [[i32; 2]; 6]);
 
