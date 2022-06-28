@@ -12,17 +12,17 @@ pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Copy, Clone, Default)]
-pub struct PrincipleVariation {
+pub struct PrincipalVariation {
     pub len: usize,
     pub moves: [Move; 16],
 }
 
-impl PrincipleVariation {
+impl PrincipalVariation {
     pub fn new() -> Self {
         Self::default()
     }
 }
-impl Display for PrincipleVariation {
+impl Display for PrincipalVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for m in self.moves {
             if m != Move::null() {
@@ -40,7 +40,7 @@ impl ChessGame {
         let mut best_move = Move::null();
         let mut boards = self.clone();
         for i in 0.. {
-            let mut pv = PrincipleVariation::new();
+            let mut pv = PrincipalVariation::new();
             let result = boards.negamax(
                 i32::MIN + 1,
                 i32::MAX - 1,
@@ -81,7 +81,7 @@ impl ChessGame {
         depth: i32,
         ply: usize,
         last_move: Move,
-        pv: &mut PrincipleVariation,
+        pv: &mut PrincipalVariation,
     ) -> (i32, Move) {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -103,7 +103,7 @@ impl ChessGame {
             return (DRAW_SCORE, Move::null());
         }
 
-        let mut line = PrincipleVariation::new();
+        let mut line = PrincipalVariation::new();
         // quiescence search at full depth
         if depth == 0 {
             pv.len = 0;
