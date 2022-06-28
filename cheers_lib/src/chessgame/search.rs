@@ -1,4 +1,4 @@
-use std::sync::atomic::*;
+use std::{fmt::Display, sync::atomic::*};
 
 use super::{
     eval_types::{GamePhase, TraceTarget},
@@ -11,6 +11,28 @@ pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+#[derive(Copy, Clone, Default)]
+pub struct PrincipleVariation {
+    pub len: usize,
+    pub moves: [Move; 16],
+}
+
+impl PrincipleVariation {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+impl Display for PrincipleVariation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for m in self.moves {
+            if m != Move::null() {
+                write!(f, "{} ", m.coords())?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl ChessGame {
     pub fn search(&self, max_depth: Option<usize>, quiet: bool) -> (i32, Move) {
         RUN_SEARCH.store(true, Ordering::Relaxed);
@@ -18,7 +40,15 @@ impl ChessGame {
         let mut best_move = Move::null();
         let mut boards = self.clone();
         for i in 0.. {
-            let result = boards.negamax(i32::MIN + 1, i32::MAX - 1, i as i32, 0, Move::null());
+            let mut pv = PrincipleVariation::new();
+            let result = boards.negamax(
+                i32::MIN + 1,
+                i32::MAX - 1,
+                i as i32,
+                0,
+                Move::null(),
+                &mut pv,
+            );
             if !RUN_SEARCH.load(Ordering::Relaxed) && i > 1 {
                 // can't trust results from a partial search
                 break;
@@ -26,7 +56,8 @@ impl ChessGame {
             score = result.0;
             best_move = result.1;
             let pv_string = if !best_move.is_null() {
-                format!(" pv {}", best_move.coords())
+                // format!(" pv {}", best_move.coords())
+                format!(" pv {pv}")
             } else {
                 String::from("")
             };
@@ -50,6 +81,7 @@ impl ChessGame {
         depth: i32,
         ply: usize,
         last_move: Move,
+        pv: &mut PrincipleVariation,
     ) -> (i32, Move) {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -71,8 +103,10 @@ impl ChessGame {
             return (DRAW_SCORE, Move::null());
         }
 
+        let mut line = PrincipleVariation::new();
         // quiescence search at full depth
         if depth == 0 {
+            pv.len = 0;
             let score = self.quiesce(alpha, beta, -1, last_move, EVAL_PARAMS);
             self.transposition_table
                 .set(self.hash, Move::null(), depth as i8, score, Exact);
@@ -113,7 +147,14 @@ impl ChessGame {
         {
             self.make_null_move();
             let null_score = -self
-                .negamax(-beta, -beta + 1, depth - 3, ply + 1, Move::null())
+                .negamax(
+                    -beta,
+                    -beta + 1,
+                    depth - 3,
+                    ply + 1,
+                    Move::null(),
+                    &mut line,
+                )
                 .0;
             self.unmake_null_move();
 
@@ -191,7 +232,7 @@ impl ChessGame {
                 self.make_move(move_);
                 // search with a null window; we only care whether it fails low or not
                 let score = -self
-                    .negamax(-alpha - 1, -alpha, depth - 2, ply + 1, move_)
+                    .negamax(-alpha - 1, -alpha, depth - 2, ply + 1, move_, &mut line)
                     .0;
                 self.unmake_move();
                 score
@@ -202,7 +243,9 @@ impl ChessGame {
             // search at full depth, if a reduced move improves alpha it is searched again
             if score > alpha {
                 self.make_move(move_);
-                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_).0;
+                score = -self
+                    .negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line)
+                    .0;
                 self.unmake_move();
                 if score >= beta {
                     self.transposition_table
@@ -217,6 +260,11 @@ impl ChessGame {
                     return (beta, move_);
                 }
                 if score > alpha {
+                    // update PV
+                    pv.moves[0] = move_;
+                    pv.moves[1..(line.len + 1)].copy_from_slice(&line.moves[..line.len]);
+                    pv.len = line.len + 1;
+
                     alpha = score;
                     best_move = move_;
                 }
