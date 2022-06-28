@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
         let start = Instant::now();
-        bench_game.search(Some(7), true);
+        bench_game.search(Some(9), true);
         let end = Instant::now();
         let time = end - start;
 

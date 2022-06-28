@@ -67,10 +67,12 @@ impl Sub<EvalScore> for EvalScore {
 }
 
 pub trait TraceTarget {
+    const TRACING: bool = false;
     fn term(&mut self, _term: impl FnMut(&mut EvalTrace)) {}
 }
 
 impl TraceTarget for EvalTrace {
+    const TRACING: bool = true;
     fn term(&mut self, mut term: impl FnMut(&mut EvalTrace)) {
         term(self)
     }
@@ -97,7 +99,7 @@ impl<T, const N: usize> IndexMut<GamePhase> for [T;N] {
     }
 }
 
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable, PartialEq, Eq)]
 #[repr(C)]
 pub struct PieceTables(pub [[[i32; 2]; 64]; 6]);
 impl std::ops::Index<(GamePhase, PieceIndex, usize)> for PieceTables {
@@ -113,7 +115,7 @@ impl Default for PieceTables {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(C)]
 pub struct PieceValues(pub [[i32; 2]; 6]);
 
