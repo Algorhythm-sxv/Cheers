@@ -98,12 +98,15 @@ impl ChessGame {
                 .count()
                 == 2
         {
+            // exact score so we must reset the pv
+            pv.len = 0;
             return (DRAW_SCORE, Move::null());
         }
 
         let mut line = PrincipalVariation::new();
         // quiescence search at full depth
         if depth == 0 {
+            // exact score so we must reset the pv
             pv.len = 0;
             let score = self.quiesce(alpha, beta, -1, last_move, EVAL_PARAMS);
             self.transposition_table
@@ -132,6 +135,8 @@ impl ChessGame {
                     && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound)
                     && tt_entry.score >= beta
                 {
+                    // exact score (?) so we must reset the pv
+                    pv.len = 0;
                     return (beta, tt_move);
                 }
             }
@@ -164,7 +169,7 @@ impl ChessGame {
         let moves = self.legal_moves();
 
         if moves.is_empty() {
-            // we will have an exact score here, so we must reset the pv like with quiescence search
+            // exact score, so we must reset the pv
             pv.len = 0;
             if self.in_check(self.current_player) {
                 // checkmate, preferring shorter mating sequences
