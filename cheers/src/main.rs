@@ -254,9 +254,9 @@ fn engine_thread(search_params: SearchParams) -> Result<(), Box<dyn Error>> {
     let max_depth = search_params.depth;
     // spawn another thread to do the actual searching
     thread::spawn(move || {
-        let (score, best_move) = boards.search(max_depth, false);
+        let (score, pv) = boards.search(max_depth, false);
         println!("info score cp {score}");
-        println!("bestmove {}", best_move.coords(),);
+        println!("bestmove {}", pv.moves[0].coords(),);
     });
 
     let search_start = Instant::now();

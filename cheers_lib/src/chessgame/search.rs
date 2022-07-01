@@ -32,14 +32,13 @@ impl Display for PrincipalVariation {
 }
 
 impl ChessGame {
-    pub fn search(&self, max_depth: Option<usize>, quiet: bool) -> (i32, Move) {
+    pub fn search(&self, max_depth: Option<usize>, quiet: bool) -> (i32, PrincipalVariation) {
         RUN_SEARCH.store(true, Ordering::Relaxed);
         let mut score = i32::MIN;
-        let mut best_move = Move::null();
+        let mut pv = PrincipalVariation::new();
         let mut boards = self.clone();
         for i in 0.. {
-            let mut pv = PrincipalVariation::new();
-            let result = boards.negamax(
+            score = boards.negamax(
                 i32::MIN + 1,
                 i32::MAX - 1,
                 i as i32,
@@ -51,16 +50,9 @@ impl ChessGame {
                 // can't trust results from a partial search
                 break;
             }
-            score = result.0;
-            best_move = result.1;
-            let pv_string = if !best_move.is_null() {
-                // format!(" pv {}", best_move.coords())
-                format!(" pv {pv}")
-            } else {
-                String::from("")
-            };
+
             if !quiet {
-                println!("info depth {i} score cp {score}{pv_string}")
+                println!("info depth {i} score cp {score} pv {pv}")
             };
 
             // terminate search at max depth
@@ -69,7 +61,7 @@ impl ChessGame {
                 break;
             }
         }
-        (score, best_move)
+        (score, pv)
     }
 
     fn negamax(
@@ -80,13 +72,13 @@ impl ChessGame {
         ply: usize,
         last_move: Move,
         pv: &mut PrincipalVariation,
-    ) -> (i32, Move) {
+    ) -> i32 {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
 
         // terminate search early
         if !RUN_SEARCH.load(Ordering::Relaxed) && depth > 1 {
-            return (0, Move::null());
+            return 0;
         }
 
         // check 50 move and repetition draws
@@ -100,7 +92,7 @@ impl ChessGame {
         {
             // exact score so we must reset the pv
             pv.len = 0;
-            return (DRAW_SCORE, Move::null());
+            return DRAW_SCORE;
         }
 
         let mut line = PrincipalVariation::new();
@@ -111,7 +103,7 @@ impl ChessGame {
             let score = self.quiesce(alpha, beta, -1, last_move, EVAL_PARAMS);
             self.transposition_table
                 .set(self.hash, Move::null(), depth as i8, score, Exact);
-            return (score, Move::null());
+            return score;
         }
 
         // transposition table lookup
@@ -137,7 +129,7 @@ impl ChessGame {
                 {
                     // exact score (?) so we must reset the pv
                     pv.len = 0;
-                    return (beta, tt_move);
+                    return beta;
                 }
             }
         }
@@ -149,20 +141,18 @@ impl ChessGame {
             && self.has_non_pawn_material(self.current_player)
         {
             self.make_null_move();
-            let null_score = -self
-                .negamax(
-                    -beta,
-                    -beta + 1,
-                    depth - 3,
-                    ply + 1,
-                    Move::null(),
-                    &mut line,
-                )
-                .0;
+            let null_score = -self.negamax(
+                -beta,
+                -beta + 1,
+                depth - 3,
+                ply + 1,
+                Move::null(),
+                &mut line,
+            );
             self.unmake_null_move();
 
             if null_score >= beta {
-                return (beta, Move::null());
+                return beta;
             }
         }
 
@@ -173,10 +163,10 @@ impl ChessGame {
             pv.len = 0;
             if self.in_check(self.current_player) {
                 // checkmate, preferring shorter mating sequences
-                return (-CHECKMATE_SCORE - depth as i32, Move::null());
+                return -CHECKMATE_SCORE - depth as i32;
             } else {
                 // stalemate
-                return (DRAW_SCORE, Move::null());
+                return DRAW_SCORE;
             }
         }
 
@@ -240,9 +230,7 @@ impl ChessGame {
             {
                 self.make_move(move_);
                 // search with a null window; we only care whether it fails low or not
-                let score = -self
-                    .negamax(-alpha - 1, -alpha, depth - 2, ply + 1, move_, &mut line)
-                    .0;
+                let score = -self.negamax(-alpha - 1, -alpha, depth - 2, ply + 1, move_, &mut line);
                 self.unmake_move();
                 score
             } else {
@@ -252,9 +240,7 @@ impl ChessGame {
             // search at full depth, if a reduced move improves alpha it is searched again
             if score > alpha {
                 self.make_move(move_);
-                score = -self
-                    .negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line)
-                    .0;
+                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line);
                 self.unmake_move();
                 if score >= beta {
                     self.transposition_table
@@ -266,7 +252,7 @@ impl ChessGame {
                             self.killer_moves.push(move_, ply);
                         }
                     }
-                    return (beta, move_);
+                    return beta;
                 }
                 if score > alpha {
                     // update PV
@@ -281,7 +267,7 @@ impl ChessGame {
         }
         self.transposition_table
             .set(self.hash, best_move, depth as i8, alpha, UpperBound);
-        (alpha, best_move)
+        alpha
     }
 
     pub fn quiesce(
