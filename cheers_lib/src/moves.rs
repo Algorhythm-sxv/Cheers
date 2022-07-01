@@ -67,7 +67,7 @@ pub fn square(coord: &str) -> u8 {
 // double_pawn_push: 23
 // enpassent_capture: 24
 // castling: 25
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Move(u32);
 
 impl Move {

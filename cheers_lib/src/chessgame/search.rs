@@ -11,7 +11,7 @@ pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct PrincipalVariation {
     pub len: usize,
     pub moves: [Move; 16],
@@ -24,10 +24,8 @@ impl PrincipalVariation {
 }
 impl Display for PrincipalVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for m in self.moves {
-            if m != Move::null() {
-                write!(f, "{} ", m.coords())?;
-            }
+        for m in self.moves.iter().take(self.len) {
+            write!(f, "{} ", m.coords())?;
         }
         Ok(())
     }
@@ -203,10 +201,10 @@ impl ChessGame {
                                 [(Midgame, self.piece_at(m.target() as usize))]
                                 - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
                         }
-                    // order queen and rook promotions ahead of quiet moves
-                    else if m.promotion() == Queen || m.promotion() == Rook {
-                        score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
-                    }
+                        // order queen and rook promotions ahead of quiet moves
+                        else if m.promotion() == Queen || m.promotion() == Rook {
+                            score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
+                        }
                     // quiet killer moves get sorted after captures but before other quiet moves
                     } else if self.killer_moves[ply].contains(&m) {
                         score += 500;
