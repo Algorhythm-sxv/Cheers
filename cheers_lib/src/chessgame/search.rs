@@ -164,6 +164,8 @@ impl ChessGame {
         let moves = self.legal_moves();
 
         if moves.is_empty() {
+            // we will have an exact score here, so we must reset the pv like with quiescence search
+            pv.len = 0;
             if self.in_check(self.current_player) {
                 // checkmate, preferring shorter mating sequences
                 return (-CHECKMATE_SCORE - depth as i32, Move::null());
