@@ -59,7 +59,6 @@ struct Entry {
 #[derive(Clone)]
 pub struct TranspositionTable {
     table: Arc<RwLock<Vec<Entry>>>,
-    mask: usize,
 }
 
 impl TranspositionTable {
@@ -71,7 +70,6 @@ impl TranspositionTable {
         }
         Self {
             table: Arc::new(RwLock::new(table)),
-            mask: table_size - 1,
         }
     }
 
@@ -82,13 +80,12 @@ impl TranspositionTable {
             .write()
             .unwrap()
             .resize_with(length, Entry::default);
-        self.mask = length - 1;
     }
 
     pub fn set(&self, hash: u64, best_move: Move, depth: i8, score: i32, node_type: NodeType) {
         use self::Ordering::*;
         let table = self.table.read().unwrap();
-        let index = hash as usize % table.len();
+        let index = hash as usize & (table.len() - 1);
         let stored_depth = (table[index].data.load(Acquire) >> 24) & 0xFF;
         if stored_depth > depth as u64 {
             // depth-preferred replacement
@@ -113,7 +110,7 @@ impl TranspositionTable {
     pub fn get(&self, hash: u64) -> Option<TTEntry> {
         use self::Ordering::*;
         let table = self.table.read().unwrap();
-        let index = hash as usize & self.mask;
+        let index = hash as usize & (table.len() - 1);
         let data = table[index].data.load(Acquire);
 
         if table[index].key.load(Acquire) ^ data == hash {
