@@ -113,7 +113,7 @@ impl TranspositionTable {
     pub fn get(&self, hash: u64) -> Option<TTEntry> {
         use self::Ordering::*;
         let table = self.table.read().unwrap();
-        let index = hash as usize % table.len();
+        let index = hash as usize & self.mask;
         let data = table[index].data.load(Acquire);
 
         if table[index].key.load(Acquire) ^ data == hash {
