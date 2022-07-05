@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     LookupTables::generate_all(true);
     zobrist::initialise_zobrist_numbers();
 
-    let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
+    let mut tt = TranspositionTable::new(TT_DEFAULT_SIZE);
     let mut position = ChessGame::new(tt.clone());
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
