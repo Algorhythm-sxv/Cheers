@@ -59,22 +59,30 @@ struct Entry {
 #[derive(Clone)]
 pub struct TranspositionTable {
     table: Arc<RwLock<Vec<Entry>>>,
+    mask: usize,
 }
 
 impl TranspositionTable {
     pub fn new(table_size: usize) -> Self {
+        assert!(table_size.is_power_of_two());
         let mut table = Vec::with_capacity(table_size);
         for _ in 0..table_size {
             table.push(Entry::default());
         }
         Self {
             table: Arc::new(RwLock::new(table)),
+            mask: table_size - 1,
         }
     }
 
-    pub fn set_size(&self, size_mb: usize) {
-        let capacity = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
-        self.table.write().unwrap().resize_with(capacity, Entry::default);
+    pub fn set_size(&mut self, size_mb: usize) {
+        let mut length = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
+        length = length.next_power_of_two();
+        self.table
+            .write()
+            .unwrap()
+            .resize_with(length, Entry::default);
+        self.mask = length - 1;
     }
 
     pub fn set(&self, hash: u64, best_move: Move, depth: i8, score: i32, node_type: NodeType) {
