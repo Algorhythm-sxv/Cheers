@@ -24,8 +24,12 @@ impl PrincipalVariation {
 }
 impl Display for PrincipalVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for m in self.moves.iter().take(self.len) {
-            write!(f, "{} ", m.coords())?;
+        for (i, m) in self.moves.iter().take(self.len).enumerate() {
+            if i == 0 {
+                write!(f, "{}", m.coords())?;
+            } else {
+                write!(f, " {}", m.coords())?;
+            }
         }
         Ok(())
     }
@@ -52,11 +56,14 @@ impl ChessGame {
             }
 
             if !quiet {
-                println!("info depth {i} score cp {score} pv {pv}")
+                println!(
+                    "info depth {i} score cp {score} pv {pv} nodes {}",
+                    NODE_COUNT.load(Ordering::Relaxed)
+                )
             };
 
-            // terminate search at max depth
-            if max_depth == Some(i) {
+            // terminate search at max depth or with forced mate/draw
+            if max_depth == Some(i) || i > pv.len + 4 {
                 RUN_SEARCH.store(false, Ordering::Relaxed);
                 break;
             }
@@ -163,7 +170,7 @@ impl ChessGame {
             pv.len = 0;
             if self.in_check(self.current_player) {
                 // checkmate, preferring shorter mating sequences
-                return -CHECKMATE_SCORE - depth as i32;
+                return -(CHECKMATE_SCORE - ply as i32);
             } else {
                 // stalemate
                 return DRAW_SCORE;
