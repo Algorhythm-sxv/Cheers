@@ -116,30 +116,29 @@ impl ChessGame {
         // transposition table lookup
         let mut tt_move = Move::null();
         if let Some(tt_entry) = self.transposition_table.get(self.hash) {
-            // if the tt move is pseudolegal cross fingers we don't have a key collision
-            if self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target) {
-                // prune on exact score/beta cutoff with pseudolegal move and equal/higher depth
-                if tt_entry.depth as i32 >= depth
-                    && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound)
-                    && tt_entry.score >= beta
-                {
-                    // exact score (?) so we must reset the pv
-                    pv.len = 0;
-                    return beta;
-                }
-
-                tt_move = Move::new(
-                    tt_entry.move_start,
-                    tt_entry.move_target,
-                    self.piece_at(tt_entry.move_start as usize),
-                    tt_entry.promotion,
-                    tt_entry.en_passent_capture
-                        || self.piece_at(tt_entry.move_target as usize) != NoPiece,
-                    tt_entry.double_pawn_push,
-                    tt_entry.en_passent_capture,
-                    tt_entry.castling,
-                );
+            // prune on exact score/beta cutoff with equal/higher depth, unless we are at the root
+            if tt_entry.depth as i32 >= depth
+                && ply != 0
+                && (tt_entry.node_type == Exact
+                    || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
+                    || (tt_entry.node_type == UpperBound && tt_entry.score <= alpha))
+            {
+                // exact score (?) so we must reset the pv
+                pv.len = 0;
+                return tt_entry.score;
             }
+
+            tt_move = Move::new(
+                tt_entry.move_start,
+                tt_entry.move_target,
+                self.piece_at(tt_entry.move_start as usize),
+                tt_entry.promotion,
+                tt_entry.en_passent_capture
+                    || self.piece_at(tt_entry.move_target as usize) != NoPiece,
+                tt_entry.double_pawn_push,
+                tt_entry.en_passent_capture,
+                tt_entry.castling,
+            );
         }
 
         // Null move pruning
