@@ -118,6 +118,16 @@ impl ChessGame {
         if let Some(tt_entry) = self.transposition_table.get(self.hash) {
             // if the tt move is pseudolegal cross fingers we don't have a key collision
             if self.is_pseudolegal(tt_entry.move_start, tt_entry.move_target) {
+                // prune on exact score/beta cutoff with pseudolegal move and equal/higher depth
+                if tt_entry.depth as i32 >= depth
+                    && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound)
+                    && tt_entry.score >= beta
+                {
+                    // exact score (?) so we must reset the pv
+                    pv.len = 0;
+                    return beta;
+                }
+
                 tt_move = Move::new(
                     tt_entry.move_start,
                     tt_entry.move_target,
@@ -129,15 +139,6 @@ impl ChessGame {
                     tt_entry.en_passent_capture,
                     tt_entry.castling,
                 );
-                // prune on exact score/beta cutoff with pseudolegal move and equal/higher depth
-                if tt_entry.depth as i32 >= depth
-                    && (tt_entry.node_type == Exact || tt_entry.node_type == LowerBound)
-                    && tt_entry.score >= beta
-                {
-                    // exact score (?) so we must reset the pv
-                    pv.len = 0;
-                    return beta;
-                }
             }
         }
 
