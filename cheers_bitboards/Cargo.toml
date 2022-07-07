@@ -1,0 +1,11 @@
+[package]
+name = "cheers_bitboards"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "cheers_bitboards"
+path = "src/lib.rs"
+
+[dependencies]
+overload = "0.1"

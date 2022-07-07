@@ -74,11 +74,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cheers_bitboards"
+version = "0.1.0"
+dependencies = [
+ "overload",
+]
+
+[[package]]
 name = "cheers_lib"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "cheers_bitboards",
+ "cheers_pregen",
  "overload",
+ "rand",
+]
+
+[[package]]
+name = "cheers_pregen"
+version = "0.1.0"
+dependencies = [
+ "cheers_bitboards",
  "rand",
 ]
 

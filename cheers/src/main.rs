@@ -13,12 +13,7 @@ use chessgame::{ChessGame, NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 use moves::Move;
 use transposition_table::{TranspositionTable, TT_DEFAULT_SIZE};
 
-use lookup_tables::*;
-
 fn main() -> Result<(), Box<dyn Error>> {
-    LookupTables::generate_all(true);
-    zobrist::initialise_zobrist_numbers();
-
     let mut tt = TranspositionTable::new(TT_DEFAULT_SIZE);
     let mut position = ChessGame::new(tt.clone());
 
@@ -184,13 +179,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
                 }
-            }
-            Some(&"magics") => {
-                let start = Instant::now();
-                LookupTables::generate_all(false);
-                let end = Instant::now();
-                println!("Generated magics in {:.3}s", (end - start).as_secs_f32());
-                unsafe { LOOKUP_TABLES.print_magics() };
             }
             Some(&"test") => {
                 let mut test_suite = String::new();

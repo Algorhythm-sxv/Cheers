@@ -3,6 +3,8 @@ members = [
     "cheers_lib",
     "cheers",
     "cheers_tuning",
+    "cheers_bitboards",
+    "cheers_pregen"
 ]
 
 [profile.test]

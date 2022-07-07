@@ -1,7 +1,7 @@
 use std::{fmt::Display, ops::Index};
 
+use cheers_bitboards::BitBoard;
 use crate::{
-    bitboard::BitBoard,
     chessgame::ChessGame,
     types::{CastlingRights, PieceIndex, PieceIndex::*},
 };

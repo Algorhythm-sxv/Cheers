@@ -1,0 +1,15 @@
+[package]
+name = "cheers_pregen"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "cheers_pregen"
+path = "src/lib.rs"
+
+[dependencies]
+cheers_bitboards = { path = "../cheers_bitboards" }
+
+[build-dependencies]
+rand = "0.8"
+cheers_bitboards = { path = "../cheers_bitboards" }

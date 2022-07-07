@@ -5,9 +5,7 @@ use std::{
 
 use overload::overload;
 
-use crate::types::ColorIndex;
-
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub struct BitBoard(pub u64);
 
 impl BitBoard {
@@ -71,7 +69,7 @@ impl Iterator for BitBoard {
 }
 impl ExactSizeIterator for BitBoard {}
 
-impl Debug for BitBoard {
+impl Display for BitBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let board_string = format!("{:064b}", self.0);
         let ranks = board_string
@@ -97,12 +95,6 @@ impl Debug for BitBoard {
     }
 }
 
-impl Display for BitBoard {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(self, f)
-    }
-}
-
 overload!((a: ?BitBoard) & (b: ?BitBoard) -> BitBoard {BitBoard(a.0 & b.0)});
 overload!((a: &mut BitBoard) &= (b: ?BitBoard) {a.0 &= b.0});
 
@@ -115,7 +107,3 @@ overload!((a: &mut BitBoard) ^= (b: ?BitBoard) {a.0 ^= b.0});
 overload!((a: ?BitBoard) << (b: ?u64) -> BitBoard {BitBoard(a.0 << b)});
 overload!((a: ?BitBoard) >> (b: ?u64) -> BitBoard {BitBoard(a.0 >> b)});
 
-#[inline]
-pub fn relative_board_index(i: usize, color: ColorIndex) -> usize {
-    i ^ (56 * color as usize)
-}

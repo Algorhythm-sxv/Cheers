@@ -1,5 +1,3 @@
-use crate::bitboard::relative_board_index;
-
 pub use self::eval_params::*;
 use self::GamePhase::*;
 
@@ -455,4 +453,9 @@ impl ChessGame {
 
         (256 * (total_phase - phase)) / total_phase
     }
+}
+
+#[inline]
+pub fn relative_board_index(i: usize, color: ColorIndex) -> usize {
+    i ^ (56 * color as usize)
 }

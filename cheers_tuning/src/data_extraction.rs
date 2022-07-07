@@ -25,11 +25,9 @@ impl GameResult {
 }
 use cheers_lib::{
     chessgame::ChessGame,
-    lookup_tables::LookupTables,
     moves::Move,
     transposition_table::{TranspositionTable, TT_DEFAULT_SIZE},
     types::PieceIndex,
-    zobrist::initialise_zobrist_numbers,
 };
 use pgn_reader::*;
 use GameResult::*;
@@ -54,8 +52,6 @@ pub struct FENWriter {
 
 impl FENWriter {
     pub fn new() -> Self {
-        LookupTables::generate_all(true);
-        initialise_zobrist_numbers();
         let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
         Self {
             move_counter: 0,

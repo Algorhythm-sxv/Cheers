@@ -1,5 +1,4 @@
 use crate::{
-    bitboard::BitBoard,
     lookup_tables::*,
     moves::*,
     transposition_table::TranspositionTable,
@@ -13,6 +12,7 @@ use crate::{
     },
     zobrist::*,
 };
+use cheers_bitboards::BitBoard;
 
 mod eval_params;
 mod eval_types;
@@ -489,7 +489,7 @@ impl ChessGame {
 
     pub fn is_pseudolegal(&self, start: u8, target: u8) -> bool {
         // allow null moves as pseudolegal for depth 0 TT entries
-        if start == target && start == 0{
+        if start == target && start == 0 {
             return true;
         }
 
@@ -1349,15 +1349,11 @@ impl ChessGame {
 mod tests {
     use crate::{
         chessgame::ChessGame,
-        lookup_tables::LookupTables,
         transposition_table::{TranspositionTable, TT_DEFAULT_SIZE},
-        zobrist::initialise_zobrist_numbers,
     };
 
     #[test]
     fn search_speed() -> Result<(), ()> {
-        LookupTables::generate_all(true);
-        initialise_zobrist_numbers();
         let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
         let game = ChessGame::new(tt);
 

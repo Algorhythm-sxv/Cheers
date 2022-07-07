@@ -1,8 +1,9 @@
-use std::ops::{Add, AddAssign, Index, Sub, IndexMut};
+use std::ops::{Add, AddAssign, Index, IndexMut, Sub};
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::{bitboard::BitBoard, types::PieceIndex};
+use crate::types::PieceIndex;
+use cheers_bitboards::BitBoard;
 
 use super::EvalTrace;
 
@@ -93,7 +94,7 @@ impl<T, const N: usize> Index<GamePhase> for [T; N] {
     }
 }
 
-impl<T, const N: usize> IndexMut<GamePhase> for [T;N] {
+impl<T, const N: usize> IndexMut<GamePhase> for [T; N] {
     fn index_mut(&mut self, index: GamePhase) -> &mut Self::Output {
         &mut self[index as usize]
     }

@@ -8,7 +8,7 @@ use std::{fmt::Display, ops::{Index, IndexMut}};
 
 use self::ColorIndex::*;
 
-use crate::bitboard::BitBoard;
+use cheers_bitboards::BitBoard;
 
 impl Default for ColorIndex {
     fn default() -> Self {

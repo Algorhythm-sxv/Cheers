@@ -11,5 +11,5 @@ path = "src/lib.rs"
 bytemuck = { version = "1.9", features = ["min_const_generics", "derive"] }
 overload = "0.1"
 rand = "0.8"
-
-
+cheers_bitboards = { path = "../cheers_bitboards" }
+cheers_pregen = { path = "../cheers_pregen" }

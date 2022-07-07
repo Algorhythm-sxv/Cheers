@@ -9,8 +9,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use pgn_reader::BufferedReader;
 use rayon::prelude::*;
 
-use cheers_lib::{lookup_tables::LookupTables, zobrist::initialise_zobrist_numbers};
-
 use crate::calculate_error::{calculate_error, calculate_gradient, data_to_entry, TuningEntry};
 use crate::data_extraction::FENWriter;
 use crate::k_tuning::tune_k;
@@ -76,8 +74,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     if !args.skip_tuning {
         println!("Commencing tuning");
-        initialise_zobrist_numbers();
-        LookupTables::generate_all(true);
 
         let mut data_file = OpenOptions::new().read(true).open(data_path)?;
         let mut data_string = String::new();
