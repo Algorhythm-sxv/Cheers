@@ -488,9 +488,9 @@ impl ChessGame {
     }
 
     pub fn is_pseudolegal(&self, start: u8, target: u8) -> bool {
-        // null move
-        if start == target {
-            return false;
+        // allow null moves as pseudolegal for depth 0 TT entries
+        if start == target && start == 0{
+            return true;
         }
 
         let piece = self.piece_at(start as usize);

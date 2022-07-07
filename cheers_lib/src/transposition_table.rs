@@ -63,6 +63,7 @@ pub struct TranspositionTable {
 
 impl TranspositionTable {
     pub fn new(table_size: usize) -> Self {
+        assert!(table_size.is_power_of_two());
         let mut table = Vec::with_capacity(table_size);
         for _ in 0..table_size {
             table.push(Entry::default());
@@ -72,15 +73,19 @@ impl TranspositionTable {
         }
     }
 
-    pub fn set_size(&self, size_mb: usize) {
-        let capacity = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
-        self.table.write().unwrap().resize_with(capacity, Entry::default);
+    pub fn set_size(&mut self, size_mb: usize) {
+        let mut length = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
+        length = length.next_power_of_two();
+        self.table
+            .write()
+            .unwrap()
+            .resize_with(length, Entry::default);
     }
 
     pub fn set(&self, hash: u64, best_move: Move, depth: i8, score: i32, node_type: NodeType) {
         use self::Ordering::*;
         let table = self.table.read().unwrap();
-        let index = hash as usize % table.len();
+        let index = hash as usize & (table.len() - 1);
         let stored_depth = (table[index].data.load(Acquire) >> 24) & 0xFF;
         if stored_depth > depth as u64 {
             // depth-preferred replacement
@@ -105,7 +110,7 @@ impl TranspositionTable {
     pub fn get(&self, hash: u64) -> Option<TTEntry> {
         use self::Ordering::*;
         let table = self.table.read().unwrap();
-        let index = hash as usize % table.len();
+        let index = hash as usize & (table.len() - 1);
         let data = table[index].data.load(Acquire);
 
         if table[index].key.load(Acquire) ^ data == hash {
