@@ -297,6 +297,9 @@ impl ChessGame {
         last_move: Move,
         eval_params: EvalParams,
     ) -> (i32, T) {
+        NODE_COUNT.fetch_add(1, Ordering::Relaxed);
+        NPS_COUNT.fetch_add(1, Ordering::Relaxed);
+
         let (stand_pat_score, mut best_trace) = self.evaluate::<T>();
 
         if stand_pat_score >= beta {
