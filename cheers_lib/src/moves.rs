@@ -68,7 +68,10 @@ pub fn square(coord: &str) -> u8 {
 // enpassent_capture: 24
 // castling: 25
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct Move(u32);
+pub struct Move {
+    data: u32,
+    pub score: i32,
+}
 
 impl Move {
     #[allow(clippy::too_many_arguments)]
@@ -92,7 +95,10 @@ impl Move {
             | (enpassent_capture as u32) << (8 + 8 + 3 + 3 + 1 + 1)
             | (castling as u32) << (8 + 8 + 3 + 3 + 1 + 1 + 1);
 
-        Self(res)
+        Self {
+            data: res,
+            score: 0,
+        }
     }
 
     pub fn null() -> Self {
@@ -174,35 +180,35 @@ impl Move {
     }
 
     pub fn start(&self) -> u8 {
-        (self.0 & 0xff) as u8
+        (self.data & 0xff) as u8
     }
 
     pub fn target(&self) -> u8 {
-        ((self.0 >> 8) & 0xff) as u8
+        ((self.data >> 8) & 0xff) as u8
     }
 
     pub fn piece(&self) -> PieceIndex {
-        PieceIndex::from_u8(((self.0 >> (8 + 8)) & 0b111) as u8)
+        PieceIndex::from_u8(((self.data >> (8 + 8)) & 0b111) as u8)
     }
 
     pub fn promotion(&self) -> PieceIndex {
-        PieceIndex::from_u8(((self.0 >> (8 + 8 + 3)) & 0b111) as u8)
+        PieceIndex::from_u8(((self.data >> (8 + 8 + 3)) & 0b111) as u8)
     }
 
     pub fn capture(&self) -> bool {
-        ((self.0 >> (8 + 8 + 3 + 3)) & 0x1) == 1
+        ((self.data >> (8 + 8 + 3 + 3)) & 0x1) == 1
     }
 
     pub fn double_pawn_push(&self) -> bool {
-        ((self.0 >> (8 + 8 + 3 + 3 + 1)) & 0x1) == 1
+        ((self.data >> (8 + 8 + 3 + 3 + 1)) & 0x1) == 1
     }
 
     pub fn en_passent(&self) -> bool {
-        ((self.0 >> (8 + 8 + 3 + 3 + 1 + 1)) & 0x1) == 1
+        ((self.data >> (8 + 8 + 3 + 3 + 1 + 1)) & 0x1) == 1
     }
 
     pub fn castling(&self) -> bool {
-        ((self.0 >> (8 + 8 + 3 + 3 + 1 + 1 + 1)) & 0x1) == 1
+        ((self.data >> (8 + 8 + 3 + 3 + 1 + 1 + 1)) & 0x1) == 1
     }
 
     pub fn coords(&self) -> String {
@@ -289,11 +295,11 @@ impl UnMove {
     }
 }
 
-pub fn pick_move(move_list: &mut [(Move, i32)], current_index: usize) {
+pub fn pick_move(move_list: &mut [Move], current_index: usize) {
     let mut best_index = current_index;
 
     for i in (current_index + 1)..move_list.len() {
-        if move_list[i].1 > move_list[best_index].1 {
+        if move_list[i].score > move_list[best_index].score {
             best_index = i;
         }
     }
@@ -312,7 +318,7 @@ impl<const N: usize> KillerMoves<N> {
         let mut moves = self.0[ply];
         if !moves.contains(&m) {
             for i in (1..N).rev() {
-                moves[i] = moves[i-1];
+                moves[i] = moves[i - 1];
             }
             moves[0] = m;
         }

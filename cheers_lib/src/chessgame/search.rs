@@ -186,48 +186,45 @@ impl ChessGame {
 
         let mut moves = moves
             .into_iter()
-            .map(|m| {
-                (m, {
-                    let mut score = 0i32;
-                    // try the transposition table move early
-                    if m.start() == tt_move.start() && m.target() == tt_move.target() {
-                        score += 100_000;
-                    } else if m.capture() {
-                        score += 2000;
+            .map(|mut m| {
+                // try the transposition table move early
+                if m.start() == tt_move.start() && m.target() == tt_move.target() {
+                    m.score += 100_000;
+                } else if m.capture() {
+                    m.score += 2000;
 
-                        // try recaptures first, least valuable piece first
-                        if last_move.capture() && m.target() == last_move.target() {
-                            score += 10_000 - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
-                        }
-                        // order all captures before quiet moves, MVV-LVA
-                        if !m.en_passent() {
-                            score += EVAL_PARAMS.piece_values
-                                [(Midgame, self.piece_at(m.target() as usize))]
-                                - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
-                        }
-                        // order queen and rook promotions ahead of quiet moves
-                        else if m.promotion() == Queen || m.promotion() == Rook {
-                            score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
-                        }
-                    // quiet killer moves get sorted after captures but before other quiet moves
-                    } else if self.killer_moves[ply].contains(&m) {
-                        score += 500;
-                    // quiet moves get ordered by their history heuristic
-                    } else {
-                        score += self.history_tables[self.current_player()][m.piece()]
-                            [m.target() as usize];
+                    // try recaptures first, least valuable piece first
+                    if last_move.capture() && m.target() == last_move.target() {
+                        m.score += 10_000 - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
                     }
-                    score
-                })
+                    // order all captures before quiet moves, MVV-LVA
+                    if !m.en_passent() {
+                        m.score += EVAL_PARAMS.piece_values
+                            [(Midgame, self.piece_at(m.target() as usize))]
+                            - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
+                    }
+                    // order queen and rook promotions ahead of quiet moves
+                    else if m.promotion() == Queen || m.promotion() == Rook {
+                        m.score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
+                    }
+                // quiet killer moves get sorted after captures but before other quiet moves
+                } else if self.killer_moves[ply].contains(&m) {
+                    m.score += 500;
+                // quiet moves get ordered by their history heuristic
+                } else {
+                    m.score +=
+                        self.history_tables[self.current_player()][m.piece()][m.target() as usize];
+                }
+                m
             })
-            .collect::<Vec<(Move, i32)>>();
+            .collect::<Vec<Move>>();
         // moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
         // make sure the reported best move is at least legal
-        let mut best_move = moves.first().unwrap().0;
+        let mut best_move = *moves.first().unwrap();
 
         for i in 0..moves.len() {
             pick_move(&mut moves, i);
-            let move_ = moves[i].0;
+            let move_ = moves[i];
             // Late move reduction on non-captures and non-queen-promotions
             let mut score = if i >= 3
                 && depth >= 3
