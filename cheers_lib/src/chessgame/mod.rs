@@ -1302,6 +1302,8 @@ impl ChessGame {
     pub fn perft(&mut self, depth: usize) -> usize {
         if depth == 1 {
             return self.legal_moves().len();
+        } else if depth == 0 {
+            return 1;
         }
 
         let moves = self.legal_moves();

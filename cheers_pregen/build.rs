@@ -40,8 +40,9 @@ fn initialise_zobrist_numbers() -> [u64; 793] {
 
 fn generate_lookup_tables() -> Box<LookupTables> {
     let mut sliding_attack_table = vec![BitBoard::empty(); 107648];
-    let rook_magics = generate_rook_magics(&mut *sliding_attack_table, true);
-    let bishop_magics = generate_bishop_magics(&mut *sliding_attack_table, true);
+    let mut index = 0;
+    let rook_magics = generate_rook_magics(&mut *sliding_attack_table, &mut index, true);
+    let bishop_magics = generate_bishop_magics(&mut *sliding_attack_table, &mut index, true);
     Box::new(LookupTables {
         knight_table: generate_knight_table(),
         king_table: generate_king_table(),
@@ -236,25 +237,29 @@ pub struct MagicSquare {
 }
 
 /// Generates magic numbers/shifts to look up rook attacks from each square
-fn generate_rook_magics(attack_table: &mut [BitBoard], use_pregen: bool) -> [MagicSquare; 64] {
+fn generate_rook_magics(
+    attack_table: &mut [BitBoard],
+    index: &mut usize,
+    use_pregen: bool,
+) -> [MagicSquare; 64] {
     let mut rook_magic = [MagicSquare::default(); 64];
 
-    let mut index = 0;
     for square in 0..64 {
-        rook_magic[square] =
-            find_magic(square, false, attack_table, &mut index, use_pregen).unwrap();
+        rook_magic[square] = find_magic(square, false, attack_table, index, use_pregen).unwrap();
     }
     rook_magic
 }
 
 /// Generates magic numbers/shifts to look up bishop attacks from each square
-fn generate_bishop_magics(attack_table: &mut [BitBoard], use_pregen: bool) -> [MagicSquare; 64] {
+fn generate_bishop_magics(
+    attack_table: &mut [BitBoard],
+    index: &mut usize,
+    use_pregen: bool,
+) -> [MagicSquare; 64] {
     let mut bishop_magic = [MagicSquare::default(); 64];
 
-    let mut index = 0;
     for square in 0..64 {
-        bishop_magic[square] =
-            find_magic(square, true, attack_table, &mut index, use_pregen).unwrap();
+        bishop_magic[square] = find_magic(square, true, attack_table, index, use_pregen).unwrap();
     }
     bishop_magic
 }
@@ -266,6 +271,7 @@ fn find_magic(
     index: &mut usize,
     use_pregen: bool,
 ) -> Result<MagicSquare, String> {
+    println!("{index}");
     let mask = if bishop {
         bishop_mask(square)
     } else {
@@ -322,6 +328,9 @@ fn find_magic(
             });
 
             // allocate more elements
+            for elem in attack_table[*index..(*index + used.len())].iter() {
+                assert!(elem.is_empty())
+            }
             attack_table[*index..(*index + used.len())].copy_from_slice(&used);
             *index += used.len();
 
