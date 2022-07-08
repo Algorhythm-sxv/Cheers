@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let search = Search::new(bench_game)
             .max_depth(9)
             .tt_size_mb(8)
-            .output(true);
+            .output(false);
         let start = Instant::now();
         search.search();
         let end = Instant::now();
