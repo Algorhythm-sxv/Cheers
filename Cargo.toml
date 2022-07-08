@@ -11,3 +11,5 @@ members = [
 opt-level = 3
 debug = true
 
+[profile.release]
+lto = true
