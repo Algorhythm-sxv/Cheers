@@ -10,6 +10,7 @@ members = [
 [profile.test]
 opt-level = 3
 debug = true
+lto = true
 
 [profile.release]
 lto = true
