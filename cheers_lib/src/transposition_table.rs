@@ -86,7 +86,13 @@ impl TranspositionTable {
         use self::Ordering::*;
         let table = self.table.read().unwrap();
         let index = hash as usize & (table.len() - 1);
-        let stored_depth = (table[index].data.load(Acquire) >> 24) & 0xFF;
+        
+        let stored = match table.get(index) {
+            Some(entry) => entry,
+            None => return,
+        };
+
+        let stored_depth = (stored.data.load(Acquire) >> 24) & 0xFF;
         if stored_depth > depth as u64 {
             // depth-preferred replacement
             return;
@@ -103,17 +109,20 @@ impl TranspositionTable {
         data |= (best_move.en_passent() as u64) << (32 + 8 + 8 + 8 + 3 + 2 + 1);
         data |= (best_move.castling() as u64) << (32 + 8 + 8 + 8 + 3 + 2 + 1 + 1);
 
-        table[index].key.store(hash ^ data, Release);
-        table[index].data.store(data, Release);
+        stored.key.store(hash ^ data, Release);
+        stored.data.store(data, Release);
     }
 
     pub fn get(&self, hash: u64) -> Option<TTEntry> {
         use self::Ordering::*;
         let table = self.table.read().unwrap();
         let index = hash as usize & (table.len() - 1);
-        let data = table[index].data.load(Acquire);
 
-        if table[index].key.load(Acquire) ^ data == hash {
+        let stored = table.get(index)?;
+
+        let data = stored.data.load(Acquire);
+
+        if stored.key.load(Acquire) ^ data == hash {
             // entry is valid, return data
             Some(TTEntry::from_data(data))
         } else {
