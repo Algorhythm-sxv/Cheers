@@ -1,7 +1,6 @@
 use crate::{
     lookup_tables::*,
     moves::*,
-    transposition_table::TranspositionTable,
     types::{
         CastlingIndex::*,
         CastlingRights, ColorIndex,
@@ -14,12 +13,9 @@ use crate::{
 };
 use cheers_bitboards::BitBoard;
 
-mod eval_params;
-mod eval_types;
+pub mod eval_params;
+pub mod eval_types;
 mod evaluate;
-mod search;
-
-pub use self::search::{NODE_COUNT, NPS_COUNT, RUN_SEARCH};
 
 pub use self::eval_params::*;
 
@@ -35,13 +31,10 @@ pub struct ChessGame {
     hash: u64,
     position_history: Vec<u64>,
     unmove_history: Vec<UnMove>,
-    transposition_table: TranspositionTable,
-    killer_moves: KillerMoves<2>,
-    history_tables: [[[i32; 64]; 6]; 2],
 }
 
 impl ChessGame {
-    pub fn new(tt: TranspositionTable) -> Self {
+    pub fn new() -> Self {
         let mut boards = Self {
             color_masks: ColorMasks::default(),
             combined: BitBoard::empty(),
@@ -53,9 +46,6 @@ impl ChessGame {
             hash: 0,
             position_history: Vec::new(),
             unmove_history: Vec::new(),
-            transposition_table: tt,
-            killer_moves: KillerMoves::new(),
-            history_tables: [[[0; 64]; 6]; 2],
         };
         boards.combined = boards.color_masks[White] | boards.color_masks[Black];
         boards
@@ -84,9 +74,6 @@ impl ChessGame {
             hash: 0,
             position_history: Vec::new(),
             unmove_history: Vec::new(),
-            transposition_table: self.transposition_table.clone(),
-            killer_moves: KillerMoves::new(),
-            history_tables: [[[0; 64]; 6]; 2],
         };
 
         self.piece_masks = PieceMasks([[BitBoard::empty(); 6]; 2]);
@@ -310,19 +297,39 @@ impl ChessGame {
         fen
     }
 
+    #[inline]
     pub fn piece_masks(&self) -> PieceMasks {
         self.piece_masks
     }
 
+    #[inline]
     pub fn enpassent_square(&self) -> usize {
         self.en_passent_mask.lsb_index() as usize
     }
 
+    #[inline]
     pub fn current_player(&self) -> ColorIndex {
         self.current_player
     }
+
+    #[inline]
     pub fn combined(&self) -> BitBoard {
         self.combined
+    }
+
+    #[inline]
+    pub fn halfmove_clock(&self) -> u8 {
+        self.halfmove_clock
+    }
+
+    #[inline]
+    pub fn position_history(&self) -> &[u64] {
+        &self.position_history
+    }
+
+    #[inline]
+    pub fn hash(&self) -> u64 {
+        self.hash
     }
 
     #[inline]
@@ -1349,17 +1356,14 @@ impl ChessGame {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        chessgame::ChessGame,
-        transposition_table::{TranspositionTable, TT_DEFAULT_SIZE},
-    };
+    use crate::{chessgame::ChessGame, search::Search};
 
     #[test]
     fn search_speed() -> Result<(), ()> {
-        let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
-        let game = ChessGame::new(tt);
+        let game = ChessGame::new();
 
-        game.search(Some(6), true);
+        let search = Search::new(game).max_depth(8).tt_size_mb(64);
+        search.search();
 
         Ok(())
     }

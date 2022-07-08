@@ -3,7 +3,7 @@ use rayon::prelude::*;
 use cheers_lib::{
     chessgame::{ChessGame, EvalParams, EvalTrace, EVAL_PARAMS},
     moves::Move,
-    transposition_table::TranspositionTable,
+    search::Search,
 };
 
 use crate::data_extraction::GameResult;
@@ -33,13 +33,14 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
     let position = split.next().unwrap();
     let result = split.next().unwrap().parse::<f64>().unwrap();
 
-    let tt = TranspositionTable::new(0);
-    let mut game = ChessGame::new(tt);
+    let mut game = ChessGame::new();
 
     game.set_from_fen(position).unwrap();
 
+    let mut search = Search::new(game);
+
     let (_, trace) =
-        game._quiesce::<EvalTrace>(i32::MIN + 1, i32::MAX - 1, -1, Move::null(), EVAL_PARAMS);
+        search._quiesce::<EvalTrace>(i32::MIN + 1, i32::MAX - 1, -1, Move::null(), EVAL_PARAMS);
     // if game.current_player() == ColorIndex::Black {
     //     score = -score;
     // }

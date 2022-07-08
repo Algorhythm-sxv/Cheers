@@ -1,11 +1,16 @@
+use std::time::Instant;
 use std::{fmt::Display, sync::atomic::*};
 
-use super::{
-    eval_types::{GamePhase, TraceTarget},
-    *,
+use crate::moves::{pick_move, KillerMoves};
+use crate::transposition_table::{NodeType::*, TranspositionTable};
+use crate::{
+    chessgame::{
+        eval_types::{GamePhase::*, TraceTarget},
+        *,
+    },
+    moves::Move,
+    types::PieceIndex::*,
 };
-use crate::transposition_table::NodeType::*;
-use GamePhase::*;
 
 pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -35,14 +40,63 @@ impl Display for PrincipalVariation {
     }
 }
 
-impl ChessGame {
-    pub fn search(&self, max_depth: Option<usize>, quiet: bool) -> (i32, PrincipalVariation) {
+#[derive(Clone)]
+pub struct Search {
+    game: ChessGame,
+    transposition_table: TranspositionTable,
+    killer_moves: KillerMoves<2>,
+    history_tables: [[[i32; 64]; 6]; 2],
+    pub max_depth: Option<usize>,
+    pub max_nodes: Option<usize>,
+    pub max_time_ms: Option<usize>,
+    output: bool,
+}
+
+impl Search {
+    pub fn new(game: ChessGame) -> Self {
+        Self {
+            game,
+            transposition_table: TranspositionTable::new(0),
+            killer_moves: KillerMoves::new(),
+            history_tables: [[[0; 64]; 6]; 2],
+            max_depth: None,
+            max_nodes: None,
+            max_time_ms: None,
+            output: false,
+        }
+    }
+
+    pub fn tt_size_mb(mut self, tt_size_mb: usize) -> Self {
+        self.transposition_table.set_size(tt_size_mb);
+        self
+    }
+
+    pub fn max_depth(mut self, depth: usize) -> Self {
+        self.max_depth = Some(depth);
+        self
+    }
+
+    pub fn max_nodes(mut self, nodes: usize) -> Self {
+        self.max_nodes = Some(nodes);
+        unimplemented!("Max nodes is currently unsupported!");
+        #[allow(unreachable_code)]
+        self
+    }
+
+    pub fn output(mut self, output: bool) -> Self {
+        self.output = output;
+        self
+    }
+
+    pub fn search(&self) -> (i32, PrincipalVariation) {
         RUN_SEARCH.store(true, Ordering::Relaxed);
+        let start = Instant::now();
         let mut score = i32::MIN;
         let mut pv = PrincipalVariation::new();
-        let mut boards = self.clone();
+
+        let mut search = self.clone();
         for i in 0.. {
-            score = boards.negamax(
+            score = search.negamax(
                 i32::MIN + 1,
                 i32::MAX - 1,
                 i as i32,
@@ -55,7 +109,7 @@ impl ChessGame {
                 break;
             }
 
-            if !quiet {
+            if self.output {
                 println!(
                     "info depth {i} score cp {score} pv {pv} nodes {}",
                     NODE_COUNT.load(Ordering::Relaxed)
@@ -63,9 +117,22 @@ impl ChessGame {
             };
 
             // terminate search at max depth or with forced mate/draw
-            if max_depth == Some(i) || i > pv.len + 4 {
+            if let Some(max_depth) = self.max_depth {
+                if i == max_depth {
+                    RUN_SEARCH.store(false, Ordering::Relaxed);
+                    break;
+                }
+            } else if i > pv.len + 10 {
                 RUN_SEARCH.store(false, Ordering::Relaxed);
                 break;
+            }
+
+            // terminate search after max time elapsed
+            if let Some(max_time) = self.max_time_ms {
+                if (Instant::now() - start).as_millis() as usize > max_time {
+                    RUN_SEARCH.store(false, Ordering::Relaxed);
+                    break;
+                }
             }
         }
         (score, pv)
@@ -89,11 +156,12 @@ impl ChessGame {
         }
 
         // check 50 move and repetition draws
-        if self.halfmove_clock == 100
+        if self.game.halfmove_clock() == 100
             || self
-                .position_history
+                .game
+                .position_history()
                 .iter()
-                .filter(|&&p| p == self.hash)
+                .filter(|&&p| p == self.game.hash())
                 .count()
                 == 2
         {
@@ -115,7 +183,7 @@ impl ChessGame {
 
         // transposition table lookup
         let mut tt_move = Move::null();
-        if let Some(tt_entry) = self.transposition_table.get(self.hash) {
+        if let Some(tt_entry) = self.transposition_table.get(self.game.hash()) {
             // prune on exact score/beta cutoff with equal/higher depth, unless we are at the root
             if tt_entry.depth as i32 >= depth
                 && ply != 0
@@ -131,10 +199,10 @@ impl ChessGame {
             tt_move = Move::new(
                 tt_entry.move_start,
                 tt_entry.move_target,
-                self.piece_at(tt_entry.move_start as usize),
+                self.game.piece_at(tt_entry.move_start as usize),
                 tt_entry.promotion,
                 tt_entry.en_passent_capture
-                    || self.piece_at(tt_entry.move_target as usize) != NoPiece,
+                    || self.game.piece_at(tt_entry.move_target as usize) != NoPiece,
                 tt_entry.double_pawn_push,
                 tt_entry.en_passent_capture,
                 tt_entry.castling,
@@ -144,10 +212,10 @@ impl ChessGame {
         // Null move pruning
         // don't search the null move when in check or only down to pawn/kings
         if depth >= 3
-            && !self.in_check(self.current_player)
-            && self.has_non_pawn_material(self.current_player)
+            && !self.game.in_check(self.game.current_player())
+            && self.game.has_non_pawn_material(self.game.current_player())
         {
-            self.make_null_move();
+            self.game.make_null_move();
             let null_score = -self.negamax(
                 -beta,
                 -beta + 1,
@@ -156,19 +224,19 @@ impl ChessGame {
                 Move::null(),
                 &mut line,
             );
-            self.unmake_null_move();
+            self.game.unmake_null_move();
 
             if null_score >= beta {
                 return beta;
             }
         }
 
-        let moves = self.legal_moves();
+        let moves = self.game.legal_moves();
 
         if moves.is_empty() {
             // exact score, so we must reset the pv
             pv.len = 0;
-            if self.in_check(self.current_player) {
+            if self.game.in_check(self.game.current_player()) {
                 // checkmate, preferring shorter mating sequences
                 return -(CHECKMATE_SCORE - ply as i32);
             } else {
@@ -200,7 +268,7 @@ impl ChessGame {
                     // order all captures before quiet moves, MVV-LVA
                     if !m.en_passent() {
                         m.score += EVAL_PARAMS.piece_values
-                            [(Midgame, self.piece_at(m.target() as usize))]
+                            [(Midgame, self.game.piece_at(m.target() as usize))]
                             - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
                     }
                     // order queen and rook promotions ahead of quiet moves
@@ -212,8 +280,8 @@ impl ChessGame {
                     m.score += 500;
                 // quiet moves get ordered by their history heuristic
                 } else {
-                    m.score +=
-                        self.history_tables[self.current_player()][m.piece()][m.target() as usize];
+                    m.score += self.history_tables[self.game.current_player()][m.piece()]
+                        [m.target() as usize];
                 }
                 m
             })
@@ -230,12 +298,12 @@ impl ChessGame {
                 && depth >= 3
                 && !move_.capture()
                 && move_.promotion() != Queen
-                && !self.in_check(self.current_player())
+                && !self.game.in_check(self.game.current_player())
             {
-                self.make_move(move_);
+                self.game.make_move(move_);
                 // search with a null window; we only care whether it fails low or not
                 let score = -self.negamax(-alpha - 1, -alpha, depth - 2, ply + 1, move_, &mut line);
-                self.unmake_move();
+                self.game.unmake_move();
                 score
             } else {
                 alpha + 1
@@ -243,14 +311,19 @@ impl ChessGame {
 
             // search at full depth, if a reduced move improves alpha it is searched again
             if score > alpha {
-                self.make_move(move_);
+                self.game.make_move(move_);
                 score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line);
-                self.unmake_move();
+                self.game.unmake_move();
                 if score >= beta {
-                    self.transposition_table
-                        .set(self.hash, move_, depth as i8, beta, LowerBound);
+                    self.transposition_table.set(
+                        self.game.hash(),
+                        move_,
+                        depth as i8,
+                        beta,
+                        LowerBound,
+                    );
                     if !move_.capture() {
-                        self.history_tables[self.current_player][move_.piece()]
+                        self.history_tables[self.game.current_player()][move_.piece()]
                             [move_.target() as usize] += depth * depth;
                         if move_.promotion() == NoPiece {
                             self.killer_moves.push(move_, ply);
@@ -270,7 +343,7 @@ impl ChessGame {
             }
         }
         self.transposition_table
-            .set(self.hash, best_move, depth as i8, alpha, UpperBound);
+            .set(self.game.hash(), best_move, depth as i8, alpha, UpperBound);
         alpha
     }
 
@@ -297,7 +370,7 @@ impl ChessGame {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
 
-        let (stand_pat_score, mut best_trace) = self.evaluate::<T>();
+        let (stand_pat_score, mut best_trace) = self.game.evaluate::<T>();
 
         if stand_pat_score >= beta {
             return (beta, best_trace);
@@ -307,7 +380,7 @@ impl ChessGame {
         // transposition table lookup
         let mut tt_move = Move::null();
         if !T::TRACING {
-            if let Some(tt_entry) = self.transposition_table.get(self.hash) {
+            if let Some(tt_entry) = self.transposition_table.get(self.game.hash()) {
                 if tt_entry.depth as i32 >= depth
                     && (tt_entry.node_type == Exact
                         || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
@@ -319,10 +392,10 @@ impl ChessGame {
                 tt_move = Move::new(
                     tt_entry.move_start,
                     tt_entry.move_target,
-                    self.piece_at(tt_entry.move_start as usize),
+                    self.game.piece_at(tt_entry.move_start as usize),
                     tt_entry.promotion,
                     tt_entry.en_passent_capture
-                        || self.piece_at(tt_entry.move_target as usize) != NoPiece,
+                        || self.game.piece_at(tt_entry.move_target as usize) != NoPiece,
                     tt_entry.double_pawn_push,
                     tt_entry.en_passent_capture,
                     tt_entry.castling,
@@ -330,6 +403,7 @@ impl ChessGame {
             }
         }
         let mut moves: Vec<(Move, i32)> = self
+            .game
             .legal_moves()
             .into_iter()
             .filter(|m| m.capture())
@@ -350,7 +424,7 @@ impl ChessGame {
                     // order captures before quiet moves, MVV-LVA
                     if !m.en_passent() {
                         score += EVAL_PARAMS.piece_values
-                            [(Midgame, self.piece_at(m.target() as usize))]
+                            [(Midgame, self.game.piece_at(m.target() as usize))]
                             - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
                     }
                     score
@@ -361,15 +435,20 @@ impl ChessGame {
 
         let mut best_move = Move::null();
         for (move_, _) in moves.iter() {
-            self.make_move(*move_);
+            self.game.make_move(*move_);
             let (mut score, trace) =
                 self._quiesce::<T>(-beta, -alpha, depth - 1, *move_, eval_params);
             score = -score;
-            self.unmake_move();
+            self.game.unmake_move();
             if score >= beta {
                 if !T::TRACING {
-                    self.transposition_table
-                        .set(self.hash, *move_, depth as i8, beta, LowerBound);
+                    self.transposition_table.set(
+                        self.game.hash(),
+                        *move_,
+                        depth as i8,
+                        beta,
+                        LowerBound,
+                    );
                 }
                 return (beta, trace);
             }
@@ -380,8 +459,13 @@ impl ChessGame {
             }
         }
         if !T::TRACING {
-            self.transposition_table
-                .set(self.hash, best_move, depth as i8, alpha, UpperBound);
+            self.transposition_table.set(
+                self.game.hash(),
+                best_move,
+                depth as i8,
+                alpha,
+                UpperBound,
+            );
         }
         (alpha, best_trace)
     }

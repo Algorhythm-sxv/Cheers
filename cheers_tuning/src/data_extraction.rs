@@ -26,7 +26,6 @@ impl GameResult {
 use cheers_lib::{
     chessgame::ChessGame,
     moves::Move,
-    transposition_table::{TranspositionTable, TT_DEFAULT_SIZE},
     types::PieceIndex,
 };
 use pgn_reader::*;
@@ -52,10 +51,9 @@ pub struct FENWriter {
 
 impl FENWriter {
     pub fn new() -> Self {
-        let tt = TranspositionTable::new(TT_DEFAULT_SIZE);
         Self {
             move_counter: 0,
-            game: ChessGame::new(tt),
+            game: ChessGame::new(),
             game_result: GameResult::Draw,
             fen_list: Vec::new(),
         }

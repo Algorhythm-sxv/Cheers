@@ -62,10 +62,13 @@ pub struct TranspositionTable {
 }
 
 impl TranspositionTable {
-    pub fn new(table_size: usize) -> Self {
-        assert!(table_size.is_power_of_two());
-        let mut table = Vec::with_capacity(table_size);
-        for _ in 0..table_size {
+    pub fn new(table_size_mb: usize) -> Self {
+        let mut length = table_size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
+        if length != 0 {
+            length = length.next_power_of_two();
+        }
+        let mut table = Vec::with_capacity(length);
+        for _ in 0..length {
             table.push(Entry::default());
         }
         Self {
@@ -86,7 +89,7 @@ impl TranspositionTable {
         use self::Ordering::*;
         let table = self.table.read().unwrap();
         let index = hash as usize & (table.len() - 1);
-        
+
         let stored = match table.get(index) {
             Some(entry) => entry,
             None => return,
