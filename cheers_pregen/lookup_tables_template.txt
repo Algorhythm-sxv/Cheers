@@ -52,7 +52,7 @@ pub fn print_magics() {{
 }}
 
 fn magic_hash(blocking_mask: BitBoard, magic: u64, shift: u8) -> usize {{
-    ((blocking_mask.as_u64().wrapping_mul(magic)) >> (64 - shift)) as usize
+    ((blocking_mask.as_u64().wrapping_mul(magic)) >> shift) as usize
 }}
 
 pub static KNIGHT_TABLE: [BitBoard; 64] = {:?};

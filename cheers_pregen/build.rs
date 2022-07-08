@@ -304,7 +304,7 @@ fn find_magic(
                 index: *index,
                 mask,
                 magic,
-                shift: n,
+                shift: 64 - n,
             });
 
             // allocate more elements
