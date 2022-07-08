@@ -9,6 +9,7 @@ use std::{
     error::Error,
     fs::File,
     io::{prelude::*, stdin},
+    path::PathBuf,
     sync::atomic::Ordering,
     thread,
     time::{Duration, Instant},
@@ -21,9 +22,7 @@ struct EngineOptions {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut position = ChessGame::new();
-    let mut options = EngineOptions {
-        tt_size_mb: 64
-    };
+    let mut options = EngineOptions { tt_size_mb: 64 };
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
@@ -189,8 +188,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             Some(&"test") => {
+                let path = match words.get(1) {
+                    Some(p) => match PathBuf::try_from(p) {
+                        Ok(path) => path,
+                        Err(_) => {
+                            println!("Invalid perft test file path: {p}");
+                            continue;
+                        }
+                    },
+                    None => {
+                        println!("No path given for perft test file");
+                        continue;
+                    }
+                };
                 let mut test_suite = String::new();
-                File::open("src/perftsuite.txt")?.read_to_string(&mut test_suite)?;
+                File::open(path)?.read_to_string(&mut test_suite)?;
                 for depth in 1..=6 {
                     for test in test_suite.split('\n') {
                         let mut test_params = test.split(';');
