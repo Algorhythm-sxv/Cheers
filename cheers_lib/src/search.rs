@@ -147,13 +147,23 @@ impl Search {
         last_move: Move,
         pv: &mut PrincipalVariation,
     ) -> i32 {
-        NODE_COUNT.fetch_add(1, Ordering::Relaxed);
-        NPS_COUNT.fetch_add(1, Ordering::Relaxed);
-
         // terminate search early
         if !RUN_SEARCH.load(Ordering::Relaxed) && depth > 1 {
             return 0;
+        } 
+        
+        // quiescence search at full depth
+        if depth == 0 {
+            // exact score so we must reset the pv
+            pv.len = 0;
+            let score = self.quiesce(alpha, beta, 0, last_move, EVAL_PARAMS);
+            // self.transposition_table
+            //     .set(self.hash, Move::null(), depth as i8, score, Exact);
+            return score;
         }
+
+        NODE_COUNT.fetch_add(1, Ordering::Relaxed);
+        NPS_COUNT.fetch_add(1, Ordering::Relaxed);
 
         // check 50 move and repetition draws
         if self.game.halfmove_clock() == 100
@@ -171,15 +181,6 @@ impl Search {
         }
 
         let mut line = PrincipalVariation::new();
-        // quiescence search at full depth
-        if depth == 0 {
-            // exact score so we must reset the pv
-            pv.len = 0;
-            let score = self.quiesce(alpha, beta, -1, last_move, EVAL_PARAMS);
-            // self.transposition_table
-            //     .set(self.hash, Move::null(), depth as i8, score, Exact);
-            return score;
-        }
 
         // transposition table lookup
         let mut tt_move = Move::null();
