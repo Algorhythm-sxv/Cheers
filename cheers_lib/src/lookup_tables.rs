@@ -1,12 +1,11 @@
 use crate::types::ColorIndex;
 use cheers_bitboards::BitBoard;
 
-use cheers_pregen::LOOKUP_TABLES;
+use cheers_pregen::*;
 
 pub fn lookup_pawn_attack(square: usize, color: ColorIndex) -> BitBoard {
     unsafe {
-        *LOOKUP_TABLES
-            .pawn_attack_tables
+        *PAWN_ATTACK_TABLES
             .get_unchecked(color as usize)
             .get_unchecked(square)
     }
@@ -14,55 +13,38 @@ pub fn lookup_pawn_attack(square: usize, color: ColorIndex) -> BitBoard {
 
 pub fn lookup_pawn_push(square: usize, color: ColorIndex) -> BitBoard {
     unsafe {
-        *LOOKUP_TABLES
-            .pawn_push_one_tables
+        *PAWN_PUSH_ONE_TABLES
             .get_unchecked(color as usize)
             .get_unchecked(square)
     }
 }
 
 pub fn lookup_knight(square: usize) -> BitBoard {
-    unsafe { *LOOKUP_TABLES.knight_table.get_unchecked(square) }
+    unsafe { *KNIGHT_TABLE.get_unchecked(square) }
 }
 
 pub fn lookup_king(square: usize) -> BitBoard {
-    unsafe { *LOOKUP_TABLES.king_table.get_unchecked(square) }
+    unsafe { *KING_TABLE.get_unchecked(square) }
 }
 
 pub fn lookup_bishop(square: usize, blocking_mask: BitBoard) -> BitBoard {
-    unsafe {
-        let tables = &LOOKUP_TABLES;
-        *tables
-            .sliding_attack_table
-            .get_unchecked(tables.bishop_attack_index(square, blocking_mask))
-    }
+    unsafe { *SLIDING_ATTACK_TABLE.get_unchecked(bishop_attack_index(square, blocking_mask)) }
 }
 
 pub fn lookup_rook(square: usize, blocking_mask: BitBoard) -> BitBoard {
-    unsafe {
-        let tables = &LOOKUP_TABLES;
-        *tables
-            .sliding_attack_table
-            .get_unchecked(tables.rook_attack_index(square, blocking_mask))
-    }
+    unsafe { *SLIDING_ATTACK_TABLE.get_unchecked(rook_attack_index(square, blocking_mask)) }
 }
 
 pub fn lookup_queen(square: usize, blocking_mask: BitBoard) -> BitBoard {
     unsafe {
-        let tables = &LOOKUP_TABLES;
-        *tables
-            .sliding_attack_table
-            .get_unchecked(tables.rook_attack_index(square, blocking_mask))
-            | tables
-                .sliding_attack_table
-                .get_unchecked(tables.bishop_attack_index(square, blocking_mask))
+        (*SLIDING_ATTACK_TABLE.get_unchecked(rook_attack_index(square, blocking_mask)))
+            | (*SLIDING_ATTACK_TABLE.get_unchecked(bishop_attack_index(square, blocking_mask)))
     }
 }
 
 pub fn lookup_between(start: u8, target: u8) -> BitBoard {
     unsafe {
-        *LOOKUP_TABLES
-            .between
+        *BETWEEN
             .get_unchecked(start as usize)
             .get_unchecked(target as usize)
     }

@@ -1,0 +1,65 @@
+use cheers_bitboards::BitBoard;
+
+#[derive(Copy, Clone)]
+pub struct MagicSquare {{
+    pub index: usize,
+    pub mask: BitBoard,
+    pub magic: u64,
+    pub shift: u8,
+}}
+
+#[allow(dead_code)]
+pub struct LookupTables {{
+    pub knight_table: &'static [BitBoard; 64],
+    pub king_table: &'static [BitBoard; 64],
+    pub pawn_push_one_tables: &'static [[BitBoard; 64]; 2],
+    pub pawn_attack_tables: &'static [[BitBoard; 64]; 2],
+    pub sliding_attack_table: &'static [BitBoard; 107648],
+    pub between: &'static [[BitBoard; 64]; 64],
+    pub rook_magics: &'static [MagicSquare; 64],
+    pub bishop_magics: &'static [MagicSquare; 64]
+}}
+
+pub fn bishop_attack_index(square: usize, blocking_mask: BitBoard) -> usize {{
+    let magic_square = unsafe {{ BISHOP_MAGICS.get_unchecked(square) }};
+    magic_square.index
+        + magic_hash(
+            magic_square.mask & blocking_mask,
+            magic_square.magic,
+            magic_square.shift,
+        )
+}}
+
+pub fn rook_attack_index(square: usize, blocking_mask: BitBoard) -> usize {{
+    let magic_square = unsafe {{ ROOK_MAGICS.get_unchecked(square) }};
+    magic_square.index
+        + magic_hash(
+            magic_square.mask & blocking_mask,
+            magic_square.magic,
+            magic_square.shift,
+        )
+}}
+
+pub fn print_magics() {{
+    println!("Rook magics:");
+    for square in ROOK_MAGICS.iter() {{
+        println!("{{:#018X}},", square.magic);
+    }}
+    println!("Bishop magics:");
+    for square in ROOK_MAGICS.iter() {{
+        println!("{{:#018X}},", square.magic);
+    }}
+}}
+
+fn magic_hash(blocking_mask: BitBoard, magic: u64, shift: u8) -> usize {{
+    ((blocking_mask.as_u64().wrapping_mul(magic)) >> (64 - shift)) as usize
+}}
+
+pub static KNIGHT_TABLE: [BitBoard; 64] = {:?};
+pub static KING_TABLE: [BitBoard; 64] = {:?};
+pub static PAWN_PUSH_ONE_TABLES: [[BitBoard; 64]; 2] = {:?};
+pub static PAWN_ATTACK_TABLES: [[BitBoard; 64]; 2] = {:?};
+pub static SLIDING_ATTACK_TABLE: [BitBoard; 107648] = {:?};
+pub static BETWEEN: [[BitBoard; 64]; 64] = {:?};
+pub static ROOK_MAGICS: [MagicSquare; 64] = {:?};
+pub static BISHOP_MAGICS: [MagicSquare; 64] = {:?};

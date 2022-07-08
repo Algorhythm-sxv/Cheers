@@ -15,12 +15,23 @@ fn main() {
     )
     .unwrap();
 
+    let mut index = 0;
+    let mut sliding_attack_tables = vec![BitBoard::empty(); 107648];
+    let rook_magics = generate_rook_magics(&mut sliding_attack_tables, &mut index, true);
+    let bishop_magics = generate_bishop_magics(&mut sliding_attack_tables, &mut index, true);
     let lookup_tables_out = Path::new("src/lookup_tables.rs");
     fs::write(
         lookup_tables_out,
         format!(
             include_str!("lookup_tables_template.txt"),
-            generate_lookup_tables(),
+            generate_knight_table(),
+            generate_king_table(),
+            generate_pawn_push_tables(),
+            generate_pawn_attack_tables(),
+            sliding_attack_tables,
+            generate_between_table(),
+            rook_magics,
+            bishop_magics,
         ),
     )
     .unwrap();
@@ -36,37 +47,6 @@ fn initialise_zobrist_numbers() -> [u64; 793] {
     // numbers[last] = 0;
 
     numbers
-}
-
-fn generate_lookup_tables() -> Box<LookupTables> {
-    let mut sliding_attack_table = vec![BitBoard::empty(); 107648];
-    let mut index = 0;
-    let rook_magics = generate_rook_magics(&mut *sliding_attack_table, &mut index, true);
-    let bishop_magics = generate_bishop_magics(&mut *sliding_attack_table, &mut index, true);
-    Box::new(LookupTables {
-        knight_table: generate_knight_table(),
-        king_table: generate_king_table(),
-        pawn_push_one_tables: generate_pawn_push_tables(),
-        pawn_attack_tables: generate_pawn_attack_tables(),
-        sliding_attack_table,
-        between: generate_between_table(),
-        rook_magics,
-        bishop_magics,
-    })
-}
-
-#[allow(dead_code)]
-#[derive(Debug)]
-pub struct LookupTables {
-    knight_table: [BitBoard; 64],
-    king_table: [BitBoard; 64],
-    pawn_push_one_tables: [[BitBoard; 64]; 2],
-    pawn_attack_tables: [[BitBoard; 64]; 2],
-    // I wish I could make this a [BitBoard; 107648] but rn it stack overflows
-    sliding_attack_table: Vec<BitBoard>,
-    between: [[BitBoard; 64]; 64],
-    rook_magics: [MagicSquare; 64],
-    bishop_magics: [MagicSquare; 64],
 }
 
 // is t between a and b?
