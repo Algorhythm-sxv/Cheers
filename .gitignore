@@ -2,6 +2,6 @@
 /.vscode
 engine-interface.txt
 /test_binaries
-*.txt
+*/best_parameters.txt
 *.fen
 *.pgn
