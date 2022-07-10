@@ -274,7 +274,6 @@ impl Search {
                     self.history_tables[self.game.current_player()][m.piece()][m.target() as usize];
             }
         });
-        // moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
         // make sure the reported best move is at least legal
         let mut best_move = *moves.first().unwrap();
 
@@ -409,8 +408,8 @@ impl Search {
                 }
                 m
             })
+            .filter(|m| m.score > 0)
             .collect();
-        // moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.score));
 
         let mut best_move = Move::null();
         for i in 0..moves.len() {
