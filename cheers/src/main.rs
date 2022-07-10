@@ -249,6 +249,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
+    let search_start = Instant::now();
+    let max_time_ms = search.max_time_ms;
     // spawn another thread to do the actual searching
     thread::spawn(move || {
         let (score, pv) = search.search();
@@ -265,6 +267,13 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
             let nps = (NPS_COUNT.swap(0, Ordering::Relaxed) as f32 / node_report_time.as_secs_f32())
                 as usize;
             println!("info nodes {nodes} nps {nps}");
+        }
+        // terminate search after max time elapsed
+        if let Some(max_time) = max_time_ms {
+            if (Instant::now() - search_start).as_millis() as usize > max_time {
+                RUN_SEARCH.store(false, Ordering::Relaxed);
+                break;
+            }
         }
         thread::sleep(Duration::from_millis(10));
     }
