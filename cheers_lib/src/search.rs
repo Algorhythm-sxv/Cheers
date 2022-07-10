@@ -1,6 +1,5 @@
 use std::{fmt::Display, sync::atomic::*};
 
-use crate::chessgame::see::SEE_PIECE_VALUES;
 use crate::moves::{pick_move, KillerMoves};
 use crate::transposition_table::{NodeType::*, TranspositionTable};
 use crate::{
@@ -255,22 +254,26 @@ impl Search {
                 if m.start() == tt_move.start() && m.target() == tt_move.target() {
                     m.score += 100_000;
                 } else if m.capture() {
-                    m.score += 2000;
-
                     // try recaptures first, least valuable piece first
-                    if last_move.capture() && m.target() == last_move.target() {
-                        m.score += 10_000 - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
-                    }
+                    // if last_move.capture() && m.target() == last_move.target() {
+                    //     m.score += 10_000 - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
+                    // }
                     // order all captures before quiet moves, MVV-LVA
-                    if !m.en_passent() {
-                        m.score += EVAL_PARAMS.piece_values
-                            [(Midgame, self.game.piece_at(m.target() as usize))]
-                            - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
+                    // if !m.en_passent() {
+                    //     m.score += EVAL_PARAMS.piece_values
+                    //         [(Midgame, self.game.piece_at(m.target() as usize))]
+                    //         - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
+                    // }
+                    let see = self.game.see(m);
+                    if see < 0 {
+                        m.score -= 2000 - see;
+                    } else {
+                        m.score += 2000 + see;
                     }
-                    // order queen and rook promotions ahead of quiet moves
-                    else if m.promotion() == Queen || m.promotion() == Rook {
-                        m.score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
-                    }
+                }
+                // order queen and rook promotions ahead of quiet moves
+                else if m.promotion() == Queen || m.promotion() == Rook {
+                    m.score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
                 }
                 // quiet killer moves get sorted after captures but before other quiet moves
                 else if self.killer_moves[ply].contains(&m) {
@@ -361,7 +364,7 @@ impl Search {
         mut alpha: i32,
         beta: i32,
         depth: i32,
-        last_move: Move,
+        _last_move: Move,
         eval_params: EvalParams,
     ) -> (i32, T) {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -410,16 +413,16 @@ impl Search {
                     m.score += 10_000;
                 }
                 // try recaptures first
-                if m.target() == last_move.target() {
-                    m.score += 2000;
-                }
+                // if m.target() == last_move.target() {
+                //     m.score += 2000;
+                // }
 
-                let mvvlva = SEE_PIECE_VALUES[self.game.piece_at(m.target() as usize)]
-                    - SEE_PIECE_VALUES[m.piece()];
-                if mvvlva < 0 {
-                    m.score += self.game.see(m);
+                let see = self.game.see(m);
+                if see < 0 {
+                    m.score -= 2000 - see
+                } else {
+                    m.score += 2000 + see;
                 }
-                m.score += mvvlva;
                 m
             })
             .collect();
