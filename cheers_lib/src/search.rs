@@ -90,10 +90,11 @@ impl Search {
     pub fn search(&self) -> (i32, PrincipalVariation) {
         RUN_SEARCH.store(true, Ordering::Relaxed);
         let mut score = i32::MIN;
-        let mut pv = PrincipalVariation::new();
+        let mut last_pv = PrincipalVariation::new();
 
         let mut search = self.clone();
         for i in 0.. {
+            let mut pv = PrincipalVariation::new();
             score = search.negamax(
                 i32::MIN + 1,
                 i32::MAX - 1,
@@ -120,14 +121,15 @@ impl Search {
                     RUN_SEARCH.store(false, Ordering::Relaxed);
                     break;
                 }
-            } else if i > pv.len + 10 {
+            }
+            if i > pv.len + 10 {
                 RUN_SEARCH.store(false, Ordering::Relaxed);
                 break;
             }
 
-
+            last_pv = pv;
         }
-        (score, pv)
+        (score, last_pv)
     }
 
     fn negamax(
@@ -142,8 +144,8 @@ impl Search {
         // terminate search early
         if !RUN_SEARCH.load(Ordering::Relaxed) && depth > 1 {
             return 0;
-        } 
-        
+        }
+
         // quiescence search at full depth
         if depth == 0 {
             // exact score so we must reset the pv
