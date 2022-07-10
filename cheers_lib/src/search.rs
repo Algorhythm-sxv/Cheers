@@ -1,4 +1,3 @@
-use std::time::Instant;
 use std::{fmt::Display, sync::atomic::*};
 
 use crate::chessgame::see::SEE_PIECE_VALUES;
@@ -91,7 +90,6 @@ impl Search {
 
     pub fn search(&self) -> (i32, PrincipalVariation) {
         RUN_SEARCH.store(true, Ordering::Relaxed);
-        let start = Instant::now();
         let mut score = i32::MIN;
         let mut pv = PrincipalVariation::new();
 
@@ -128,13 +126,7 @@ impl Search {
                 break;
             }
 
-            // terminate search after max time elapsed
-            if let Some(max_time) = self.max_time_ms {
-                if (Instant::now() - start).as_millis() as usize > max_time {
-                    RUN_SEARCH.store(false, Ordering::Relaxed);
-                    break;
-                }
-            }
+
         }
         (score, pv)
     }
