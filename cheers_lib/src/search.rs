@@ -227,7 +227,7 @@ impl Search {
             }
         }
 
-        let moves = self.game.legal_moves();
+        let mut moves = self.game.legal_moves();
 
         if moves.is_empty() {
             // exact score, so we must reset the pv
@@ -248,36 +248,32 @@ impl Search {
             depth
         };
 
-        let mut moves = moves
-            .into_iter()
-            .map(|mut m| {
-                // try the transposition table move early
-                if m.start() == tt_move.start() && m.target() == tt_move.target() {
-                    m.score += 100_000;
-                } else if m.capture() {
-                    // winning captures first, then equal, then quiets, then losing
-                    let see = self.game.see(m);
-                    if see < 0 {
-                        m.score -= 2000 - see;
-                    } else {
-                        m.score += 2000 + see;
-                    }
-                }
-                // order queen and rook promotions ahead of quiet moves
-                else if m.promotion() == Queen || m.promotion() == Rook {
-                    m.score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
-                }
-                // quiet killer moves get sorted before other quiet moves
-                else if self.killer_moves[ply].contains(&m) {
-                    m.score += 500;
-                // quiet moves get ordered by their history heuristic
+        moves.iter_mut().for_each(|mut m| {
+            // try the transposition table move early
+            if m.start() == tt_move.start() && m.target() == tt_move.target() {
+                m.score += 100_000;
+            } else if m.capture() {
+                // winning captures first, then equal, then quiets, then losing
+                let see = self.game.see(*m);
+                if see < 0 {
+                    m.score -= 2000 - see;
                 } else {
-                    m.score += self.history_tables[self.game.current_player()][m.piece()]
-                        [m.target() as usize];
+                    m.score += 2000 + see;
                 }
-                m
-            })
-            .collect::<Vec<Move>>();
+            }
+            // order queen and rook promotions ahead of quiet moves
+            else if m.promotion() == Queen || m.promotion() == Rook {
+                m.score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
+            }
+            // quiet killer moves get sorted before other quiet moves
+            else if self.killer_moves[ply].contains(&m) {
+                m.score += 500;
+            // quiet moves get ordered by their history heuristic
+            } else {
+                m.score +=
+                    self.history_tables[self.game.current_player()][m.piece()][m.target() as usize];
+            }
+        });
         // moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.sort_score));
         // make sure the reported best move is at least legal
         let mut best_move = *moves.first().unwrap();
@@ -414,20 +410,23 @@ impl Search {
                 m
             })
             .collect();
-        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.score));
+        // moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.score));
 
         let mut best_move = Move::null();
-        for move_ in moves.iter() {
-            self.game.make_move(*move_);
+        for i in 0..moves.len() {
+            pick_move(&mut moves, i);
+            let move_ = moves[i];
+
+            self.game.make_move(move_);
             let (mut score, trace) =
-                self._quiesce::<T>(-beta, -alpha, depth - 1, *move_, eval_params);
+                self._quiesce::<T>(-beta, -alpha, depth - 1, move_, eval_params);
             score = -score;
             self.game.unmake_move();
             if score >= beta {
                 if !T::TRACING {
                     self.transposition_table.set(
                         self.game.hash(),
-                        *move_,
+                        move_,
                         depth as i8,
                         beta,
                         LowerBound,
@@ -438,7 +437,7 @@ impl Search {
             if score > alpha {
                 alpha = score;
                 best_trace = trace;
-                best_move = *move_;
+                best_move = move_;
             }
         }
         if !T::TRACING {
