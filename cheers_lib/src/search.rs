@@ -15,10 +15,11 @@ pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+pub const PV_MAX_LEN: usize = 16;
 #[derive(Copy, Clone, Default, Debug)]
 pub struct PrincipalVariation {
     pub len: usize,
-    pub moves: [Move; 16],
+    pub moves: [Move; PV_MAX_LEN],
 }
 
 impl PrincipalVariation {
@@ -122,7 +123,7 @@ impl Search {
                     break;
                 }
             }
-            if i > pv.len + 10 {
+            if i > pv.len + 10 && pv.len != PV_MAX_LEN {
                 RUN_SEARCH.store(false, Ordering::Relaxed);
                 break;
             }
@@ -254,16 +255,7 @@ impl Search {
                 if m.start() == tt_move.start() && m.target() == tt_move.target() {
                     m.score += 100_000;
                 } else if m.capture() {
-                    // try recaptures first, least valuable piece first
-                    // if last_move.capture() && m.target() == last_move.target() {
-                    //     m.score += 10_000 - EVAL_PARAMS.piece_values[(Midgame, m.piece())] / 10;
-                    // }
-                    // order all captures before quiet moves, MVV-LVA
-                    // if !m.en_passent() {
-                    //     m.score += EVAL_PARAMS.piece_values
-                    //         [(Midgame, self.game.piece_at(m.target() as usize))]
-                    //         - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
-                    // }
+                    // winning captures first, then equal, then quiets, then losing
                     let see = self.game.see(m);
                     if see < 0 {
                         m.score -= 2000 - see;
@@ -275,7 +267,7 @@ impl Search {
                 else if m.promotion() == Queen || m.promotion() == Rook {
                     m.score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
                 }
-                // quiet killer moves get sorted after captures but before other quiet moves
+                // quiet killer moves get sorted before other quiet moves
                 else if self.killer_moves[ply].contains(&m) {
                     m.score += 500;
                 // quiet moves get ordered by their history heuristic
@@ -334,9 +326,9 @@ impl Search {
                 if score > alpha {
                     // update PV
                     pv.moves[0] = move_;
-                    pv.moves[1..(line.len + 1)].copy_from_slice(&line.moves[..line.len]);
-                    pv.len = line.len + 1;
-
+                    pv.moves[1..((line.len + 1).min(PV_MAX_LEN))]
+                        .copy_from_slice(&line.moves[..(line.len).min(PV_MAX_LEN - 1)]);
+                    pv.len = (line.len + 1).min(PV_MAX_LEN);
                     alpha = score;
                     best_move = move_;
                 }
@@ -412,10 +404,6 @@ impl Search {
                 if m.start() == tt_move.start() && m.target() == tt_move.target() {
                     m.score += 10_000;
                 }
-                // try recaptures first
-                // if m.target() == last_move.target() {
-                //     m.score += 2000;
-                // }
 
                 let see = self.game.see(m);
                 if see < 0 {
