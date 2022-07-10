@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let nodes = NODE_COUNT.load(Ordering::Relaxed);
         let nps = (nodes as f64 / time.as_secs_f64()) as usize;
-        println!("nodes {nodes} nps {nps}");
+        println!("{nodes} nodes {nps} nps");
         return Ok(());
     }
 
