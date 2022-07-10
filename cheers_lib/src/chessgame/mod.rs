@@ -15,7 +15,8 @@ use cheers_bitboards::BitBoard;
 
 pub mod eval_params;
 pub mod eval_types;
-mod evaluate;
+pub mod evaluate;
+pub mod see;
 
 pub use self::eval_params::*;
 
@@ -488,6 +489,26 @@ impl ChessGame {
             | self.bishop_attacks(color, blocking_mask)
             | self.rook_attacks(color, blocking_mask)
             | self.queen_attacks(color, blocking_mask)
+    }
+
+    fn all_attacks_on(&self, target: usize, blocking_mask: BitBoard) -> BitBoard {
+        let knights = self.piece_masks[(White, Knight)] | self.piece_masks[(Black, Knight)];
+        let bishops = self.piece_masks[(White, Bishop)]
+            | self.piece_masks[(Black, Bishop)]
+            | self.piece_masks[(White, Queen)]
+            | self.piece_masks[(Black, Queen)];
+        let rooks = self.piece_masks[(White, Rook)]
+            | self.piece_masks[(Black, Rook)]
+            | self.piece_masks[(White, Queen)]
+            | self.piece_masks[(Black, Queen)];
+        let kings = self.piece_masks[(White, King)] | self.piece_masks[(Black, King)];
+
+        (lookup_pawn_attack(target, White) & self.piece_masks[(Black, Pawn)])
+            | (lookup_pawn_attack(target, Black) & self.piece_masks[(White, Pawn)])
+            | (lookup_knight(target) & knights)
+            | (lookup_bishop(target, blocking_mask) & bishops)
+            | (lookup_rook(target, blocking_mask) & rooks)
+            | (lookup_king(target) & kings)
     }
 
     pub fn in_check(&self, color: ColorIndex) -> bool {

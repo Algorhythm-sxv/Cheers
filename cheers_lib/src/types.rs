@@ -4,7 +4,10 @@ pub enum ColorIndex {
     Black = 1,
 }
 
-use std::{fmt::Display, ops::{Index, IndexMut}};
+use std::{
+    fmt::Display,
+    ops::{Index, IndexMut},
+};
 
 use self::ColorIndex::*;
 
@@ -21,7 +24,7 @@ impl From<u8> for ColorIndex {
         match color {
             0 => White,
             1 => Black,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -34,7 +37,7 @@ impl<T, const N: usize> Index<ColorIndex> for [T; N] {
     }
 }
 
-impl<T, const N: usize> IndexMut<ColorIndex> for [T;N] {
+impl<T, const N: usize> IndexMut<ColorIndex> for [T; N] {
     fn index_mut(&mut self, index: ColorIndex) -> &mut Self::Output {
         &mut self[index as usize]
     }
@@ -106,12 +109,14 @@ impl<T, const N: usize> Index<PieceIndex> for [T; N] {
     }
 }
 
-impl<T, const N: usize> IndexMut<PieceIndex> for [T;N] {
+impl<T, const N: usize> IndexMut<PieceIndex> for [T; N] {
     fn index_mut(&mut self, index: PieceIndex) -> &mut Self::Output {
         &mut self[index as usize]
     }
 }
 
+use PieceIndex::*;
+pub const PIECES: [PieceIndex; 6] = [Pawn, Knight, Bishop, Rook, Queen, King];
 pub enum CastlingIndex {
     Queenside = 0,
     Kingside = 1,
@@ -125,7 +130,7 @@ impl<T, const N: usize> Index<CastlingIndex> for [T; N] {
     }
 }
 
-impl<T, const N: usize> IndexMut<CastlingIndex> for [T;N] {
+impl<T, const N: usize> IndexMut<CastlingIndex> for [T; N] {
     fn index_mut(&mut self, index: CastlingIndex) -> &mut Self::Output {
         &mut self[index as usize]
     }
@@ -189,4 +194,3 @@ impl std::ops::IndexMut<ColorIndex> for CastlingRights {
         &mut self.0[index as usize]
     }
 }
-

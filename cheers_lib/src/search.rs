@@ -1,6 +1,7 @@
 use std::time::Instant;
 use std::{fmt::Display, sync::atomic::*};
 
+use crate::chessgame::see::SEE_PIECE_VALUES;
 use crate::moves::{pick_move, KillerMoves};
 use crate::transposition_table::{NodeType::*, TranspositionTable};
 use crate::{
@@ -150,8 +151,8 @@ impl Search {
         // terminate search early
         if !RUN_SEARCH.load(Ordering::Relaxed) && depth > 1 {
             return 0;
-        } 
-        
+        }
+
         // quiescence search at full depth
         if depth == 0 {
             // exact score so we must reset the pv
@@ -276,8 +277,9 @@ impl Search {
                     else if m.promotion() == Queen || m.promotion() == Rook {
                         m.score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
                     }
+                }
                 // quiet killer moves get sorted after captures but before other quiet moves
-                } else if self.killer_moves[ply].contains(&m) {
+                else if self.killer_moves[ply].contains(&m) {
                     m.score += 500;
                 // quiet moves get ordered by their history heuristic
                 } else {
@@ -403,39 +405,34 @@ impl Search {
                 );
             }
         }
-        let mut moves: Vec<(Move, i32)> = self
+        let mut moves: Vec<Move> = self
             .game
             .legal_moves()
             .into_iter()
             .filter(|m| m.capture())
-            .map(|m| {
-                (m, {
-                    let mut score = 0i32;
-                    // try the transposition table move early
-                    if m.start() == tt_move.start()
-                        && m.target() == tt_move.target()
-                        && tt_move.capture()
-                    {
-                        score += 10_000;
-                    }
-                    // try recaptures first
-                    if last_move.capture() && m.target() == last_move.target() {
-                        score += 2000;
-                    }
-                    // order captures before quiet moves, MVV-LVA
-                    if !m.en_passent() {
-                        score += EVAL_PARAMS.piece_values
-                            [(Midgame, self.game.piece_at(m.target() as usize))]
-                            - EVAL_PARAMS.piece_values[(Midgame, m.piece())];
-                    }
-                    score
-                })
+            .map(|mut m| {
+                // try the transposition table move early
+                if m.start() == tt_move.start() && m.target() == tt_move.target() {
+                    m.score += 10_000;
+                }
+                // try recaptures first
+                if m.target() == last_move.target() {
+                    m.score += 2000;
+                }
+
+                let mvvlva = SEE_PIECE_VALUES[self.game.piece_at(m.target() as usize)]
+                    - SEE_PIECE_VALUES[m.piece()];
+                if mvvlva < 0 {
+                    m.score += self.game.see(m);
+                }
+                m.score += mvvlva;
+                m
             })
             .collect();
-        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.1));
+        moves.sort_unstable_by_key(|m| std::cmp::Reverse(m.score));
 
         let mut best_move = Move::null();
-        for (move_, _) in moves.iter() {
+        for move_ in moves.iter() {
             self.game.make_move(*move_);
             let (mut score, trace) =
                 self._quiesce::<T>(-beta, -alpha, depth - 1, *move_, eval_params);
