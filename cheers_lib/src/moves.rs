@@ -103,8 +103,8 @@ impl Move {
 
     pub fn null() -> Self {
         Self::new(
-            Square::Null,
-            Square::Null,
+            Square::A1,
+            Square::A1,
             NoPiece,
             NoPiece,
             false,
@@ -235,7 +235,7 @@ impl Move {
     }
 
     pub fn is_null(&self) -> bool {
-        self.start() == Square::Null
+        self.start() == self.target()
     }
 }
 

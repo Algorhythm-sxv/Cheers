@@ -516,7 +516,7 @@ impl ChessGame {
     }
 
     pub fn is_pseudolegal(&self, start: Square, target: Square) -> bool {
-        if start == Square::Null {
+        if start == target {
             return true;
         }
 
@@ -764,7 +764,10 @@ impl ChessGame {
                                 true,
                                 false,
                                 // en passent capture
-                                target == self.en_passent_mask.first_square(),
+                                match self.en_passent_mask {
+                                    BitBoard(0) => false,
+                                    _ => target == self.en_passent_mask.first_square(),
+                                },
                                 false,
                             ));
                         }
@@ -783,7 +786,7 @@ impl ChessGame {
             {
                 // generate castling kingside if rights remain, the way is clear and the squares aren't attacked
                 let start = king.first_square();
-                moves.push(Move::king_castle(start, (start as u8 + 2).into()));
+                moves.push(Move::king_castle(start, start.offset(2, 0)));
             }
             if self.castling_rights[(color, Queenside)]
                 && ((self.combined) & (king >> 1 | king >> 2 | king >> 3)).is_empty()
@@ -791,7 +794,7 @@ impl ChessGame {
             {
                 // generate castling queenside if rights remain, the way is clear and the squares aren't attacked
                 let start = king.first_square();
-                moves.push(Move::king_castle(start, (start as u8 - 2).into()));
+                moves.push(Move::king_castle(start, start.offset(-2, 0)));
             }
         }
         // Pawn moves
@@ -1046,10 +1049,10 @@ impl ChessGame {
             let dx = target as isize - start as isize;
             let (rook_start, rook_target) = if dx == 2 {
                 // Kingside
-                ((target as u8 + 1).into(), (target as u8 - 1).into())
+                (target.offset(1, 0), target.offset(-1, 0))
             } else {
                 // Queenside
-                ((target as u8 - 2).into(), (target as u8 + 1).into())
+                (target.offset(-2, 0), target.offset(1, 0))
             };
 
             // update king position and hash
@@ -1074,9 +1077,9 @@ impl ChessGame {
         if captured != NoPiece {
             let cap_square = if move_.en_passent() {
                 if color == White {
-                    (target as u8 - 8).into()
+                    target.offset(0, -1)
                 } else {
-                    (target as u8 + 8).into()
+                    target.offset(0, 1)
                 }
             } else {
                 target
@@ -1147,9 +1150,9 @@ impl ChessGame {
             // en passent square
             if move_.double_pawn_push() {
                 let ep_square: Square = if color == White {
-                    (target as u8 - 8).into()
+                    target.offset(0, -1)
                 } else {
-                    (target as u8 + 8).into()
+                    target.offset(0, 1)
                 };
                 // only set the ep mask if the pawn can be taken
                 self.en_passent_mask = ep_square.bitboard() & self.pawn_attacks(!color);
@@ -1199,8 +1202,8 @@ impl ChessGame {
                 self.piece_masks[(self.current_player, King)] ^=
                     start.bitboard() | target.bitboard();
 
-                let rook_start: Square = (target as u8 - 2).into();
-                let rook_target: Square = (target as u8 + 1).into();
+                let rook_start: Square = target.offset(-2, 0);
+                let rook_target: Square = target.offset(1, 0);
 
                 self.piece_masks[(self.current_player, Rook)] ^=
                     rook_start.bitboard() | rook_target.bitboard();
@@ -1214,8 +1217,8 @@ impl ChessGame {
                 self.piece_masks[(self.current_player, King)] ^=
                     start.bitboard() | target.bitboard();
 
-                let rook_start: Square = (target as u8 + 1).into();
-                let rook_target: Square = (target as u8 - 1).into();
+                let rook_start: Square = target.offset(1, 0);
+                let rook_target: Square = target.offset(-1, 0);
 
                 self.piece_masks[(self.current_player, Rook)] ^=
                     rook_start.bitboard() | rook_target.bitboard();
@@ -1234,8 +1237,8 @@ impl ChessGame {
                 let mut cap_square = target;
                 if unmove.en_passent {
                     cap_square = match self.current_player {
-                        White => (target as u8 - 8).into(),
-                        Black => (target as u8 + 8).into(),
+                        White => target.offset(0, -1),
+                        Black => target.offset(0, 1),
                     };
                 }
                 // replace captured piece
@@ -1257,8 +1260,8 @@ impl ChessGame {
 
     pub fn make_null_move(&mut self) {
         let unmove = UnMove::new(
-            Square::Null,
-            Square::Null,
+            Square::A1,
+            Square::A1,
             false,
             NoPiece,
             false,

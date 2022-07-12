@@ -3,6 +3,7 @@ use std::{
     ops::{self, Index, IndexMut},
 };
 
+use bytemuck::Contiguous;
 use overload::overload;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
@@ -174,7 +175,14 @@ pub enum Square {
     F8 = 61,
     G8 = 62,
     H8 = 63,
-    Null = 64,
+}
+
+unsafe impl Contiguous for Square {
+    type Int = u8;
+
+    const MAX_VALUE: Self::Int = 63;
+
+    const MIN_VALUE: Self::Int = 0;
 }
 
 use Square::*;
@@ -193,7 +201,6 @@ impl Square {
             A6 | B6 | C6 | D6 | E6 | F6 | G6 | H6 => 5,
             A7 | B7 | C7 | D7 | E7 | F7 | G7 | H7 => 6,
             A8 | B8 | C8 | D8 | E8 | F8 | G8 | H8 => 7,
-            Null => panic!("'rank()' called on Square::None"),
         }
     }
 
@@ -207,8 +214,12 @@ impl Square {
             F1 | F2 | F3 | F4 | F5 | F6 | F7 | F8 => 5,
             G1 | G2 | G3 | G4 | G5 | G6 | G7 | G8 => 6,
             H1 | H2 | H3 | H4 | H5 | H6 | H7 | H8 => 7,
-            Null => panic!("'file()' called on Square::None"),
         }
+    }
+
+    #[inline]
+    pub fn offset(&self, file: i8, rank: i8) -> Self {
+        Self::from_integer((self.into_integer() as i8 + 8 * rank + file) as u8).unwrap()
     }
 }
 
@@ -230,75 +241,7 @@ macro_rules! square_from_impl {
     ($ty: ty) => {
         impl From<$ty> for Square {
             fn from(n: $ty) -> Self {
-                use Square::*;
-                match n {
-                    0 => A1,
-                    1 => B1,
-                    2 => C1,
-                    3 => D1,
-                    4 => E1,
-                    5 => F1,
-                    6 => G1,
-                    7 => H1,
-                    8 => A2,
-                    9 => B2,
-                    10 => C2,
-                    11 => D2,
-                    12 => E2,
-                    13 => F2,
-                    14 => G2,
-                    15 => H2,
-                    16 => A3,
-                    17 => B3,
-                    18 => C3,
-                    19 => D3,
-                    20 => E3,
-                    21 => F3,
-                    22 => G3,
-                    23 => H3,
-                    24 => A4,
-                    25 => B4,
-                    26 => C4,
-                    27 => D4,
-                    28 => E4,
-                    29 => F4,
-                    30 => G4,
-                    31 => H4,
-                    32 => A5,
-                    33 => B5,
-                    34 => C5,
-                    35 => D5,
-                    36 => E5,
-                    37 => F5,
-                    38 => G5,
-                    39 => H5,
-                    40 => A6,
-                    41 => B6,
-                    42 => C6,
-                    43 => D6,
-                    44 => E6,
-                    45 => F6,
-                    46 => G6,
-                    47 => H6,
-                    48 => A7,
-                    49 => B7,
-                    50 => C7,
-                    51 => D7,
-                    52 => E7,
-                    53 => F7,
-                    54 => G7,
-                    55 => H7,
-                    56 => A8,
-                    57 => B8,
-                    58 => C8,
-                    59 => D8,
-                    60 => E8,
-                    61 => F8,
-                    62 => G8,
-                    63 => H8,
-                    64 => Null,
-                    n => panic!("Invalid Square index: {n}"),
-                }
+                Self::from_integer(n as u8).unwrap()
             }
         }
     };

@@ -9,3 +9,4 @@ path = "src/lib.rs"
 
 [dependencies]
 overload = "0.1"
+bytemuck = "1.9"
