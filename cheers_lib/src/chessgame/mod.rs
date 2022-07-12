@@ -304,8 +304,11 @@ impl ChessGame {
     }
 
     #[inline]
-    pub fn enpassent_square(&self) -> Square {
-        self.en_passent_mask.first_square()
+    pub fn enpassent_square(&self) -> Option<Square> {
+        match self.en_passent_mask {
+            BitBoard(0) => None,
+            _ => Some(self.en_passent_mask.first_square())
+        }
     }
 
     #[inline]

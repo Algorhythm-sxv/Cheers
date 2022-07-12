@@ -140,7 +140,7 @@ impl Move {
             p,
             boards.piece_at(target) != NoPiece,
             piece == Pawn && (target as isize).abs_diff(start as isize) == 16,
-            piece == Pawn && target == boards.enpassent_square(),
+            piece == Pawn && Some(target) == boards.enpassent_square(),
             piece == King && (target as isize).abs_diff(start as isize) == 2,
         )
     }
