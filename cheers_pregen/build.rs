@@ -18,7 +18,9 @@ fn main() {
     let mut index = 0;
     let mut sliding_attack_tables = vec![BitBoard::empty(); 107648];
     let rook_magics = generate_rook_magics(&mut sliding_attack_tables, &mut index, true);
+    println!("rooks");
     let bishop_magics = generate_bishop_magics(&mut sliding_attack_tables, &mut index, true);
+    println!("bishops");
     let lookup_tables_out = Path::new("src/lookup_tables.rs");
     fs::write(
         lookup_tables_out,
@@ -251,7 +253,6 @@ fn find_magic(
     index: &mut usize,
     use_pregen: bool,
 ) -> Result<MagicSquare, String> {
-    println!("{index}");
     let mask = if bishop {
         bishop_mask(square)
     } else {
@@ -316,6 +317,7 @@ fn find_magic(
 
             return result;
         }
+        println!("Failed to calc magic square for {square}: {magic:X}");
     }
 
     Err(format!(
@@ -337,11 +339,11 @@ fn index_to_blocking_mask(index: usize, num_blockers: u8, mut mask: BitBoard) ->
     let mut result = BitBoard::empty();
     for i in 0..num_blockers {
         // find the bit-index of the first blocker and clear that bit in the mask
-        let first_blocker = mask.lsb_index();
-        mask.clear_lsb();
+        let first_blocker = mask.first_square();
+        mask.clear_first_square();
 
         if index & (1 << i) != 0 {
-            result |= BitBoard(1 << first_blocker)
+            result |= first_blocker.bitboard()
         }
     }
     result

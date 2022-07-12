@@ -3,7 +3,7 @@ use std::ops::{Add, AddAssign, Index, IndexMut, Sub};
 use bytemuck::{Pod, Zeroable};
 
 use crate::types::PieceIndex;
-use cheers_bitboards::BitBoard;
+use cheers_bitboards::{BitBoard, Square};
 
 use super::EvalTrace;
 
@@ -22,7 +22,7 @@ pub struct EvalInfo {
     pub behind_pawns: [BitBoard; 2],
     pub outposts: [BitBoard; 2],
     pub seventh_rank: [BitBoard; 2],
-    pub king_square: [i32; 2],
+    pub king_square: [Square; 2],
     pub king_area: [BitBoard; 2],
 }
 
@@ -103,9 +103,9 @@ impl<T, const N: usize> IndexMut<GamePhase> for [T; N] {
 #[derive(Clone, Copy, Debug, Pod, Zeroable, PartialEq, Eq)]
 #[repr(C)]
 pub struct PieceTables(pub [[[i32; 2]; 64]; 6]);
-impl std::ops::Index<(GamePhase, PieceIndex, usize)> for PieceTables {
+impl std::ops::Index<(GamePhase, PieceIndex, Square)> for PieceTables {
     type Output = i32;
-    fn index(&self, index: (GamePhase, PieceIndex, usize)) -> &Self::Output {
+    fn index(&self, index: (GamePhase, PieceIndex, Square)) -> &Self::Output {
         &self.0[index.1 as usize][index.2][index.0 as usize]
     }
 }

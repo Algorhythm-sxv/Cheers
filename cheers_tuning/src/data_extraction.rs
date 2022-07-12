@@ -23,11 +23,7 @@ impl GameResult {
         }
     }
 }
-use cheers_lib::{
-    chessgame::ChessGame,
-    moves::Move,
-    types::PieceIndex,
-};
+use cheers_lib::{chessgame::ChessGame, moves::Move, types::PieceIndex};
 use pgn_reader::*;
 use GameResult::*;
 
@@ -129,17 +125,17 @@ fn san_to_move(san: San, game: &ChessGame) -> Option<Move> {
             promotion,
         } => {
             let correct_file = if let Some(f) = file {
-                f as u8 == m.start() % 8
+                f as usize == m.start().file()
             } else {
                 true
             };
             let correct_rank = if let Some(r) = rank {
-                r as u8 == m.start() / 8
+                r as usize == m.start().rank()
             } else {
                 true
             };
             compare_roles(m.piece(), role)
-                && m.target() == to as u8
+                && m.target() == (to as u8).into()
                 && m.capture() == capture
                 && correct_file
                 && correct_rank
@@ -149,7 +145,7 @@ fn san_to_move(san: San, game: &ChessGame) -> Option<Move> {
         }
         San::Castle(side) => {
             m.castling()
-                && m.target() % 8
+                && m.target().file()
                     == match side {
                         CastlingSide::KingSide => 6,
                         CastlingSide::QueenSide => 2,

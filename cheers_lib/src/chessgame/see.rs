@@ -1,5 +1,3 @@
-use cheers_bitboards::BitBoard;
-
 use crate::{
     lookup_tables::{lookup_bishop, lookup_rook},
     moves::Move,
@@ -15,7 +13,7 @@ impl ChessGame {
         let mut swap_list = [0i32; 32];
 
         let mut current_attacker = move_.piece();
-        let mut attacker_mask = BitBoard(1 << move_.start());
+        let mut attacker_mask = move_.start().bitboard();
 
         let bishops = self.piece_masks[(White, Bishop)]
             | self.piece_masks[(Black, Bishop)]
@@ -28,7 +26,7 @@ impl ChessGame {
             | self.piece_masks[(Black, Queen)];
 
         // simulate the first capture
-        swap_list[0] = SEE_PIECE_VALUES[self.piece_at(target as usize)];
+        swap_list[0] = SEE_PIECE_VALUES[self.piece_at(target)];
         let mut occupied = self.combined;
         let mut color = !self.current_player;
 
@@ -40,7 +38,7 @@ impl ChessGame {
             swap_list[0] = SEE_PIECE_VALUES[Pawn];
         }
 
-        let mut attackers = self.all_attacks_on(target as usize, occupied);
+        let mut attackers = self.all_attacks_on(target, occupied);
 
         let mut i = 0;
         for _ in 1..32 {
@@ -55,11 +53,11 @@ impl ChessGame {
 
             // consider diagonal x-rays
             if current_attacker == Pawn || current_attacker == Bishop || current_attacker == Queen {
-                attackers |= lookup_bishop(target as usize, occupied) & bishops;
+                attackers |= lookup_bishop(target, occupied) & bishops;
             }
             // consider orthogonal x-rays
             if current_attacker == Rook || current_attacker == Queen {
-                attackers |= lookup_rook(target as usize, occupied) & rooks;
+                attackers |= lookup_rook(target, occupied) & rooks;
             }
 
             // remove used attacks
@@ -70,8 +68,9 @@ impl ChessGame {
             for p in PIECES {
                 if (attackers & self.piece_masks[(color, p)]).is_not_empty() {
                     current_attacker = p;
-                    attacker_mask =
-                        BitBoard(1 << (attackers & self.piece_masks[(color, p)]).lsb_index());
+                    attacker_mask = (attackers & self.piece_masks[(color, p)])
+                        .first_square()
+                        .bitboard();
                     break;
                 }
             }

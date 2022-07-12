@@ -19,11 +19,11 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
 
         let phase = self.game.game_phase();
 
-        let white_king_square = self.game.piece_masks()[(White, King)].lsb_index() as i32;
-        let black_king_square = self.game.piece_masks()[(Black, King)].lsb_index() as i32;
+        let white_king_square = self.game.piece_masks()[(White, King)].first_square().into();
+        let black_king_square = self.game.piece_masks()[(Black, King)].first_square().into();
 
-        let white_king_attacks = lookup_king(white_king_square as usize);
-        let black_king_attacks = lookup_king(black_king_square as usize);
+        let white_king_attacks = lookup_king(white_king_square);
+        let black_king_attacks = lookup_king(black_king_square);
 
         // initialise eval info
         let info = EvalInfo {
@@ -102,9 +102,10 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
 
             // king distance
             let king = info.king_square[color];
-            let distance = (king % 8 - knight as i32 % 8)
-                .abs()
-                .max((king / 8 - knight as i32 / 8).abs()) as usize;
+            let distance = king
+                .file()
+                .abs_diff(knight.file())
+                .max(king.rank().abs_diff(knight.rank())) as usize;
             if distance >= 4 {
                 eval.mg += params.knight_king_distance[distance - 4][Midgame];
                 eval.eg += params.knight_king_distance[distance - 4][Endgame];
@@ -113,7 +114,7 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
             }
 
             // outposts
-            if (BitBoard(1 << knight) & info.outposts[color]).is_not_empty() {
+            if (knight.bitboard() & info.outposts[color]).is_not_empty() {
                 let defended = (lookup_pawn_attack(knight, !color)
                     & self.game.piece_masks()[(color, Pawn)])
                     .is_not_empty() as usize;
@@ -183,9 +184,10 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
 
             // king distance
             let king = info.king_square[color];
-            let distance = (king % 8 - bishop as i32 % 8)
-                .abs()
-                .max((king / 8 - bishop as i32 / 8).abs()) as usize;
+            let distance = king
+                .file()
+                .abs_diff(bishop.file())
+                .max(king.rank().abs_diff(bishop.rank())) as usize;
             if distance >= 4 {
                 eval.mg += params.bishop_king_distance[distance - 4][Midgame];
                 eval.eg += params.bishop_king_distance[distance - 4][Endgame];
@@ -194,7 +196,7 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
             }
 
             // outposts
-            if (BitBoard(1 << bishop) & info.outposts[color]).is_not_empty() {
+            if (bishop.bitboard() & info.outposts[color]).is_not_empty() {
                 let defended = (lookup_pawn_attack(bishop, !color)
                     & self.game.piece_masks()[(color, Pawn)])
                     .is_not_empty() as usize;
@@ -204,7 +206,7 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
             }
 
             // mobility
-            let attacks = lookup_bishop(bishop as usize, self.game.combined());
+            let attacks = lookup_bishop(bishop, self.game.combined());
             let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
             eval.mg += params.bishop_mobility[mobility][Midgame];
             eval.eg += params.bishop_mobility[mobility][Endgame];
@@ -246,16 +248,16 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
                 .term(|t| t.rook_placement[relative_rook][color] += 1);
 
             // open files
-            if (self.game.piece_masks()[(color, Pawn)] & FILES[rook % 8]).is_empty() {
-                let open =
-                    (self.game.piece_masks()[(!color, Pawn)] & FILES[rook % 8]).is_empty() as usize;
+            if (self.game.piece_masks()[(color, Pawn)] & FILES[rook.file()]).is_empty() {
+                let open = (self.game.piece_masks()[(!color, Pawn)] & FILES[rook.file()]).is_empty()
+                    as usize;
                 eval.mg += params.rook_open_file[open][Midgame];
                 eval.eg += params.rook_open_file[open][Endgame];
                 self.trace.term(|t| t.rook_open_files[open][color] += 1);
             }
 
             // mobility
-            let attacks = lookup_rook(rook as usize, self.game.combined());
+            let attacks = lookup_rook(rook, self.game.combined());
             let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
             eval.mg += params.rook_mobility[mobility][Midgame];
             eval.eg += params.rook_mobility[mobility][Endgame];
@@ -288,18 +290,14 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
                 .term(|t| t.queen_placement[relative_queen][color] += 1);
 
             // discovery risk
-            if self
-                .game
-                .discovered_attacks(queen as usize, color)
-                .is_not_empty()
-            {
+            if self.game.discovered_attacks(queen, color).is_not_empty() {
                 eval.mg += params.queen_discovery_risk[Midgame];
                 eval.eg += params.queen_discovery_risk[Endgame];
                 self.trace.term(|t| t.queen_discovery_risks[color] += 1);
             }
 
             // mobility
-            let attacks = lookup_queen(queen as usize, self.game.combined());
+            let attacks = lookup_queen(queen, self.game.combined());
             let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
             eval.mg += params.queen_mobility[mobility][Midgame];
             eval.eg += params.queen_mobility[mobility][Endgame];
@@ -318,7 +316,7 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let mut eval = EvalScore::zero();
 
         // placement
-        let king = relative_board_index(info.king_square[color] as usize, color);
+        let king = relative_board_index(info.king_square[color], color);
         eval.mg += params.piece_tables[(Midgame, King, king)];
         eval.eg += params.piece_tables[(Endgame, King, king)];
         self.trace.term(|t| t.king_placement[king][color] += 1);
@@ -383,19 +381,20 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
             self.trace
                 .term(|t| t.pawn_placement[relative_pawn][color] += 1);
 
-            let board = BitBoard(1 << pawn);
+            let board = pawn.bitboard();
             let attacks = match color {
                 White => ((board & NOT_H_FILE) << 9) | ((board & NOT_A_FILE) << 7),
                 Black => ((board & NOT_A_FILE) >> 9) | ((board & NOT_H_FILE) >> 7),
             };
             let threats = attacks & self.game.piece_masks()[(!color, Pawn)];
-            let neighbors = self.game.piece_masks()[(color, Pawn)] & adjacent_files(pawn % 8);
+            let neighbors = self.game.piece_masks()[(color, Pawn)] & adjacent_files(pawn.file());
 
             // isolated pawns
             if threats.is_empty() && neighbors.is_empty() {
-                eval.mg += params.isolated_pawn[pawn % 8][Midgame];
-                eval.eg += params.isolated_pawn[pawn % 8][Endgame];
-                self.trace.term(|t| t.isolated_pawns[pawn % 8][color] += 1);
+                eval.mg += params.isolated_pawn[pawn.file()][Midgame];
+                eval.eg += params.isolated_pawn[pawn.file()][Endgame];
+                self.trace
+                    .term(|t| t.isolated_pawns[pawn.file()][color] += 1);
             }
         }
 
@@ -456,6 +455,6 @@ impl ChessGame {
 }
 
 #[inline]
-pub fn relative_board_index(i: usize, color: ColorIndex) -> usize {
-    i ^ (56 * color as usize)
+pub fn relative_board_index(i: Square, color: ColorIndex) -> Square {
+    (i as usize ^ (56 * color as usize)).into()
 }

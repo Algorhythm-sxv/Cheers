@@ -1,14 +1,14 @@
 use std::{fmt::Display, ops::Index};
 
-use cheers_bitboards::BitBoard;
 use crate::{
     chessgame::ChessGame,
     types::{CastlingRights, PieceIndex, PieceIndex::*},
 };
+use cheers_bitboards::{BitBoard, Square};
 
-pub fn coord(square: u8) -> String {
+pub fn coord(square: Square) -> String {
     let mut res = String::new();
-    res.push(match square % 8 {
+    res.push(match square.file() {
         0 => 'a',
         1 => 'b',
         2 => 'c',
@@ -19,7 +19,7 @@ pub fn coord(square: u8) -> String {
         7 => 'h',
         _ => unreachable!(),
     });
-    res.push(match square / 8 {
+    res.push(match square.rank() {
         0 => '1',
         1 => '2',
         2 => '3',
@@ -33,7 +33,7 @@ pub fn coord(square: u8) -> String {
     res
 }
 
-pub fn square(coord: &str) -> u8 {
+pub fn square(coord: &str) -> Square {
     let mut result = match coord.chars().next().unwrap() {
         'a' => 0,
         'b' => 1,
@@ -56,7 +56,7 @@ pub fn square(coord: &str) -> u8 {
         '8' => 7 * 8,
         _ => unreachable!(),
     };
-    result
+    result.into()
 }
 
 // start: 0-7
@@ -76,8 +76,8 @@ pub struct Move {
 impl Move {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        start: u8,
-        target: u8,
+        start: Square,
+        target: Square,
         piece: PieceIndex,
         promotion: PieceIndex,
         capture: bool,
@@ -102,7 +102,16 @@ impl Move {
     }
 
     pub fn null() -> Self {
-        Self::new(0, 0, NoPiece, NoPiece, false, false, false, false)
+        Self::new(
+            Square::Null,
+            Square::Null,
+            NoPiece,
+            NoPiece,
+            false,
+            false,
+            false,
+            false,
+        )
     }
 
     pub fn from_pair(boards: &ChessGame, xy: impl AsRef<str>) -> Self {
@@ -121,70 +130,69 @@ impl Move {
         } else {
             yp
         };
-        let start = square(x) as usize;
-        let target = square(y) as usize;
+        let start = square(x).into();
+        let target = square(y).into();
         let piece = boards.piece_at(start);
         Self::new(
-            start as u8,
-            target as u8,
+            start,
+            target,
             piece,
             p,
             boards.piece_at(target) != NoPiece,
-            // TODO: replace with `abs_diff` once stabilised
-            piece == Pawn && (target as isize - start as isize).abs() == 16,
+            piece == Pawn && (target as isize).abs_diff(start as isize) == 16,
             piece == Pawn && target == boards.enpassent_square(),
-            piece == King && (target as isize - start as isize).abs() == 2,
+            piece == King && (target as isize).abs_diff(start as isize) == 2,
         )
     }
-    pub fn pawn_push(start: u8, target: u8) -> Self {
+    pub fn pawn_push(start: Square, target: Square) -> Self {
         Self::new(start, target, Pawn, NoPiece, false, false, false, false)
     }
-    pub fn pawn_double_push(start: u8, target: u8) -> Self {
+    pub fn pawn_double_push(start: Square, target: Square) -> Self {
         Self::new(start, target, Pawn, NoPiece, false, true, false, false)
     }
-    pub fn pawn_push_promotion(start: u8, target: u8, promotion: PieceIndex) -> Self {
+    pub fn pawn_push_promotion(start: Square, target: Square, promotion: PieceIndex) -> Self {
         Self::new(start, target, Pawn, promotion, false, false, false, false)
     }
-    pub fn pawn_capture(start: u8, target: u8) -> Self {
+    pub fn pawn_capture(start: Square, target: Square) -> Self {
         Self::new(start, target, Pawn, NoPiece, true, false, false, false)
     }
-    pub fn pawn_capture_promotion(start: u8, target: u8, promotion: PieceIndex) -> Self {
+    pub fn pawn_capture_promotion(start: Square, target: Square, promotion: PieceIndex) -> Self {
         Self::new(start, target, Pawn, promotion, true, false, false, false)
     }
-    pub fn pawn_enpassent_capture(start: u8, target: u8) -> Self {
+    pub fn pawn_enpassent_capture(start: Square, target: Square) -> Self {
         Self::new(start, target, Pawn, NoPiece, true, false, true, false)
     }
 
-    pub fn king_move(start: u8, target: u8, capture: bool) -> Self {
+    pub fn king_move(start: Square, target: Square, capture: bool) -> Self {
         Self::new(start, target, King, NoPiece, capture, false, false, false)
     }
 
-    pub fn king_castle(start: u8, target: u8) -> Self {
+    pub fn king_castle(start: Square, target: Square) -> Self {
         Self::new(start, target, King, NoPiece, false, false, false, true)
     }
 
-    pub fn knight_move(start: u8, target: u8, capture: bool) -> Self {
+    pub fn knight_move(start: Square, target: Square, capture: bool) -> Self {
         Self::new(start, target, Knight, NoPiece, capture, false, false, false)
     }
 
-    pub fn bishop_move(start: u8, target: u8, capture: bool) -> Self {
+    pub fn bishop_move(start: Square, target: Square, capture: bool) -> Self {
         Self::new(start, target, Bishop, NoPiece, capture, false, false, false)
     }
 
-    pub fn rook_move(start: u8, target: u8, capture: bool) -> Self {
+    pub fn rook_move(start: Square, target: Square, capture: bool) -> Self {
         Self::new(start, target, Rook, NoPiece, capture, false, false, false)
     }
 
-    pub fn queen_move(start: u8, target: u8, capture: bool) -> Self {
+    pub fn queen_move(start: Square, target: Square, capture: bool) -> Self {
         Self::new(start, target, Queen, NoPiece, capture, false, false, false)
     }
 
-    pub fn start(&self) -> u8 {
-        (self.data & 0xff) as u8
+    pub fn start(&self) -> Square {
+        (self.data & 0xff).into()
     }
 
-    pub fn target(&self) -> u8 {
-        ((self.data >> 8) & 0xff) as u8
+    pub fn target(&self) -> Square {
+        ((self.data >> 8) & 0xff).into()
     }
 
     pub fn piece(&self) -> PieceIndex {
@@ -227,7 +235,7 @@ impl Move {
     }
 
     pub fn is_null(&self) -> bool {
-        self.start() == self.target()
+        self.start() == Square::Null
     }
 }
 
@@ -257,8 +265,8 @@ impl Display for Move {
 
 #[derive(Clone, Copy)]
 pub struct UnMove {
-    pub start: u8,
-    pub target: u8,
+    pub start: Square,
+    pub target: Square,
     pub promotion: bool,
     pub capture: PieceIndex,
     pub en_passent: bool,
@@ -271,8 +279,8 @@ pub struct UnMove {
 impl UnMove {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        start: u8,
-        target: u8,
+        start: Square,
+        target: Square,
         promotion: bool,
         capture: PieceIndex,
         en_passent: bool,

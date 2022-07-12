@@ -1,5 +1,7 @@
 use std::sync::{atomic::*, Arc, RwLock};
 
+use cheers_bitboards::Square;
+
 use crate::{moves::Move, types::PieceIndex};
 
 pub const TT_DEFAULT_SIZE: usize = 1 << 22; // 2^22 entries for ~64MB
@@ -25,8 +27,8 @@ impl NodeType {
 pub struct TTEntry {
     pub score: i32,
     pub depth: i8,
-    pub move_start: u8,
-    pub move_target: u8,
+    pub move_start: Square,
+    pub move_target: Square,
     pub promotion: PieceIndex,
     pub node_type: NodeType,
     pub double_pawn_push: bool,
@@ -39,8 +41,8 @@ impl TTEntry {
         Self {
             score: (data & 0xFFFFFFFF) as i32,
             depth: ((data >> 32) & 0xFF) as i8,
-            move_start: ((data >> (32 + 8)) & 0xFF) as u8,
-            move_target: ((data >> (32 + 8 + 8)) & 0xFF) as u8,
+            move_start: ((data >> (32 + 8)) & 0xFF).into(),
+            move_target: ((data >> (32 + 8 + 8)) & 0xFF).into(),
             promotion: PieceIndex::from_u8(((data >> (32 + 8 + 8 + 8)) & 0b111) as u8),
             node_type: NodeType::from_u8(((data >> (32 + 8 + 8 + 8 + 3)) & 0b11) as u8),
             double_pawn_push: ((data >> (32 + 8 + 8 + 8 + 3 + 2)) & 0b1) != 0,

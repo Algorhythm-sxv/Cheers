@@ -195,10 +195,9 @@ impl Search {
             tt_move = Move::new(
                 tt_entry.move_start,
                 tt_entry.move_target,
-                self.game.piece_at(tt_entry.move_start as usize),
+                self.game.piece_at(tt_entry.move_start),
                 tt_entry.promotion,
-                tt_entry.en_passent_capture
-                    || self.game.piece_at(tt_entry.move_target as usize) != NoPiece,
+                tt_entry.en_passent_capture || self.game.piece_at(tt_entry.move_target) != NoPiece,
                 tt_entry.double_pawn_push,
                 tt_entry.en_passent_capture,
                 tt_entry.castling,
@@ -379,10 +378,10 @@ impl Search {
                 tt_move = Move::new(
                     tt_entry.move_start,
                     tt_entry.move_target,
-                    self.game.piece_at(tt_entry.move_start as usize),
+                    self.game.piece_at(tt_entry.move_start),
                     tt_entry.promotion,
                     tt_entry.en_passent_capture
-                        || self.game.piece_at(tt_entry.move_target as usize) != NoPiece,
+                        || self.game.piece_at(tt_entry.move_target) != NoPiece,
                     tt_entry.double_pawn_push,
                     tt_entry.en_passent_capture,
                     tt_entry.castling,
