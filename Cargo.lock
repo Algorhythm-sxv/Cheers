@@ -76,9 +76,6 @@ dependencies = [
 [[package]]
 name = "cheers_bitboards"
 version = "0.1.0"
-dependencies = [
- "bytemuck",
-]
 
 [[package]]
 name = "cheers_lib"

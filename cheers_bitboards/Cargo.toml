@@ -6,6 +6,3 @@ edition = "2021"
 [lib]
 name = "cheers_bitboards"
 path = "src/lib.rs"
-
-[dependencies]
-bytemuck = "1.9"

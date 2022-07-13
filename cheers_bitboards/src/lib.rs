@@ -3,8 +3,6 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use bytemuck::Contiguous;
-
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub struct BitBoard(pub u64);
 
@@ -31,11 +29,11 @@ impl BitBoard {
     }
     #[inline(always)]
     pub fn first_square(&self) -> Square {
-        Square::from_integer(self.0.trailing_zeros() as u8).unwrap()
+        Square::try_from(self.0.trailing_zeros() as u8).unwrap()
     }
     #[inline(always)]
     pub fn try_first_square(&self) -> Option<Square> {
-        Square::from_integer(self.0.trailing_zeros() as u8)
+        Square::try_from(self.0.trailing_zeros() as u8)
     }
     #[inline(always)]
     pub fn clear_first_square(&mut self) {
@@ -216,14 +214,6 @@ pub enum Square {
     H8 = 63,
 }
 
-unsafe impl Contiguous for Square {
-    type Int = u8;
-
-    const MAX_VALUE: Self::Int = 63;
-
-    const MIN_VALUE: Self::Int = 0;
-}
-
 use Square::*;
 impl Square {
     #[inline(always)]
@@ -261,7 +251,78 @@ impl Square {
 
     #[inline(always)]
     pub fn offset(&self, file: i8, rank: i8) -> Self {
-        Self::from_integer((self.into_integer() as i8 + 8 * rank + file) as u8).unwrap()
+        Self::try_from((*self as i8 + rank * 8 + file) as u8).unwrap()
+    }
+
+    #[inline(always)]
+    pub fn try_from(n: u8) -> Option<Self> {
+        match n {
+            0 => Some(A1),
+            1 => Some(B1),
+            2 => Some(C1),
+            3 => Some(D1),
+            4 => Some(E1),
+            5 => Some(F1),
+            6 => Some(G1),
+            7 => Some(H1),
+            8 => Some(A2),
+            9 => Some(B2),
+            10 => Some(C2),
+            11 => Some(D2),
+            12 => Some(E2),
+            13 => Some(F2),
+            14 => Some(G2),
+            15 => Some(H2),
+            16 => Some(A3),
+            17 => Some(B3),
+            18 => Some(C3),
+            19 => Some(D3),
+            20 => Some(E3),
+            21 => Some(F3),
+            22 => Some(G3),
+            23 => Some(H3),
+            24 => Some(A4),
+            25 => Some(B4),
+            26 => Some(C4),
+            27 => Some(D4),
+            28 => Some(E4),
+            29 => Some(F4),
+            30 => Some(G4),
+            31 => Some(H4),
+            32 => Some(A5),
+            33 => Some(B5),
+            34 => Some(C5),
+            35 => Some(D5),
+            36 => Some(E5),
+            37 => Some(F5),
+            38 => Some(G5),
+            39 => Some(H5),
+            40 => Some(A6),
+            41 => Some(B6),
+            42 => Some(C6),
+            43 => Some(D6),
+            44 => Some(E6),
+            45 => Some(F6),
+            46 => Some(G6),
+            47 => Some(H6),
+            48 => Some(A7),
+            49 => Some(B7),
+            50 => Some(C7),
+            51 => Some(D7),
+            52 => Some(E7),
+            53 => Some(F7),
+            54 => Some(G7),
+            55 => Some(H7),
+            56 => Some(A8),
+            57 => Some(B8),
+            58 => Some(C8),
+            59 => Some(D8),
+            60 => Some(E8),
+            61 => Some(F8),
+            62 => Some(G8),
+            63 => Some(H8),
+            _ => None,
+        }
     }
 }
 
@@ -286,7 +347,7 @@ macro_rules! square_from_impl {
         impl From<$ty> for Square {
             #[inline(always)]
             fn from(n: $ty) -> Self {
-                Self::from_integer(n as u8).unwrap()
+                Self::try_from(n as u8).unwrap()
             }
         }
     };
