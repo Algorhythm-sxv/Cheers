@@ -42,7 +42,7 @@ impl Display for PrincipalVariation {
 
 #[derive(Clone)]
 pub struct Search {
-    game: ChessGame,
+    pub game: ChessGame,
     transposition_table: TranspositionTable,
     killer_moves: KillerMoves<2>,
     history_tables: [[[i32; 64]; 6]; 2],
@@ -240,9 +240,9 @@ impl Search {
             }
         }
 
-        let depth = if moves.len() == 1 {
-            // reduce depth when we only have 1 legal move
-            depth.saturating_sub(3).max(1)
+        // check extension
+        let depth = if self.game.in_check(self.game.current_player()) {
+            depth + 1
         } else {
             depth
         };
@@ -269,8 +269,8 @@ impl Search {
                 m.score += 500;
             // quiet moves get ordered by their history heuristic
             } else {
-                m.score +=
-                    self.history_tables[self.game.current_player()][m.piece()][*m.target() as usize];
+                m.score += self.history_tables[self.game.current_player()][m.piece()]
+                    [*m.target() as usize];
             }
         });
         // make sure the reported best move is at least legal

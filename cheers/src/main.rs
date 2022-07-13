@@ -250,7 +250,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
     let search_start = Instant::now();
-    let max_time_ms = search.max_time_ms;
+    let max_time_ms = search.max_time_ms.map(|ms| {
+        // limit the time of a search with 1 legal move
+        if search.game.legal_moves().len() == 1 {
+            500
+        } else {
+            ms
+        }
+    });
     // spawn another thread to do the actual searching
     thread::spawn(move || {
         let (score, pv) = search.search();
