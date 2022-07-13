@@ -34,7 +34,7 @@ impl ChessGame {
         if move_.en_passent() {
             // shift the pawn back to the normal square for en passent
             occupied ^= self.en_passent_mask
-                | (self.en_passent_mask >> 8 << 16 * (self.current_player as u64));
+                | (self.en_passent_mask >> 8 << 16 * (self.current_player as u8));
             swap_list[0] = SEE_PIECE_VALUES[Pawn];
         }
 

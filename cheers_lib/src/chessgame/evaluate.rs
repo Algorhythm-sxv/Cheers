@@ -19,8 +19,8 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
 
         let phase = self.game.game_phase();
 
-        let white_king_square = self.game.piece_masks()[(White, King)].first_square().into();
-        let black_king_square = self.game.piece_masks()[(Black, King)].first_square().into();
+        let white_king_square = self.game.piece_masks()[(White, King)].first_square();
+        let black_king_square = self.game.piece_masks()[(Black, King)].first_square();
 
         let white_king_attacks = lookup_king(white_king_square);
         let black_king_attacks = lookup_king(black_king_square);

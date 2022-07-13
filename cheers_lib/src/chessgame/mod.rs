@@ -220,7 +220,7 @@ impl ChessGame {
         for rank in (0..8).rev() {
             let mut empty_counter = 0;
             for file in 0..8 {
-                let square = 8 * rank + file;
+                let square = 8u8 * rank + file;
                 let piece = self.piece_at(square.into());
 
                 match piece {
@@ -282,9 +282,9 @@ impl ChessGame {
         fen.push(' ');
 
         // en passent square
-        match self.en_passent_mask {
-            BitBoard(0) => fen.push('-'),
-            mask => fen.push_str(&coord(mask.first_square())),
+        match self.en_passent_mask.try_first_square() {
+            None => fen.push('-'),
+            Some(sq) => fen.push_str(&coord(sq)),
         }
         fen.push(' ');
 
@@ -305,10 +305,7 @@ impl ChessGame {
 
     #[inline]
     pub fn enpassent_square(&self) -> Option<Square> {
-        match self.en_passent_mask {
-            BitBoard(0) => None,
-            _ => Some(self.en_passent_mask.first_square())
-        }
+        self.en_passent_mask.try_first_square()
     }
 
     #[inline]

@@ -1,48 +1,51 @@
 use std::{
     fmt::{Debug, Display},
-    ops::{self, Index, IndexMut},
+    ops::{Index, IndexMut},
 };
 
 use bytemuck::Contiguous;
-use overload::overload;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub struct BitBoard(pub u64);
 
 impl BitBoard {
-    #[inline]
+    #[inline(always)]
     pub fn empty() -> Self {
         Self(0)
     }
-    #[inline]
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.0 == 0
     }
-    #[inline]
+    #[inline(always)]
     pub fn is_not_empty(&self) -> bool {
         self.0 != 0
     }
-    #[inline]
+    #[inline(always)]
     pub fn as_u64(&self) -> u64 {
         self.0
     }
-    #[inline]
+    #[inline(always)]
     pub fn inverse(&self) -> Self {
         Self(!self.0)
     }
-    #[inline]
+    #[inline(always)]
     pub fn first_square(&self) -> Square {
-        self.0.trailing_zeros().into()
+        Square::from_integer(self.0.trailing_zeros() as u8).unwrap()
     }
-    #[inline]
+    #[inline(always)]
+    pub fn try_first_square(&self) -> Option<Square> {
+        Square::from_integer(self.0.trailing_zeros() as u8)
+    }
+    #[inline(always)]
     pub fn clear_first_square(&mut self) {
         self.0 &= self.0 - 1;
     }
-    #[inline]
+    #[inline(always)]
     pub fn count_ones(&self) -> u32 {
         self.0.count_ones()
     }
-    #[inline]
+    #[inline(always)]
     pub fn ishift(&self, n: i32) -> Self {
         if n > 0 {
             Self(self.0 << n)
@@ -54,16 +57,21 @@ impl BitBoard {
 
 impl Iterator for BitBoard {
     type Item = Square;
-
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.0 == 0 {
-            None
-        } else {
-            let i = self.first_square();
+        self.try_first_square().map(|s| {
             self.clear_first_square();
-            Some(i)
-        }
+            s
+        })
+        // if self.0 == 0 {
+        //     None
+        // } else {
+        //     let i = self.first_square();
+        //     self.clear_first_square();
+        //     Some(i)
+        // }
     }
+    #[inline(always)]
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.count_ones() as usize, Some(self.count_ones() as usize))
     }
@@ -96,17 +104,48 @@ impl Display for BitBoard {
     }
 }
 
-overload!((a: ?BitBoard) & (b: ?BitBoard) -> BitBoard {BitBoard(a.0 & b.0)});
-overload!((a: &mut BitBoard) &= (b: ?BitBoard) {a.0 &= b.0});
+macro_rules! bb_impl_op {
+    ($op: ident, $fn: ident) => {
+        impl std::ops::$op for BitBoard {
+            type Output = BitBoard;
+            #[inline(always)]
+            fn $fn(self, rhs: BitBoard) -> Self::Output {
+                BitBoard(self.0.$fn(rhs.0))
+            }
+        }
+    };
+}
+bb_impl_op!(BitAnd, bitand);
+bb_impl_op!(BitOr, bitor);
+bb_impl_op!(BitXor, bitxor);
 
-overload!((a: ?BitBoard) | (b: ?BitBoard) -> BitBoard {BitBoard(a.0 | b.0)});
-overload!((a: &mut BitBoard) |= (b: ?BitBoard) {a.0 |= b.0});
+macro_rules! bb_impl_op_assign {
+    ($op: ident, $fn: ident) => {
+        impl std::ops::$op for BitBoard {
+            #[inline(always)]
+            fn $fn(&mut self, rhs: Self) {
+                self.0.$fn(rhs.0)
+            }
+        }
+    };
+}
+bb_impl_op_assign!(BitAndAssign, bitand_assign);
+bb_impl_op_assign!(BitOrAssign, bitor_assign);
+bb_impl_op_assign!(BitXorAssign, bitxor_assign);
 
-overload!((a: ?BitBoard) ^ (b: ?BitBoard) -> BitBoard {BitBoard(a.0 ^ b.0)});
-overload!((a: &mut BitBoard) ^= (b: ?BitBoard) {a.0 ^= b.0});
+macro_rules! bb_impl_shift {
+    ($sh: ident, $fn: ident, $n: ty) => {
+        impl std::ops::$sh<$n> for BitBoard {
+            type Output = Self;
+            fn $fn(self, rhs: $n) -> Self::Output {
+                Self(self.0.$fn(rhs))
+            }
+        }
+    };
+}
 
-overload!((a: ?BitBoard) << (b: ?u64) -> BitBoard {BitBoard(a.0 << b)});
-overload!((a: ?BitBoard) >> (b: ?u64) -> BitBoard {BitBoard(a.0 >> b)});
+bb_impl_shift!(Shl, shl, u8);
+bb_impl_shift!(Shr, shr, u8);
 
 #[repr(u8)]
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -187,10 +226,12 @@ unsafe impl Contiguous for Square {
 
 use Square::*;
 impl Square {
+    #[inline(always)]
     pub fn bitboard(&self) -> BitBoard {
         BitBoard(1u64.wrapping_shl(*self as u32))
     }
 
+    #[inline(always)]
     pub fn rank(&self) -> usize {
         match self {
             A1 | B1 | C1 | D1 | E1 | F1 | G1 | H1 => 0,
@@ -204,6 +245,7 @@ impl Square {
         }
     }
 
+    #[inline(always)]
     pub fn file(&self) -> usize {
         match self {
             A1 | A2 | A3 | A4 | A5 | A6 | A7 | A8 => 0,
@@ -217,7 +259,7 @@ impl Square {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn offset(&self, file: i8, rank: i8) -> Self {
         Self::from_integer((self.into_integer() as i8 + 8 * rank + file) as u8).unwrap()
     }
@@ -226,12 +268,14 @@ impl Square {
 impl<T, const N: usize> Index<Square> for [T; N] {
     type Output = T;
 
+    #[inline(always)]
     fn index(&self, index: Square) -> &Self::Output {
         &self[index as usize]
     }
 }
 
 impl<T, const N: usize> IndexMut<Square> for [T; N] {
+    #[inline(always)]
     fn index_mut(&mut self, index: Square) -> &mut Self::Output {
         &mut self[index as usize]
     }
@@ -240,6 +284,7 @@ impl<T, const N: usize> IndexMut<Square> for [T; N] {
 macro_rules! square_from_impl {
     ($ty: ty) => {
         impl From<$ty> for Square {
+            #[inline(always)]
             fn from(n: $ty) -> Self {
                 Self::from_integer(n as u8).unwrap()
             }
