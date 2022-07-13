@@ -147,6 +147,13 @@ impl Search {
             return 0;
         }
 
+        // check extension before quiescence
+        let depth = if self.game.in_check(self.game.current_player()) {
+            depth + 1
+        } else {
+            depth
+        };
+
         // quiescence search at full depth
         if depth == 0 {
             // exact score so we must reset the pv
@@ -240,12 +247,6 @@ impl Search {
             }
         }
 
-        // check extension
-        let depth = if self.game.in_check(self.game.current_player()) {
-            depth + 1
-        } else {
-            depth
-        };
 
         moves.iter_mut().for_each(|mut m| {
             // try the transposition table move early
