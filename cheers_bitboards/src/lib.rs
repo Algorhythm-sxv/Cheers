@@ -1,6 +1,6 @@
 use std::{
     fmt::{Debug, Display},
-    ops::{Index, IndexMut},
+    ops::{Deref, Index, IndexMut},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
@@ -29,11 +29,7 @@ impl BitBoard {
     }
     #[inline(always)]
     pub fn first_square(&self) -> Square {
-        Square::try_from(self.0.trailing_zeros() as u8).unwrap()
-    }
-    #[inline(always)]
-    pub fn try_first_square(&self) -> Option<Square> {
-        Square::try_from(self.0.trailing_zeros() as u8)
+        Square(self.0.trailing_zeros() as u8)
     }
     #[inline(always)]
     pub fn clear_first_square(&mut self) {
@@ -57,17 +53,13 @@ impl Iterator for BitBoard {
     type Item = Square;
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        self.try_first_square().map(|s| {
+        if self.0 == 0 {
+            None
+        } else {
+            let sq = Some(self.first_square());
             self.clear_first_square();
-            s
-        })
-        // if self.0 == 0 {
-        //     None
-        // } else {
-        //     let i = self.first_square();
-        //     self.clear_first_square();
-        //     Some(i)
-        // }
+            sq
+        }
     }
     #[inline(always)]
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -145,200 +137,118 @@ macro_rules! bb_impl_shift {
 bb_impl_shift!(Shl, shl, u8);
 bb_impl_shift!(Shr, shr, u8);
 
-#[repr(u8)]
 #[derive(Copy, Clone, Eq, PartialEq)]
-pub enum Square {
-    A1 = 0,
-    B1 = 1,
-    C1 = 2,
-    D1 = 3,
-    E1 = 4,
-    F1 = 5,
-    G1 = 6,
-    H1 = 7,
-    A2 = 8,
-    B2 = 9,
-    C2 = 10,
-    D2 = 11,
-    E2 = 12,
-    F2 = 13,
-    G2 = 14,
-    H2 = 15,
-    A3 = 16,
-    B3 = 17,
-    C3 = 18,
-    D3 = 19,
-    E3 = 20,
-    F3 = 21,
-    G3 = 22,
-    H3 = 23,
-    A4 = 24,
-    B4 = 25,
-    C4 = 26,
-    D4 = 27,
-    E4 = 28,
-    F4 = 29,
-    G4 = 30,
-    H4 = 31,
-    A5 = 32,
-    B5 = 33,
-    C5 = 34,
-    D5 = 35,
-    E5 = 36,
-    F5 = 37,
-    G5 = 38,
-    H5 = 39,
-    A6 = 40,
-    B6 = 41,
-    C6 = 42,
-    D6 = 43,
-    E6 = 44,
-    F6 = 45,
-    G6 = 46,
-    H6 = 47,
-    A7 = 48,
-    B7 = 49,
-    C7 = 50,
-    D7 = 51,
-    E7 = 52,
-    F7 = 53,
-    G7 = 54,
-    H7 = 55,
-    A8 = 56,
-    B8 = 57,
-    C8 = 58,
-    D8 = 59,
-    E8 = 60,
-    F8 = 61,
-    G8 = 62,
-    H8 = 63,
-}
+pub struct Square(u8);
 
-use Square::*;
 impl Square {
+    pub const A1: Self = Self(0);
+    pub const B1: Self = Self(1);
+    pub const C1: Self = Self(2);
+    pub const D1: Self = Self(3);
+    pub const E1: Self = Self(4);
+    pub const F1: Self = Self(5);
+    pub const G1: Self = Self(6);
+    pub const H1: Self = Self(7);
+    pub const A2: Self = Self(8);
+    pub const B2: Self = Self(9);
+    pub const C2: Self = Self(10);
+    pub const D2: Self = Self(11);
+    pub const E2: Self = Self(12);
+    pub const F2: Self = Self(13);
+    pub const G2: Self = Self(14);
+    pub const H2: Self = Self(15);
+    pub const A3: Self = Self(16);
+    pub const B3: Self = Self(17);
+    pub const C3: Self = Self(18);
+    pub const D3: Self = Self(19);
+    pub const E3: Self = Self(20);
+    pub const F3: Self = Self(21);
+    pub const G3: Self = Self(22);
+    pub const H3: Self = Self(23);
+    pub const A4: Self = Self(24);
+    pub const B4: Self = Self(25);
+    pub const C4: Self = Self(26);
+    pub const D4: Self = Self(27);
+    pub const E4: Self = Self(28);
+    pub const F4: Self = Self(29);
+    pub const G4: Self = Self(30);
+    pub const H4: Self = Self(31);
+    pub const A5: Self = Self(32);
+    pub const B5: Self = Self(33);
+    pub const C5: Self = Self(34);
+    pub const D5: Self = Self(35);
+    pub const E5: Self = Self(36);
+    pub const F5: Self = Self(37);
+    pub const G5: Self = Self(38);
+    pub const H5: Self = Self(39);
+    pub const A6: Self = Self(40);
+    pub const B6: Self = Self(41);
+    pub const C6: Self = Self(42);
+    pub const D6: Self = Self(43);
+    pub const E6: Self = Self(44);
+    pub const F6: Self = Self(45);
+    pub const G6: Self = Self(46);
+    pub const H6: Self = Self(47);
+    pub const A7: Self = Self(48);
+    pub const B7: Self = Self(49);
+    pub const C7: Self = Self(50);
+    pub const D7: Self = Self(51);
+    pub const E7: Self = Self(52);
+    pub const F7: Self = Self(53);
+    pub const G7: Self = Self(54);
+    pub const H7: Self = Self(55);
+    pub const A8: Self = Self(56);
+    pub const B8: Self = Self(57);
+    pub const C8: Self = Self(58);
+    pub const D8: Self = Self(59);
+    pub const E8: Self = Self(60);
+    pub const F8: Self = Self(61);
+    pub const G8: Self = Self(62);
+    pub const H8: Self = Self(63);
+    pub const NULL: Self = Self(64);
+
     #[inline(always)]
     pub fn bitboard(&self) -> BitBoard {
-        BitBoard(1u64.wrapping_shl(*self as u32))
+        BitBoard(1u64.wrapping_shl(self.0 as u32))
     }
 
     #[inline(always)]
     pub fn rank(&self) -> usize {
-        match self {
-            A1 | B1 | C1 | D1 | E1 | F1 | G1 | H1 => 0,
-            A2 | B2 | C2 | D2 | E2 | F2 | G2 | H2 => 1,
-            A3 | B3 | C3 | D3 | E3 | F3 | G3 | H3 => 2,
-            A4 | B4 | C4 | D4 | E4 | F4 | G4 | H4 => 3,
-            A5 | B5 | C5 | D5 | E5 | F5 | G5 | H5 => 4,
-            A6 | B6 | C6 | D6 | E6 | F6 | G6 | H6 => 5,
-            A7 | B7 | C7 | D7 | E7 | F7 | G7 | H7 => 6,
-            A8 | B8 | C8 | D8 | E8 | F8 | G8 | H8 => 7,
-        }
+        (self.0 / 8) as usize
     }
 
     #[inline(always)]
     pub fn file(&self) -> usize {
-        match self {
-            A1 | A2 | A3 | A4 | A5 | A6 | A7 | A8 => 0,
-            B1 | B2 | B3 | B4 | B5 | B6 | B7 | B8 => 1,
-            C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 => 2,
-            D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 => 3,
-            E1 | E2 | E3 | E4 | E5 | E6 | E7 | E8 => 4,
-            F1 | F2 | F3 | F4 | F5 | F6 | F7 | F8 => 5,
-            G1 | G2 | G3 | G4 | G5 | G6 | G7 | G8 => 6,
-            H1 | H2 | H3 | H4 | H5 | H6 | H7 | H8 => 7,
-        }
+        (self.0 % 8) as usize
     }
 
     #[inline(always)]
     pub fn offset(&self, file: i8, rank: i8) -> Self {
-        Self::try_from((*self as i8 + rank * 8 + file) as u8).unwrap()
-    }
-
-    #[inline(always)]
-    pub fn try_from(n: u8) -> Option<Self> {
-        match n {
-            0 => Some(A1),
-            1 => Some(B1),
-            2 => Some(C1),
-            3 => Some(D1),
-            4 => Some(E1),
-            5 => Some(F1),
-            6 => Some(G1),
-            7 => Some(H1),
-            8 => Some(A2),
-            9 => Some(B2),
-            10 => Some(C2),
-            11 => Some(D2),
-            12 => Some(E2),
-            13 => Some(F2),
-            14 => Some(G2),
-            15 => Some(H2),
-            16 => Some(A3),
-            17 => Some(B3),
-            18 => Some(C3),
-            19 => Some(D3),
-            20 => Some(E3),
-            21 => Some(F3),
-            22 => Some(G3),
-            23 => Some(H3),
-            24 => Some(A4),
-            25 => Some(B4),
-            26 => Some(C4),
-            27 => Some(D4),
-            28 => Some(E4),
-            29 => Some(F4),
-            30 => Some(G4),
-            31 => Some(H4),
-            32 => Some(A5),
-            33 => Some(B5),
-            34 => Some(C5),
-            35 => Some(D5),
-            36 => Some(E5),
-            37 => Some(F5),
-            38 => Some(G5),
-            39 => Some(H5),
-            40 => Some(A6),
-            41 => Some(B6),
-            42 => Some(C6),
-            43 => Some(D6),
-            44 => Some(E6),
-            45 => Some(F6),
-            46 => Some(G6),
-            47 => Some(H6),
-            48 => Some(A7),
-            49 => Some(B7),
-            50 => Some(C7),
-            51 => Some(D7),
-            52 => Some(E7),
-            53 => Some(F7),
-            54 => Some(G7),
-            55 => Some(H7),
-            56 => Some(A8),
-            57 => Some(B8),
-            58 => Some(C8),
-            59 => Some(D8),
-            60 => Some(E8),
-            61 => Some(F8),
-            62 => Some(G8),
-            63 => Some(H8),
-            _ => None,
-        }
+        Self((self.0 as i8 + rank * 8 + file) as u8)
     }
 }
 
+impl Deref for Square {
+    type Target = u8;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 impl<T, const N: usize> Index<Square> for [T; N] {
     type Output = T;
 
     #[inline(always)]
     fn index(&self, index: Square) -> &Self::Output {
-        &self[index as usize]
+        &self[index.0 as usize]
     }
 }
 
 impl<T, const N: usize> IndexMut<Square> for [T; N] {
     #[inline(always)]
     fn index_mut(&mut self, index: Square) -> &mut Self::Output {
-        &mut self[index as usize]
+        &mut self[index.0 as usize]
     }
 }
 
@@ -347,7 +257,7 @@ macro_rules! square_from_impl {
         impl From<$ty> for Square {
             #[inline(always)]
             fn from(n: $ty) -> Self {
-                Self::try_from(n as u8).unwrap()
+                Self(n as u8)
             }
         }
     };

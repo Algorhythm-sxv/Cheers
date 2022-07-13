@@ -282,7 +282,7 @@ impl ChessGame {
         fen.push(' ');
 
         // en passent square
-        match self.en_passent_mask.try_first_square() {
+        match self.en_passent_square() {
             None => fen.push('-'),
             Some(sq) => fen.push_str(&coord(sq)),
         }
@@ -304,8 +304,11 @@ impl ChessGame {
     }
 
     #[inline]
-    pub fn enpassent_square(&self) -> Option<Square> {
-        self.en_passent_mask.try_first_square()
+    pub fn en_passent_square(&self) -> Option<Square> {
+        match self.en_passent_mask.first_square() {
+            Square::NULL => None,
+            sq => Some(sq),
+        }
     }
 
     #[inline]
@@ -525,7 +528,7 @@ impl ChessGame {
 
         match piece {
             Pawn => {
-                let d = (target as u8).abs_diff(start as u8);
+                let d = (target).abs_diff(*start);
                 if d % 8 != 0 {
                     // captures
                     (self.pawn_attacks(color)
@@ -675,15 +678,14 @@ impl ChessGame {
                     let mut pawn_moves = lookup_pawn_push(pawn_square, color)
                         & pin_ray
                         & push_mask
-                        & (self.combined).inverse();
+                        & self.combined.inverse();
                     if pawn_moves.is_not_empty()
                         && ((color == White
                             && pawn_square.rank() == 1
-                            && ((self.combined) & BitBoard(1 << (pawn_square as u8 + 16)))
-                                .is_empty())
+                            && (self.combined & pawn_square.offset(0, 2).bitboard()).is_empty())
                             || (color == Black
                                 && pawn_square.rank() == 6
-                                && ((self.combined) & BitBoard(1 << (pawn_square as u8 - 16)))
+                                && (self.combined & pawn_square.offset(0, -2).bitboard())
                                     .is_empty()))
                     {
                         pawn_moves |= lookup_pawn_push(pawn_moves.first_square(), color)
@@ -696,7 +698,7 @@ impl ChessGame {
                             NoPiece,
                             false,
                             // double pawn push
-                            (target as isize - pawn_square as isize).abs() == 16,
+                            target.abs_diff(*pawn_square) == 16,
                             false,
                             false,
                         ));
@@ -1046,7 +1048,7 @@ impl ChessGame {
 
         // Castling
         if move_.castling() {
-            let dx = target as isize - start as isize;
+            let dx = *target as isize - *start as isize;
             let (rook_start, rook_target) = if dx == 2 {
                 // Kingside
                 (target.offset(1, 0), target.offset(-1, 0))
@@ -1105,14 +1107,14 @@ impl ChessGame {
             self.castling_rights[color] = [false, false];
             self.hash ^= zobrist_castling(self.castling_rights);
         } else if piece == Rook {
-            if self.castling_rights[(color, Kingside)] && start as usize == 7 + 56 * color as usize
+            if self.castling_rights[(color, Kingside)] && *start as usize == 7 + 56 * color as usize
             {
                 // kingside rook has made first move
                 self.hash ^= zobrist_castling(self.castling_rights);
                 self.castling_rights[(color, Kingside)] = false;
                 self.hash ^= zobrist_castling(self.castling_rights);
             } else if self.castling_rights[(color, Queenside)]
-                && start as usize == 56 * color as usize
+                && *start as usize == 56 * color as usize
             {
                 // queenside rook has made first move
                 self.hash ^= zobrist_castling(self.castling_rights);
@@ -1122,14 +1124,14 @@ impl ChessGame {
         }
         if captured == Rook {
             if self.castling_rights[(!color, Kingside)]
-                && target as usize == 7 + 56 * !color as usize
+                && *target as usize == 7 + 56 * !color as usize
             {
                 // kingside rook has been captured
                 self.hash ^= zobrist_castling(self.castling_rights);
                 self.castling_rights[(!color, Kingside)] = false;
                 self.hash ^= zobrist_castling(self.castling_rights);
             } else if self.castling_rights[(!color, Queenside)]
-                && target as usize == 56 * !color as usize
+                && *target as usize == 56 * !color as usize
             {
                 // queenside rook has been captured
                 self.hash ^= zobrist_castling(self.castling_rights);

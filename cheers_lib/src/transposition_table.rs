@@ -106,8 +106,8 @@ impl TranspositionTable {
         let mut data = 0u64;
         data |= score as u32 as u64;
         data |= ((depth as u8) as u64) << 32;
-        data |= (best_move.start() as u64) << (32 + 8);
-        data |= (best_move.target() as u64) << (32 + 8 + 8);
+        data |= (*best_move.start() as u64) << (32 + 8);
+        data |= (*best_move.target() as u64) << (32 + 8 + 8);
         data |= (best_move.promotion() as u64) << (32 + 8 + 8 + 8);
         data |= (node_type as u64) << (32 + 8 + 8 + 8 + 3);
         data |= (best_move.double_pawn_push() as u64) << (32 + 8 + 8 + 8 + 3 + 2);

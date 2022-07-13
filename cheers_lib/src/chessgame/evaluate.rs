@@ -456,5 +456,5 @@ impl ChessGame {
 
 #[inline]
 pub fn relative_board_index(i: Square, color: ColorIndex) -> Square {
-    (i as usize ^ (56 * color as usize)).into()
+    (*i as usize ^ (56 * color as usize)).into()
 }

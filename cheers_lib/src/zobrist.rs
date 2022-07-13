@@ -6,7 +6,7 @@ use cheers_pregen::ZOBRIST_NUMBERS;
 pub fn zobrist_piece(piece: PieceIndex, color: ColorIndex, square: Square) -> u64 {
     unsafe {
         *ZOBRIST_NUMBERS
-            .get_unchecked(64 * 2 * (piece as usize) + 64 * (color as usize) + square as usize)
+            .get_unchecked(64 * 2 * (piece as usize) + 64 * (color as usize) + *square as usize)
     }
 }
 

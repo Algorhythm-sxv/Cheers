@@ -7,7 +7,7 @@ pub fn lookup_pawn_attack(square: Square, color: ColorIndex) -> BitBoard {
     unsafe {
         *PAWN_ATTACK_TABLES
             .get_unchecked(color as usize)
-            .get_unchecked(square as usize)
+            .get_unchecked(*square as usize)
     }
 }
 
@@ -15,43 +15,38 @@ pub fn lookup_pawn_push(square: Square, color: ColorIndex) -> BitBoard {
     unsafe {
         *PAWN_PUSH_ONE_TABLES
             .get_unchecked(color as usize)
-            .get_unchecked(square as usize)
+            .get_unchecked(*square as usize)
     }
 }
 
 pub fn lookup_knight(square: Square) -> BitBoard {
-    unsafe { *KNIGHT_TABLE.get_unchecked(square as usize) }
+    unsafe { *KNIGHT_TABLE.get_unchecked(*square as usize) }
 }
 
 pub fn lookup_king(square: Square) -> BitBoard {
-    unsafe { *KING_TABLE.get_unchecked(square as usize) }
+    unsafe { *KING_TABLE.get_unchecked(*square as usize) }
 }
 
 pub fn lookup_bishop(square: Square, blocking_mask: BitBoard) -> BitBoard {
-    unsafe {
-        *SLIDING_ATTACK_TABLE.get_unchecked(bishop_attack_index(square as usize, blocking_mask))
-    }
+    unsafe { *SLIDING_ATTACK_TABLE.get_unchecked(bishop_attack_index(square, blocking_mask)) }
 }
 
 pub fn lookup_rook(square: Square, blocking_mask: BitBoard) -> BitBoard {
-    unsafe {
-        *SLIDING_ATTACK_TABLE.get_unchecked(rook_attack_index(square as usize, blocking_mask))
-    }
+    unsafe { *SLIDING_ATTACK_TABLE.get_unchecked(rook_attack_index(square, blocking_mask)) }
 }
 
 pub fn lookup_queen(square: Square, blocking_mask: BitBoard) -> BitBoard {
     unsafe {
-        (*SLIDING_ATTACK_TABLE.get_unchecked(rook_attack_index(square as usize, blocking_mask)))
-            | (*SLIDING_ATTACK_TABLE
-                .get_unchecked(bishop_attack_index(square as usize, blocking_mask)))
+        (*SLIDING_ATTACK_TABLE.get_unchecked(rook_attack_index(square, blocking_mask)))
+            | (*SLIDING_ATTACK_TABLE.get_unchecked(bishop_attack_index(square, blocking_mask)))
     }
 }
 
 pub fn lookup_between(start: Square, target: Square) -> BitBoard {
     unsafe {
         *BETWEEN
-            .get_unchecked(start as usize)
-            .get_unchecked(target as usize)
+            .get_unchecked(*start as usize)
+            .get_unchecked(*target as usize)
     }
 }
 

@@ -86,8 +86,8 @@ impl Move {
         castling: bool,
     ) -> Self {
         let mut res = 0u32;
-        res |= start as u32
-            | (target as u32) << 8
+        res |= *start as u32
+            | (*target as u32) << 8
             | (piece as u32) << (8 + 8)
             | (promotion as u32) << (8 + 8 + 3)
             | (capture as u32) << (8 + 8 + 3 + 3)
@@ -139,9 +139,9 @@ impl Move {
             piece,
             p,
             boards.piece_at(target) != NoPiece,
-            piece == Pawn && (target as isize).abs_diff(start as isize) == 16,
-            piece == Pawn && Some(target) == boards.enpassent_square(),
-            piece == King && (target as isize).abs_diff(start as isize) == 2,
+            piece == Pawn && (target).abs_diff(*start) == 16,
+            piece == Pawn && Some(target) == boards.en_passent_square(),
+            piece == King && (target).abs_diff(*start) == 2,
         )
     }
     pub fn pawn_push(start: Square, target: Square) -> Self {

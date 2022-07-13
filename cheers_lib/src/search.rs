@@ -270,7 +270,7 @@ impl Search {
             // quiet moves get ordered by their history heuristic
             } else {
                 m.score +=
-                    self.history_tables[self.game.current_player()][m.piece()][m.target() as usize];
+                    self.history_tables[self.game.current_player()][m.piece()][*m.target() as usize];
             }
         });
         // make sure the reported best move is at least legal
@@ -310,7 +310,7 @@ impl Search {
                     );
                     if !move_.capture() {
                         self.history_tables[self.game.current_player()][move_.piece()]
-                            [move_.target() as usize] += depth * depth;
+                            [*move_.target() as usize] += depth * depth;
                         if move_.promotion() == NoPiece {
                             self.killer_moves.push(move_, ply);
                         }

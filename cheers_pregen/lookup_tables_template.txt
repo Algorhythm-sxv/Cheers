@@ -1,4 +1,4 @@
-use cheers_bitboards::BitBoard;
+use cheers_bitboards::{{BitBoard, Square}};
 
 #[derive(Copy, Clone)]
 pub struct MagicSquare {{
@@ -20,8 +20,8 @@ pub struct LookupTables {{
     pub bishop_magics: &'static [MagicSquare; 64]
 }}
 
-pub fn bishop_attack_index(square: usize, blocking_mask: BitBoard) -> usize {{
-    let magic_square = unsafe {{ BISHOP_MAGICS.get_unchecked(square) }};
+pub fn bishop_attack_index(square: Square, blocking_mask: BitBoard) -> usize {{
+    let magic_square = unsafe {{ BISHOP_MAGICS.get_unchecked(*square as usize) }};
     magic_square.index
         + magic_hash(
             magic_square.mask & blocking_mask,
@@ -30,8 +30,8 @@ pub fn bishop_attack_index(square: usize, blocking_mask: BitBoard) -> usize {{
         )
 }}
 
-pub fn rook_attack_index(square: usize, blocking_mask: BitBoard) -> usize {{
-    let magic_square = unsafe {{ ROOK_MAGICS.get_unchecked(square) }};
+pub fn rook_attack_index(square: Square, blocking_mask: BitBoard) -> usize {{
+    let magic_square = unsafe {{ ROOK_MAGICS.get_unchecked(*square as usize) }};
     magic_square.index
         + magic_hash(
             magic_square.mask & blocking_mask,
