@@ -247,7 +247,6 @@ impl Search {
             }
         }
 
-
         moves.iter_mut().for_each(|mut m| {
             // try the transposition table move early
             if m.start() == tt_move.start() && m.target() == tt_move.target() {
@@ -280,6 +279,16 @@ impl Search {
         for i in 0..moves.len() {
             pick_move(&mut moves, i);
             let move_ = moves[i];
+
+            // SEE pruning
+            if depth < 6 && ply != 0 && i > 0 && move_.promotion() == NoPiece {
+                let see = self.game.see(move_);
+                let depth_margin = depth * if move_.capture() { 100 } else { 50 };
+                if see <= -depth * depth_margin {
+                    continue;
+                }
+            }
+
             // Late move reduction on non-captures and non-queen-promotions
             let mut score = if i >= 3
                 && depth >= 3
