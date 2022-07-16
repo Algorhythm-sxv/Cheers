@@ -290,7 +290,20 @@ impl Search {
             }
 
             self.game.make_move(move_);
-            let score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line);
+            // Principal Variation Search: search the first move at full width
+            let score = if i < 1 {
+                -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line)
+            } else {
+                // search remaining moves with a null window
+                let mut score =
+                    -self.negamax(-alpha - 1, -alpha, depth - 1, ply + 1, move_, &mut line);
+
+                // if a null window search improves alpha, search again with a full window
+                if score > alpha && score < beta {
+                    score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line);
+                }
+                score
+            };
             self.game.unmake_move();
             if score >= beta {
                 self.transposition_table.set(
