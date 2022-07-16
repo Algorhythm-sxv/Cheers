@@ -184,8 +184,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .output(true);
                     search.max_depth = depth;
                     search.max_time_ms = match position.current_player() {
-                        ColorIndex::White => Some(move_time(wtime, winc)),
-                        ColorIndex::Black => Some(move_time(btime, binc)),
+                        ColorIndex::White => move_time(wtime, winc),
+                        ColorIndex::Black => move_time(btime, binc),
                     };
                     RUN_SEARCH.store(true, Ordering::Relaxed);
                     NODE_COUNT.store(0, Ordering::Relaxed);
@@ -321,12 +321,14 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn move_time(time_millis: Option<usize>, inc_millis: Option<usize>) -> usize {
-    let time = time_millis.unwrap_or(0);
-    let inc = inc_millis.unwrap_or(0);
+fn move_time(time_millis: Option<usize>, inc_millis: Option<usize>) -> Option<usize> {
+    let (time, inc) = match (time_millis, inc_millis) {
+        (None, None) => return None,
+        (t, i) => (t.unwrap_or(0), i.unwrap_or(0)),
+    };
     if time < inc {
-        time / 50
+        Some(time / 20)
     } else {
-        time / 50 + inc / 2
+        Some(time / 20 + inc / 2)
     }
 }
