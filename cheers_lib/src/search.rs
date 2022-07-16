@@ -289,53 +289,34 @@ impl Search {
                 }
             }
 
-            // Late move reduction on non-captures and non-queen-promotions
-            let mut score = if i >= 3
-                && depth >= 3
-                && !move_.capture()
-                && move_.promotion() != Queen
-                && !self.game.in_check(self.game.current_player())
-            {
-                self.game.make_move(move_);
-                // search with a null window; we only care whether it fails low or not
-                let score = -self.negamax(-alpha - 1, -alpha, depth - 2, ply + 1, move_, &mut line);
-                self.game.unmake_move();
-                score
-            } else {
-                alpha + 1
-            };
-
-            // search at full depth, if a reduced move improves alpha it is searched again
-            if score > alpha {
-                self.game.make_move(move_);
-                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line);
-                self.game.unmake_move();
-                if score >= beta {
-                    self.transposition_table.set(
-                        self.game.hash(),
-                        move_,
-                        depth as i8,
-                        beta,
-                        LowerBound,
-                    );
-                    if !move_.capture() {
-                        self.history_tables[self.game.current_player()][move_.piece()]
-                            [*move_.target() as usize] += depth * depth;
-                        if move_.promotion() == NoPiece {
-                            self.killer_moves.push(move_, ply);
-                        }
+            self.game.make_move(move_);
+            let score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line);
+            self.game.unmake_move();
+            if score >= beta {
+                self.transposition_table.set(
+                    self.game.hash(),
+                    move_,
+                    depth as i8,
+                    beta,
+                    LowerBound,
+                );
+                if !move_.capture() {
+                    self.history_tables[self.game.current_player()][move_.piece()]
+                        [*move_.target() as usize] += depth * depth;
+                    if move_.promotion() == NoPiece {
+                        self.killer_moves.push(move_, ply);
                     }
-                    return beta;
                 }
-                if score > alpha {
-                    // update PV
-                    pv.moves[0] = move_;
-                    pv.moves[1..((line.len + 1).min(PV_MAX_LEN))]
-                        .copy_from_slice(&line.moves[..(line.len).min(PV_MAX_LEN - 1)]);
-                    pv.len = (line.len + 1).min(PV_MAX_LEN);
-                    alpha = score;
-                    best_move = move_;
-                }
+                return beta;
+            }
+            if score > alpha {
+                // update PV
+                pv.moves[0] = move_;
+                pv.moves[1..((line.len + 1).min(PV_MAX_LEN))]
+                    .copy_from_slice(&line.moves[..(line.len).min(PV_MAX_LEN - 1)]);
+                pv.len = (line.len + 1).min(PV_MAX_LEN);
+                alpha = score;
+                best_move = move_;
             }
         }
         self.transposition_table
