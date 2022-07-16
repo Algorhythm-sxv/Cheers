@@ -146,13 +146,46 @@ fn main() -> Result<(), Box<dyn Error>> {
                         },
                         None => None,
                     };
+
+                    let winc = words
+                        .iter()
+                        .enumerate()
+                        .skip_while(|(_, &w)| w != "winc")
+                        .nth(1);
+                    let winc = match winc {
+                        Some((i, w)) => match w.parse::<usize>() {
+                            Ok(n) => Some(n),
+                            _ => {
+                                println!("Invalid value for winc: {}", words[i]);
+                                continue;
+                            }
+                        },
+                        None => None,
+                    };
+
+                    let binc = words
+                        .iter()
+                        .enumerate()
+                        .skip_while(|(_, &w)| w != "binc")
+                        .nth(1);
+                    let binc = match binc {
+                        Some((i, w)) => match w.parse::<usize>() {
+                            Ok(n) => Some(n),
+                            _ => {
+                                println!("Invalid value for binc: {}", words[i]);
+                                continue;
+                            }
+                        },
+                        None => None,
+                    };
+
                     let mut search = Search::new(position.clone())
                         .tt_size_mb(options.tt_size_mb)
                         .output(true);
                     search.max_depth = depth;
                     search.max_time_ms = match position.current_player() {
-                        ColorIndex::White => wtime.map(|t| move_time(t).as_millis() as usize),
-                        ColorIndex::Black => btime.map(|t| move_time(t).as_millis() as usize),
+                        ColorIndex::White => Some(move_time(wtime, winc)),
+                        ColorIndex::Black => Some(move_time(btime, binc)),
                     };
                     RUN_SEARCH.store(true, Ordering::Relaxed);
                     NODE_COUNT.store(0, Ordering::Relaxed);
@@ -267,9 +300,10 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
 
     let mut nodes_report = Instant::now();
     while RUN_SEARCH.load(Ordering::Relaxed) {
-        let node_report_time = Instant::now().duration_since(nodes_report);
+        let now = Instant::now();
+        let node_report_time = now.duration_since(nodes_report);
         if node_report_time > Duration::from_millis(500) {
-            nodes_report = Instant::now();
+            nodes_report = now;
             let nodes = NODE_COUNT.load(Ordering::Relaxed);
             let nps = (NPS_COUNT.swap(0, Ordering::Relaxed) as f32 / node_report_time.as_secs_f32())
                 as usize;
@@ -277,16 +311,22 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
         }
         // terminate search after max time elapsed
         if let Some(max_time) = max_time_ms {
-            if (Instant::now() - search_start).as_millis() as usize > max_time {
+            if (now - search_start).as_millis() as usize > max_time {
                 RUN_SEARCH.store(false, Ordering::Relaxed);
                 break;
             }
         }
-        thread::sleep(Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(1));
     }
     Ok(())
 }
 
-fn move_time(msec: usize) -> Duration {
-    Duration::from_millis(msec as u64 / 15)
+fn move_time(time_millis: Option<usize>, inc_millis: Option<usize>) -> usize {
+    let time = time_millis.unwrap_or(0);
+    let inc = inc_millis.unwrap_or(0);
+    if time < inc {
+        time / 50
+    } else {
+        time / 50 + inc / 2
+    }
 }
