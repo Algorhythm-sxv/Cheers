@@ -4,8 +4,8 @@ use cheers_bitboards::BitBoard;
 use rand::prelude::*;
 
 fn main() {
-    println!("cargo:rerun-if-changed=src/lib.rs");
-    println!("cargo:rerun-if-changed=src/lookup_tables_template.txt");
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=lookup_tables_template.txt");
     let zobrist_out = Path::new("src/zobrist.rs");
     fs::write(
         zobrist_out,

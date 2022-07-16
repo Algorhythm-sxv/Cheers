@@ -291,6 +291,7 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
             ms
         }
     });
+    println!("{max_time_ms:?}");
     // spawn another thread to do the actual searching
     thread::spawn(move || {
         let (score, pv) = search.search();
