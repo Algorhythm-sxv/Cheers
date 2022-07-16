@@ -286,7 +286,7 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
     let max_time_ms = search.max_time_ms.map(|ms| {
         // limit the time of a search with 1 legal move
         if search.game.legal_moves().len() == 1 {
-            500
+            ms.min(500)
         } else {
             ms
         }
