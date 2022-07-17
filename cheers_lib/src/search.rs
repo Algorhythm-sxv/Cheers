@@ -109,6 +109,7 @@ impl Search {
                 break;
             }
 
+            last_pv = pv;
             if self.output {
                 println!(
                     "info depth {i} score cp {score} pv {pv} nodes {}",
@@ -127,8 +128,6 @@ impl Search {
                 RUN_SEARCH.store(false, Ordering::Relaxed);
                 break;
             }
-
-            last_pv = pv;
         }
         (score, last_pv)
     }
@@ -316,6 +315,12 @@ impl Search {
                 if !move_.capture() {
                     self.history_tables[self.game.current_player()][move_.piece()]
                         [*move_.target() as usize] += depth * depth;
+                    if self.history_tables[self.game.current_player()][move_.piece()]
+                        [move_.target()]
+                        > 500
+                    {
+                        self.history_tables[self.game.current_player()].iter_mut().flatten().for_each(|h| {*h /= 2});
+                    }
                     if move_.promotion() == NoPiece {
                         self.killer_moves.push(move_, ply);
                     }
