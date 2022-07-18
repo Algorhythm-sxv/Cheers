@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
         let search = Search::new(bench_game)
-            .max_depth(11)
+            .max_depth(9)
             .tt_size_mb(8)
             .output(false);
         let start = Instant::now();
