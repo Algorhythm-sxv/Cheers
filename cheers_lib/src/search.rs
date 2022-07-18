@@ -290,7 +290,7 @@ impl Search {
 
             self.game.make_move(move_);
             // Principal Variation Search: search the first move at full width
-            let score = if i == 0 {
+            let score = if i == 0 || depth <= 2 {
                 -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line)
             } else {
                 // search remaining moves with a null window
