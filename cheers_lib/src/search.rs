@@ -254,20 +254,20 @@ impl Search {
                 // winning captures first, then equal, then quiets, then losing
                 let see = self.game.see(*m);
                 if see < 0 {
-                    m.score -= 2000 - see;
+                    m.score -= 50_000 - see;
                 } else {
-                    m.score += 2000 + see;
+                    m.score += 50_000 + see;
                 }
             }
             // order queen and rook promotions ahead of quiet moves
             else if m.promotion() == Queen || m.promotion() == Rook {
-                m.score += EVAL_PARAMS.piece_values[(Midgame, m.promotion())] + 100;
-            }
-            // quiet killer moves get sorted before other quiet moves
-            else if self.killer_moves[ply].contains(&m) {
-                m.score += 500;
-            // quiet moves get ordered by their history heuristic
+                m.score += 10_000 + EVAL_PARAMS.piece_values[(Midgame, m.promotion())];
             } else {
+                // quiet killer moves get sorted before other quiet moves
+                if self.killer_moves[ply].contains(&m) {
+                    m.score += 5_000;
+                }
+                // quiet moves get ordered by their history heuristic
                 m.score += self.history_tables[self.game.current_player()][m.piece()]
                     [*m.target() as usize];
             }
@@ -304,9 +304,12 @@ impl Search {
                         [*move_.target() as usize] += depth * depth;
                     if self.history_tables[self.game.current_player()][move_.piece()]
                         [move_.target()]
-                        > 500
+                        > 2_000
                     {
-                        self.history_tables[self.game.current_player()].iter_mut().flatten().for_each(|h| {*h /= 2});
+                        self.history_tables[self.game.current_player()]
+                            .iter_mut()
+                            .flatten()
+                            .for_each(|h| *h >>= 1);
                     }
                     if move_.promotion() == NoPiece {
                         self.killer_moves.push(move_, ply);
