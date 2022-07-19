@@ -17,6 +17,9 @@ pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+const MINUS_INF: i32 = i32::MIN + 1;
+const INF: i32 = i32::MAX - 1;
+
 pub const PV_MAX_LEN: usize = 16;
 #[derive(Copy, Clone, Default, Debug)]
 pub struct PrincipalVariation {
@@ -99,8 +102,8 @@ impl Search {
         for i in 0.. {
             let mut pv = PrincipalVariation::new();
             score = search.negamax(
-                i32::MIN + 1,
-                i32::MAX - 1,
+                MINUS_INF,
+                INF,
                 i as i32,
                 0,
                 Move::null(),
@@ -307,7 +310,7 @@ impl Search {
             };
 
             self.game.make_move(move_);
-            let mut score = 0;
+            let mut score = MINUS_INF;
             // reduced-depth null-window search on most moves outside of PV nodes
             let full_depth = if depth > 2 && i > 0 && ply != 0 {
                 let reduced_depth = (depth - reduction).max(1).min(depth);
@@ -319,7 +322,7 @@ impl Search {
 
             // full-depth null-window search on reduced moves that improved alpha, later moves or non-pv nodes
             if full_depth {
-                score = -self.negamax(-alpha - 1, alpha, depth - 1, ply + 1, move_, &mut line);
+                score = -self.negamax(-alpha - 1, -alpha, depth - 1, ply + 1, move_, &mut line);
             }
 
             // full-depth, full-window search on first move in PV nodes and reduced moves that improve alpha
