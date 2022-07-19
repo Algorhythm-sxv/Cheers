@@ -1,5 +1,7 @@
 use std::{fmt::Display, sync::atomic::*};
 
+use cheers_pregen::LMR;
+
 use crate::moves::{pick_move, KillerMoves};
 use crate::transposition_table::{NodeType::*, TranspositionTable};
 use crate::{
@@ -147,11 +149,8 @@ impl Search {
         }
 
         // check extension before quiescence
-        let depth = if self.game.in_check(self.game.current_player()) {
-            depth + 1
-        } else {
-            depth
-        };
+        let in_check = self.game.in_check(self.game.current_player());
+        let depth = if in_check { depth + 1 } else { depth };
 
         // quiescence search at full depth
         if depth == 0 {
@@ -209,6 +208,8 @@ impl Search {
                 tt_entry.castling,
             );
         }
+
+        let pv_node = alpha != beta - 1;
 
         // Null move pruning
         // don't search the null move when in check or only down to pawn/kings
@@ -288,21 +289,44 @@ impl Search {
                 }
             }
 
-            self.game.make_move(move_);
-            // Principal Variation Search: search the first move at full width
-            let score = if i == 0 || depth <= 2 {
-                -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line)
-            } else {
-                // search remaining moves with a null window
-                let mut score =
-                    -self.negamax(-alpha - 1, -alpha, depth - 1, ply + 1, move_, &mut line);
+            // reductions and extensions
+            let reduction = {
+                let mut r = 0;
 
-                // if a null window search improves alpha, search again with a full window
-                if score > alpha && score < beta {
-                    score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line);
+                // Late Move Reduction (LMR)
+                if depth >= 3
+                    && ply != 0
+                    && !move_.capture()
+                    && move_.promotion() != Queen
+                    && !in_check
+                {
+                    r += LMR[(depth as usize).min(31)][i.min(31)]
                 }
-                score
+
+                r
             };
+
+            self.game.make_move(move_);
+            let mut score = 0;
+            // reduced-depth null-window search on most moves outside of PV nodes
+            let full_depth = if depth > 2 && i > 0 && ply != 0 {
+                let reduced_depth = (depth - reduction).max(1).min(depth);
+                score = -self.negamax(-alpha - 1, -alpha, reduced_depth, ply + 1, move_, &mut line);
+                score > alpha && reduced_depth < depth - 1
+            } else {
+                !pv_node || i > 0
+            };
+
+            // full-depth null-window search on reduced moves that improved alpha, later moves or non-pv nodes
+            if full_depth {
+                score = -self.negamax(-alpha - 1, alpha, depth - 1, ply + 1, move_, &mut line);
+            }
+
+            // full-depth, full-window search on first move in PV nodes and reduced moves that improve alpha
+            if pv_node && (i == 0 || (score > alpha && score < beta)) {
+                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line);
+            }
+
             self.game.unmake_move();
             if score >= beta {
                 self.transposition_table.set(

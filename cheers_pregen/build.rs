@@ -6,12 +6,23 @@ use rand::prelude::*;
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=lookup_tables_template.txt");
+
     let zobrist_out = Path::new("src/zobrist.rs");
     fs::write(
         zobrist_out,
         format!(
             "pub static ZOBRIST_NUMBERS: [u64; 793] = {:?};",
-            initialise_zobrist_numbers()
+            generate_zobrist_numbers()
+        ),
+    )
+    .unwrap();
+
+    let lmr_out = Path::new("src/lmr.rs");
+    fs::write(
+        lmr_out,
+        format!(
+            "pub static LMR: [[i32; 32]; 32] = {:?};",
+            generate_lmr_reductions()
         ),
     )
     .unwrap();
@@ -40,7 +51,7 @@ fn main() {
     .unwrap();
 }
 
-fn initialise_zobrist_numbers() -> [u64; 793] {
+fn generate_zobrist_numbers() -> [u64; 793] {
     let mut rng = StdRng::seed_from_u64(0x11A5117AB1E0);
     let mut numbers = [0; 64 * 6 * 2 + 1 + 16 + 8];
 
@@ -52,6 +63,17 @@ fn initialise_zobrist_numbers() -> [u64; 793] {
     numbers
 }
 
+fn generate_lmr_reductions() -> [[i32; 32]; 32] {
+    let mut reductions = [[0; 32]; 32];
+
+    for depth in 1..32 {
+        for played in 1..32 {
+            reductions[depth][played] =
+                (1.5 + (depth as f32).ln() * (played as f32).ln() / 1.75) as i32;
+        }
+    }
+    reductions
+}
 // is t between a and b?
 pub fn between(a: i8, t: i8, b: i8) -> bool {
     if a < b {
