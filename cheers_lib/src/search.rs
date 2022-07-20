@@ -13,7 +13,9 @@ use crate::{
     types::PieceIndex::*,
 };
 
-pub static RUN_SEARCH: AtomicBool = AtomicBool::new(false);
+pub static ABORT_SEARCH: AtomicBool = AtomicBool::new(false);
+pub static TIME_ELAPSED: AtomicBool = AtomicBool::new(false);
+pub static SEARCH_COMPLETE: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -54,6 +56,7 @@ pub struct Search {
     pub max_depth: Option<usize>,
     pub max_nodes: Option<usize>,
     pub max_time_ms: Option<usize>,
+    pub abort_time_ms: Option<usize>,
     output: bool,
 }
 
@@ -67,6 +70,7 @@ impl Search {
             max_depth: None,
             max_nodes: None,
             max_time_ms: None,
+            abort_time_ms: None,
             output: false,
         }
     }
@@ -94,20 +98,19 @@ impl Search {
     }
 
     pub fn search(&self) -> (i32, PrincipalVariation) {
-        RUN_SEARCH.store(true, Ordering::Relaxed);
-        let mut score = i32::MIN;
+        let mut last_score = i32::MIN;
         let mut last_pv = PrincipalVariation::new();
 
         let mut search = self.clone();
         for i in 0.. {
             let mut pv = PrincipalVariation::new();
-            score = search.negamax(MINUS_INF, INF, i as i32, 0, Move::null(), &mut pv);
-            if !RUN_SEARCH.load(Ordering::Relaxed) && i > 1 {
+            let score = search.negamax(MINUS_INF, INF, i as i32, 0, Move::null(), &mut pv);
+            if ABORT_SEARCH.load(Ordering::Relaxed) && i > 1 {
                 // can't trust results from a partial search
                 break;
             }
 
-            last_pv = pv;
+            // we can trust the results from the previous search
             if self.output {
                 println!(
                     "info depth {i} score cp {score} pv {pv} nodes {}",
@@ -115,19 +118,27 @@ impl Search {
                 )
             };
 
+            last_pv = pv;
+            last_score = score;
+            // terminate search if we are hinted to do so
+            if TIME_ELAPSED.load(Ordering::Relaxed) {
+                break;
+            }
+
             // terminate search at max depth or with forced mate/draw
             if let Some(max_depth) = self.max_depth {
                 if i == max_depth {
-                    RUN_SEARCH.store(false, Ordering::Relaxed);
+                    ABORT_SEARCH.store(false, Ordering::Relaxed);
                     break;
                 }
             }
             if i > pv.len + 10 && pv.len != PV_MAX_LEN {
-                RUN_SEARCH.store(false, Ordering::Relaxed);
+                ABORT_SEARCH.store(false, Ordering::Relaxed);
                 break;
             }
         }
-        (score, last_pv)
+        SEARCH_COMPLETE.store(true, Ordering::Relaxed);
+        (last_score, last_pv)
     }
 
     fn negamax(
@@ -140,7 +151,7 @@ impl Search {
         pv: &mut PrincipalVariation,
     ) -> i32 {
         // terminate search early
-        if !RUN_SEARCH.load(Ordering::Relaxed) && depth > 1 {
+        if ABORT_SEARCH.load(Ordering::Relaxed) && depth > 1 {
             return 0;
         }
 

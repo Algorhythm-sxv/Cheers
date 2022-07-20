@@ -1,7 +1,7 @@
 use cheers_lib::{
     chessgame::ChessGame,
     moves::Move,
-    search::{Search, NODE_COUNT, NPS_COUNT, RUN_SEARCH},
+    search::{Search, ABORT_SEARCH, NODE_COUNT, NPS_COUNT, SEARCH_COMPLETE, TIME_ELAPSED},
     types::ColorIndex,
 };
 
@@ -183,17 +183,24 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .tt_size_mb(options.tt_size_mb)
                         .output(true);
                     search.max_depth = depth;
-                    search.max_time_ms = match position.current_player() {
-                        ColorIndex::White => move_time(wtime, winc),
-                        ColorIndex::Black => move_time(btime, binc),
+                    match position.current_player() {
+                        ColorIndex::White => {
+                            move_time(wtime, winc).map(|(move_time, abort_time)| {
+                                search.max_time_ms = Some(move_time);
+                                search.abort_time_ms = Some(abort_time);
+                            })
+                        }
+                        ColorIndex::Black => {
+                            move_time(btime, binc).map(|(move_time, abort_time)| {
+                                search.max_time_ms = Some(move_time);
+                                search.abort_time_ms = Some(abort_time);
+                            })
+                        }
                     };
-                    RUN_SEARCH.store(true, Ordering::Relaxed);
-                    NODE_COUNT.store(0, Ordering::Relaxed);
-                    NPS_COUNT.store(0, Ordering::Relaxed);
                     let _ = thread::spawn(move || engine_thread(search).unwrap());
                 }
             }
-            Some(&"stop") => RUN_SEARCH.store(false, Ordering::Relaxed),
+            Some(&"stop") => ABORT_SEARCH.store(true, Ordering::Relaxed),
             Some(&"setoption") => {
                 let option_name = words
                     .iter()
@@ -282,6 +289,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
+    ABORT_SEARCH.store(false, Ordering::Relaxed);
+    TIME_ELAPSED.store(false, Ordering::Relaxed);
+    SEARCH_COMPLETE.store(false, Ordering::Relaxed);
+    NODE_COUNT.store(0, Ordering::Relaxed);
+    NPS_COUNT.store(0, Ordering::Relaxed);
+
     let search_start = Instant::now();
     let max_time_ms = search.max_time_ms.map(|ms| {
         // limit the time of a search with 1 legal move
@@ -291,16 +304,25 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
             ms
         }
     });
+    let abort_time_ms = search.abort_time_ms;
     // spawn another thread to do the actual searching
     thread::spawn(move || {
-        let (score, pv) = search.search();
-        println!("info score cp {score} pv {pv}");
+        let (_, pv) = search.search();
         println!("bestmove {}", pv.moves[0].coords(),);
     });
 
     let mut nodes_report = Instant::now();
-    while RUN_SEARCH.load(Ordering::Relaxed) {
+    while !SEARCH_COMPLETE.load(Ordering::Relaxed) {
         let now = Instant::now();
+
+        // Emergency search abort when extemely low on time
+        if let Some(abort_time) = abort_time_ms {
+            if (now - search_start).as_millis() as usize > abort_time {
+                ABORT_SEARCH.store(true, Ordering::Relaxed);
+                break;
+            }
+        }
+
         let node_report_time = now.duration_since(nodes_report);
         if node_report_time > Duration::from_millis(500) {
             nodes_report = now;
@@ -309,26 +331,32 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
                 as usize;
             println!("info nodes {nodes} nps {nps}");
         }
-        // terminate search after max time elapsed
+
+        // hint to terminate search after max time elapsed
         if let Some(max_time) = max_time_ms {
             if (now - search_start).as_millis() as usize > max_time {
-                RUN_SEARCH.store(false, Ordering::Relaxed);
-                break;
+                TIME_ELAPSED.store(true, Ordering::Relaxed);
             }
         }
+
+        // search has ended cleanly after max time elapsed
+        if SEARCH_COMPLETE.load(Ordering::Relaxed) {
+            break;
+        }
+
         thread::sleep(Duration::from_millis(1));
     }
     Ok(())
 }
 
-fn move_time(time_millis: Option<usize>, inc_millis: Option<usize>) -> Option<usize> {
+fn move_time(time_millis: Option<usize>, inc_millis: Option<usize>) -> Option<(usize, usize)> {
     let (time, inc) = match (time_millis, inc_millis) {
         (None, None) => return None,
         (t, i) => (t.unwrap_or(0), i.unwrap_or(0)),
     };
     if time < inc {
-        Some(time / 20)
+        Some((time / 20, time * 9 / 10))
     } else {
-        Some(time / 20 + inc / 2)
+        Some((time / 20 + inc / 2, time * 9 / 10))
     }
 }
