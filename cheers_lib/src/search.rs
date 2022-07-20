@@ -101,14 +101,7 @@ impl Search {
         let mut search = self.clone();
         for i in 0.. {
             let mut pv = PrincipalVariation::new();
-            score = search.negamax(
-                MINUS_INF,
-                INF,
-                i as i32,
-                0,
-                Move::null(),
-                &mut pv,
-            );
+            score = search.negamax(MINUS_INF, INF, i as i32, 0, Move::null(), &mut pv);
             if !RUN_SEARCH.load(Ordering::Relaxed) && i > 1 {
                 // can't trust results from a partial search
                 break;
@@ -268,7 +261,7 @@ impl Search {
                 m.score += 10_000 + EVAL_PARAMS.piece_values[(Midgame, m.promotion())];
             } else {
                 // quiet killer moves get sorted before other quiet moves
-                if self.killer_moves[ply].contains(&m) {
+                if self.killer_moves[ply.min(127)].contains(&m) {
                     m.score += 5_000;
                 }
                 // quiet moves get ordered by their history heuristic
@@ -292,28 +285,23 @@ impl Search {
                 }
             }
 
-            // reductions and extensions
-            let reduction = {
-                let mut r = 0;
-
-                // Late Move Reduction (LMR)
-                if depth >= 3
-                    && ply != 0
-                    && !move_.capture()
-                    && move_.promotion() != Queen
-                    && !in_check
-                {
-                    r += LMR[(depth as usize).min(31)][i.min(31)]
-                }
-
-                r
-            };
-
             self.game.make_move(move_);
             let mut score = MINUS_INF;
             // reduced-depth null-window search on most moves outside of PV nodes
             let full_depth = if depth > 2 && i > 0 && ply != 0 {
-                let reduced_depth = (depth - reduction).max(1).min(depth);
+                // reductions and extensions
+                let reduction = {
+                    let mut r = 0;
+
+                    // Late Move Reduction (LMR)
+                    if !move_.capture() && move_.promotion() != Queen && !in_check {
+                        r += LMR[(depth as usize).min(31)][i.min(31)]
+                    }
+
+                    // make sure we reduce by at least 1 to avoid infinite search
+                    r.max(1)
+                };
+                let reduced_depth = (depth - reduction).max(1);
                 score = -self.negamax(-alpha - 1, -alpha, reduced_depth, ply + 1, move_, &mut line);
                 score > alpha && reduced_depth < depth - 1
             } else {
@@ -352,7 +340,7 @@ impl Search {
                             .for_each(|h| *h >>= 1);
                     }
                     if move_.promotion() == NoPiece {
-                        self.killer_moves.push(move_, ply);
+                        self.killer_moves.push(move_, ply.min(127));
                     }
                 }
                 return score;
