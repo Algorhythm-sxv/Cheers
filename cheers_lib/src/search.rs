@@ -121,7 +121,7 @@ impl Search {
             last_pv = pv;
             last_score = score;
             // terminate search if we are hinted to do so
-            if TIME_ELAPSED.load(Ordering::Relaxed) {
+            if TIME_ELAPSED.load(Ordering::Relaxed) && i > 1 {
                 break;
             }
 
