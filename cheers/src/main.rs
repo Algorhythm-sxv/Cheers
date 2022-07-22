@@ -355,8 +355,8 @@ fn move_time(time_millis: Option<usize>, inc_millis: Option<usize>) -> Option<(u
         (t, i) => (t.unwrap_or(0), i.unwrap_or(0)),
     };
     if time < inc {
-        Some((time / 20, time * 9 / 10))
+        Some((time / 20, time / 2))
     } else {
-        Some((time / 20 + inc / 2, time * 9 / 10))
+        Some((time / 20 + inc / 2, time / 2))
     }
 }
