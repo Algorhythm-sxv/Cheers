@@ -11,5 +11,4 @@ path = "src/lib.rs"
 cheers_bitboards = { path = "../cheers_bitboards" }
 
 [build-dependencies]
-rand = "0.8"
 cheers_bitboards = { path = "../cheers_bitboards" }

@@ -1,21 +1,10 @@
 use std::{fs, path::Path};
 
 use cheers_bitboards::BitBoard;
-use rand::prelude::*;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=lookup_tables_template.txt");
-
-    let zobrist_out = Path::new("src/zobrist.rs");
-    fs::write(
-        zobrist_out,
-        format!(
-            "pub static ZOBRIST_NUMBERS: [u64; 793] = {:?};",
-            generate_zobrist_numbers()
-        ),
-    )
-    .unwrap();
 
     let lmr_out = Path::new("src/lmr.rs");
     fs::write(
@@ -29,9 +18,9 @@ fn main() {
 
     let mut index = 0;
     let mut sliding_attack_tables = vec![BitBoard::empty(); 107648];
-    let rook_magics = generate_rook_magics(&mut sliding_attack_tables, &mut index, true);
+    let rook_magics = generate_rook_magics(&mut sliding_attack_tables, &mut index);
     println!("rooks");
-    let bishop_magics = generate_bishop_magics(&mut sliding_attack_tables, &mut index, true);
+    let bishop_magics = generate_bishop_magics(&mut sliding_attack_tables, &mut index);
     println!("bishops");
     let lookup_tables_out = Path::new("src/lookup_tables.rs");
     fs::write(
@@ -49,18 +38,6 @@ fn main() {
         ),
     )
     .unwrap();
-}
-
-fn generate_zobrist_numbers() -> [u64; 793] {
-    let mut rng = StdRng::seed_from_u64(0x11A5117AB1E0);
-    let mut numbers = [0; 64 * 6 * 2 + 1 + 16 + 8];
-
-    rng.fill(&mut numbers[..]);
-    // for the case when the en passent mask is zero and not changing, x^0 = x
-    // let last = numbers.len() - 1;
-    // numbers[last] = 0;
-
-    numbers
 }
 
 fn generate_lmr_reductions() -> [[i32; 32]; 32] {
@@ -242,29 +219,21 @@ pub struct MagicSquare {
 }
 
 /// Generates magic numbers/shifts to look up rook attacks from each square
-fn generate_rook_magics(
-    attack_table: &mut [BitBoard],
-    index: &mut usize,
-    use_pregen: bool,
-) -> [MagicSquare; 64] {
+fn generate_rook_magics(attack_table: &mut [BitBoard], index: &mut usize) -> [MagicSquare; 64] {
     let mut rook_magic = [MagicSquare::default(); 64];
 
     for square in 0..64 {
-        rook_magic[square] = find_magic(square, false, attack_table, index, use_pregen).unwrap();
+        rook_magic[square] = find_magic(square, false, attack_table, index).unwrap();
     }
     rook_magic
 }
 
 /// Generates magic numbers/shifts to look up bishop attacks from each square
-fn generate_bishop_magics(
-    attack_table: &mut [BitBoard],
-    index: &mut usize,
-    use_pregen: bool,
-) -> [MagicSquare; 64] {
+fn generate_bishop_magics(attack_table: &mut [BitBoard], index: &mut usize) -> [MagicSquare; 64] {
     let mut bishop_magic = [MagicSquare::default(); 64];
 
     for square in 0..64 {
-        bishop_magic[square] = find_magic(square, true, attack_table, index, use_pregen).unwrap();
+        bishop_magic[square] = find_magic(square, true, attack_table, index).unwrap();
     }
     bishop_magic
 }
@@ -274,7 +243,6 @@ fn find_magic(
     bishop: bool,
     attack_table: &mut [BitBoard],
     index: &mut usize,
-    use_pregen: bool,
 ) -> Result<MagicSquare, String> {
     let mask = if bishop {
         bishop_mask(square)
@@ -299,14 +267,10 @@ fn find_magic(
     let mut used = vec![BitBoard::empty(); 1 << n];
 
     for _ in 0..100000000 {
-        let magic = if use_pregen {
-            if bishop {
-                BISHOP_MAGICS[square]
-            } else {
-                ROOK_MAGICS[square]
-            }
+        let magic = if bishop {
+            BISHOP_MAGICS[square]
         } else {
-            random_sparse_u64()
+            ROOK_MAGICS[square]
         };
 
         // reset the vec for the next attempt
@@ -347,11 +311,6 @@ fn find_magic(
         "Failed to find magic number for square index {}",
         square
     ))
-}
-
-fn random_sparse_u64() -> u64 {
-    let mut rng = thread_rng();
-    rng.gen::<u64>() & rng.gen::<u64>() & rng.gen::<u64>()
 }
 
 fn magic_hash(blocking_mask: BitBoard, magic: u64, shift: u8) -> usize {
