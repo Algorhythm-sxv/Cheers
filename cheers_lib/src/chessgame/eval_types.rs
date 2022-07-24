@@ -1,5 +1,6 @@
 use std::ops::{Add, AddAssign, Index, IndexMut, Sub};
 
+#[cfg(feature = "eval-tracing")]
 use bytemuck::{Pod, Zeroable};
 
 use crate::types::PieceIndex;
@@ -100,7 +101,8 @@ impl<T, const N: usize> IndexMut<GamePhase> for [T; N] {
     }
 }
 
-#[derive(Clone, Copy, Debug, Pod, Zeroable, PartialEq, Eq)]
+#[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct PieceTables(pub [[[i32; 2]; 64]; 6]);
 impl std::ops::Index<(GamePhase, PieceIndex, Square)> for PieceTables {
@@ -116,7 +118,8 @@ impl Default for PieceTables {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, Pod, Zeroable, PartialEq, Eq)]
+#[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[repr(C)]
 pub struct PieceValues(pub [[i32; 2]; 6]);
 

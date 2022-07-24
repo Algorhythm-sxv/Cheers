@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies.cheers_lib]
 path = "../cheers_lib"
+features = ["eval-tracing"]
 
 [dependencies]
 clap = { version = "3.1", features = ["derive"] }

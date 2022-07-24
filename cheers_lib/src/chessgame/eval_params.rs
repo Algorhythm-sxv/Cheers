@@ -1,8 +1,10 @@
+#[cfg(feature = "eval-tracing")]
 use bytemuck::{Pod, Zeroable};
 
 use super::eval_types::{PieceTables, PieceValues};
 
-#[derive(Copy, Clone, Debug, Default, Pod, Zeroable, PartialEq, Eq)]
+#[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[repr(C)]
 pub struct EvalParams {
     pub piece_values: PieceValues,
@@ -35,6 +37,7 @@ pub struct EvalParams {
     pub piece_tables: PieceTables,
 }
 
+#[cfg(feature = "eval-tracing")]
 impl EvalParams {
     pub const LEN: usize = std::mem::size_of::<Self>() / std::mem::size_of::<i32>();
     pub fn to_array(&self) -> [i32; Self::LEN] {
@@ -48,7 +51,8 @@ impl EvalParams {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct EvalTrace {
     pub pawn_count: [i32; 2],
@@ -94,6 +98,7 @@ pub struct EvalTrace {
     pub turn: i32,
 }
 
+#[cfg(feature = "eval-tracing")]
 impl EvalTrace {
     pub const LEN: usize = std::mem::size_of::<Self>() / std::mem::size_of::<i32>();
     pub fn new() -> Self {
@@ -104,6 +109,7 @@ impl EvalTrace {
     }
 }
 
+#[cfg(feature = "eval-tracing")]
 impl Default for EvalTrace {
     fn default() -> Self {
         Self::new()
