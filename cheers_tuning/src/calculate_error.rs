@@ -40,7 +40,7 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
     let mut search = Search::new(game);
 
     let (_, trace) =
-        search._quiesce::<EvalTrace>(i32::MIN + 1, i32::MAX - 1, -1, Move::null(), EVAL_PARAMS);
+        search.quiesce_impl::<EvalTrace>(i32::MIN + 1, i32::MAX - 1, -1, Move::null(), EVAL_PARAMS);
     // if game.current_player() == ColorIndex::Black {
     //     score = -score;
     // }

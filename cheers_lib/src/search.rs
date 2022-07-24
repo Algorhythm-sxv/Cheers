@@ -2,6 +2,7 @@ use std::{fmt::Display, sync::atomic::*};
 
 use cheers_pregen::LMR;
 
+use crate::chessgame::see::SEE_PIECE_VALUES;
 use crate::moves::{pick_move, KillerMoves};
 use crate::transposition_table::{NodeType::*, TranspositionTable};
 use crate::{
@@ -379,11 +380,11 @@ impl Search {
         last_move: Move,
         eval_params: EvalParams,
     ) -> i32 {
-        self._quiesce::<()>(alpha, beta, depth, last_move, eval_params)
+        self.quiesce_impl::<()>(alpha, beta, depth, last_move, eval_params)
             .0
     }
 
-    pub fn _quiesce<T: TraceTarget + Default>(
+    pub fn quiesce_impl<T: TraceTarget + Default>(
         &mut self,
         mut alpha: i32,
         beta: i32,
@@ -437,11 +438,16 @@ impl Search {
                     m.score += 10_000;
                 }
 
-                let see = self.game.see(m);
-                if see < 0 {
-                    m.score -= 2000 - see
+                if stand_pat_score + SEE_PIECE_VALUES[self.game.piece_at(m.target())] + 200 <= alpha
+                {
+                    m.score = -1000;
                 } else {
-                    m.score += 2000 + see;
+                    let see = self.game.see(m);
+                    if see < 0 {
+                        m.score -= 2000 - see
+                    } else {
+                        m.score += 2000 + see;
+                    }
                 }
                 m
             })
@@ -455,7 +461,7 @@ impl Search {
 
             self.game.make_move(move_);
             let (mut score, trace) =
-                self._quiesce::<T>(-beta, -alpha, depth - 1, move_, eval_params);
+                self.quiesce_impl::<T>(-beta, -alpha, depth - 1, move_, eval_params);
             score = -score;
             self.game.unmake_move();
             if score >= beta {
