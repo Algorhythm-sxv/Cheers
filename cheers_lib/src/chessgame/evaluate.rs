@@ -262,6 +262,17 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
             eval.mg += params.rook_mobility[mobility][Midgame];
             eval.eg += params.rook_mobility[mobility][Endgame];
             self.trace.term(|t| t.rook_mobility[mobility][color] += 1);
+
+            // trapped by king
+            if mobility <= 3 {
+                let king_file = self.game.piece_masks[(color, King)].first_square().file();
+                if (king_file < 5) == (rook.file() < king_file) {
+                    let can_castle = self.game.castling_rights.0[color].iter().any(|&c| c) as usize;
+                    eval.mg += params.rook_trapped[can_castle][Midgame];
+                    eval.eg += params.rook_trapped[can_castle][Endgame];
+                    self.trace.term(|t| t.rook_trapped[can_castle][color] += 1)
+                }
+            }
         }
         eval
     }
@@ -316,10 +327,10 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let mut eval = EvalScore::zero();
 
         // placement
-        let king = relative_board_index(info.king_square[color], color);
-        eval.mg += params.piece_tables[(Midgame, King, king)];
-        eval.eg += params.piece_tables[(Endgame, King, king)];
-        self.trace.term(|t| t.king_placement[king][color] += 1);
+        let relative_king = relative_board_index(info.king_square[color], color);
+        eval.mg += params.piece_tables[(Midgame, King, relative_king)];
+        eval.eg += params.piece_tables[(Endgame, King, relative_king)];
+        self.trace.term(|t| t.king_placement[relative_king][color] += 1);
 
         // pawn and minor piece defenders
         let defenders = (info.king_area[color]
@@ -331,6 +342,13 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         eval.eg += params.king_defenders[defenders][Endgame];
         self.trace.term(|t| t.king_defenders[defenders][color] += 1);
 
+        // mobility
+        let attacks = lookup_king(info.king_square[color]);
+        let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
+        eval.mg += params.king_mobility[mobility][Midgame];
+        eval.eg += params.king_mobility[mobility][Endgame];
+        self.trace.term(|t| t.king_mobility[mobility][color] += 1);
+        
         eval
     }
 
@@ -415,7 +433,12 @@ impl ChessGame {
     }
 
     #[inline]
-    pub fn evaluate<T: TraceTarget + Default>(&self) -> (i32, T) {
+    pub fn evaluate(&self) -> i32 {
+        self.evaluate_impl::<()>().0
+    }
+
+    #[inline]
+    pub fn evaluate_impl<T: TraceTarget + Default>(&self) -> (i32, T) {
         let mut trace = T::default();
         let mut eval = EvalContext {
             game: self,

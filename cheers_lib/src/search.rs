@@ -111,10 +111,15 @@ impl Search {
                 break;
             }
 
+            let score_string = if CHECKMATE_SCORE - score.abs() < 100 {
+                format!("mate {}", (score.signum() * CHECKMATE_SCORE) - score)
+            } else {
+                format!("cp {score}")
+            };
             // we can trust the results from the previous search
             if self.output {
                 println!(
-                    "info depth {i} score cp {score} pv {pv} nodes {}",
+                    "info depth {i} score {score_string} pv {pv} nodes {}",
                     NODE_COUNT.load(Ordering::Relaxed)
                 )
             };
@@ -248,7 +253,7 @@ impl Search {
             pv.len = 0;
             if self.game.in_check(self.game.current_player()) {
                 // checkmate, preferring shorter mating sequences
-                return -(CHECKMATE_SCORE - ply as i32);
+                return -(CHECKMATE_SCORE - (ply as i32 + 1) / 2);
             } else {
                 // stalemate
                 return DRAW_SCORE;
@@ -395,7 +400,7 @@ impl Search {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
 
-        let (stand_pat_score, mut best_trace) = self.game.evaluate::<T>();
+        let (stand_pat_score, mut best_trace) = self.game.evaluate_impl::<T>();
 
         if stand_pat_score >= beta {
             return (beta, best_trace);
