@@ -3,6 +3,7 @@ use std::{fmt::Display, sync::atomic::*};
 
 use cheers_pregen::LMR;
 
+use crate::chessgame::movegen::{All, Captures, MoveList};
 use crate::chessgame::see::SEE_PIECE_VALUES;
 use crate::moves::{pick_move, KillerMoves};
 use crate::transposition_table::{NodeType::*, TranspositionTable};
@@ -52,6 +53,8 @@ impl Display for PrincipalVariation {
 #[derive(Clone)]
 pub struct Search {
     pub game: ChessGame,
+    pub move_lists: Vec<MoveList>,
+    pub seldepth: usize,
     transposition_table: TranspositionTable,
     killer_moves: KillerMoves<2>,
     history_tables: [[[i32; 64]; 6]; 2],
@@ -66,6 +69,8 @@ impl Search {
     pub fn new(game: ChessGame) -> Self {
         Self {
             game,
+            move_lists: vec![MoveList::new(); 128],
+            seldepth: 0,
             transposition_table: TranspositionTable::new(0),
             killer_moves: KillerMoves::new(),
             history_tables: [[[0; 64]; 6]; 2],
@@ -106,6 +111,7 @@ impl Search {
         let mut search = self.clone();
         let start = Instant::now();
         for i in 0.. {
+            search.seldepth = 0;
             let mut pv = PrincipalVariation::new();
             let score = search.negamax(MINUS_INF, INF, i as i32, 0, Move::null(), &mut pv);
             if ABORT_SEARCH.load(Ordering::Relaxed) && i > 1 {
@@ -121,7 +127,8 @@ impl Search {
             // we can trust the results from the previous search
             if self.output {
                 println!(
-                    "info depth {i} score {score_string} pv {pv} nodes {} time {}",
+                    "info depth {i} seldepth {} score {score_string} pv {pv} nodes {} time {}",
+                    search.seldepth,
                     NODE_COUNT.load(Ordering::Relaxed),
                     (end - start).as_millis(),
                 )
@@ -172,7 +179,7 @@ impl Search {
         if depth == 0 {
             // exact score so we must reset the pv
             pv.len = 0;
-            let score = self.quiesce(alpha, beta, 0, last_move, EVAL_PARAMS);
+            let score = self.quiesce(alpha, beta, 0, ply, last_move, EVAL_PARAMS);
             // self.transposition_table
             //     .set(self.hash, Move::null(), depth as i8, score, Exact);
             return score;
@@ -249,9 +256,10 @@ impl Search {
             }
         }
 
-        let mut moves = self.game.legal_moves();
+        self.game
+            .generate_legal_moves::<All>(&mut self.move_lists[ply]);
 
-        if moves.is_empty() {
+        if self.move_lists[ply].is_empty() {
             // exact score, so we must reset the pv
             pv.len = 0;
             if self.game.in_check(self.game.current_player()) {
@@ -263,38 +271,41 @@ impl Search {
             }
         }
 
-        moves.iter_mut().for_each(|mut m| {
-            // try the transposition table move early
-            if m.start() == tt_move.start() && m.target() == tt_move.target() {
-                m.score += 100_000;
-            } else if m.capture() {
-                // winning captures first, then equal, then quiets, then losing
-                let see = self.game.see(*m);
-                if see < 0 {
-                    m.score -= 50_000 - see;
+        self.move_lists[ply]
+            .inner_mut()
+            .iter_mut()
+            .for_each(|mut m| {
+                // try the transposition table move early
+                if m.start() == tt_move.start() && m.target() == tt_move.target() {
+                    m.score += 100_000;
+                } else if m.capture() {
+                    // winning captures first, then equal, then quiets, then losing
+                    let see = self.game.see(*m);
+                    if see < 0 {
+                        m.score -= 50_000 - see;
+                    } else {
+                        m.score += 50_000 + see;
+                    }
+                }
+                // order queen and rook promotions ahead of quiet moves
+                else if m.promotion() == Queen || m.promotion() == Rook {
+                    m.score += 10_000 + EVAL_PARAMS.piece_values[(Midgame, m.promotion())];
                 } else {
-                    m.score += 50_000 + see;
+                    // quiet killer moves get sorted before other quiet moves
+                    if self.killer_moves[ply.min(127)].contains(&m) {
+                        m.score += 5_000;
+                    }
+                    // quiet moves get ordered by their history heuristic
+                    m.score += self.history_tables[self.game.current_player()][m.piece()]
+                        [*m.target() as usize];
                 }
-            }
-            // order queen and rook promotions ahead of quiet moves
-            else if m.promotion() == Queen || m.promotion() == Rook {
-                m.score += 10_000 + EVAL_PARAMS.piece_values[(Midgame, m.promotion())];
-            } else {
-                // quiet killer moves get sorted before other quiet moves
-                if self.killer_moves[ply.min(127)].contains(&m) {
-                    m.score += 5_000;
-                }
-                // quiet moves get ordered by their history heuristic
-                m.score += self.history_tables[self.game.current_player()][m.piece()]
-                    [*m.target() as usize];
-            }
-        });
+            });
         // make sure the reported best move is at least legal
-        let mut best_move = *moves.first().unwrap();
+        let mut best_move = *self.move_lists[ply].inner().first().unwrap();
 
-        for i in 0..moves.len() {
-            pick_move(&mut moves, i);
-            let move_ = moves[i];
+        for i in 0..self.move_lists[ply].len() {
+            pick_move(self.move_lists[ply].inner_mut(), i);
+            let move_ = self.move_lists[ply][i];
 
             // SEE pruning
             if depth < 6 && ply != 0 && i > 0 && move_.promotion() == NoPiece {
@@ -385,10 +396,11 @@ impl Search {
         alpha: i32,
         beta: i32,
         depth: i32,
+        ply: usize,
         last_move: Move,
         eval_params: EvalParams,
     ) -> i32 {
-        self.quiesce_impl::<()>(alpha, beta, depth, last_move, eval_params)
+        self.quiesce_impl::<()>(alpha, beta, depth, ply, last_move, eval_params)
             .0
     }
 
@@ -397,11 +409,14 @@ impl Search {
         mut alpha: i32,
         beta: i32,
         depth: i32,
+        ply: usize,
         _last_move: Move,
         eval_params: EvalParams,
     ) -> (i32, T) {
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
+
+        self.seldepth = self.seldepth.max(ply);
 
         let (stand_pat_score, mut best_trace) = self.game.evaluate::<T>();
 
@@ -435,41 +450,42 @@ impl Search {
                 );
             }
         }
-        let mut moves: Vec<Move> = self
-            .game
-            .legal_moves()
-            .into_iter()
-            .filter(|m| m.capture())
-            .map(|mut m| {
-                // try the transposition table move early
-                if m.start() == tt_move.start() && m.target() == tt_move.target() {
-                    m.score += 10_000;
-                }
+        self.game
+            .generate_legal_moves::<Captures>(&mut self.move_lists[ply]);
+        self.move_lists[ply].inner_mut().iter_mut().for_each(|m| {
+            // try the transposition table move early
+            if m.start() == tt_move.start() && m.target() == tt_move.target() {
+                m.score += 10_000;
+            }
 
-                if stand_pat_score + SEE_PIECE_VALUES[self.game.piece_at(m.target())] + 200 <= alpha
-                {
-                    m.score = -1000;
+            // Delta pruning: if this capture immediately falls short by some margin, skip it
+            if stand_pat_score + SEE_PIECE_VALUES[self.game.piece_at(m.target())] + 200 <= alpha {
+                m.score = -1000;
+            } else {
+                let see = self.game.see(*m);
+                if see < 0 {
+                    // SEE pruning: skip all moves with negative SEE
+                    m.score -= 2000 - see
                 } else {
-                    let see = self.game.see(m);
-                    if see < 0 {
-                        m.score -= 2000 - see
-                    } else {
-                        m.score += 2000 + see;
-                    }
+                    // order all captures by SEE
+                    m.score += 2000 + see;
                 }
-                m
-            })
-            .filter(|m| m.score > 0)
-            .collect();
+            }
+        });
 
         let mut best_move = Move::null();
-        for i in 0..moves.len() {
-            pick_move(&mut moves, i);
-            let move_ = moves[i];
+        for i in 0..self.move_lists[ply].len() {
+            pick_move(self.move_lists[ply].inner_mut(), i);
+            let move_ = self.move_lists[ply][i];
+
+            // once we hit the first pruned move, skip all the rest
+            if move_.score < 0 {
+                break;
+            }
 
             self.game.make_move(move_);
             let (mut score, trace) =
-                self.quiesce_impl::<T>(-beta, -alpha, depth - 1, move_, eval_params);
+                self.quiesce_impl::<T>(-beta, -alpha, depth - 1, ply + 1, move_, eval_params);
             score = -score;
             self.game.unmake_move();
             if score >= beta {
