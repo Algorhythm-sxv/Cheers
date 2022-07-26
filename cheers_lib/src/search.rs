@@ -1,3 +1,4 @@
+use std::time::Instant;
 use std::{fmt::Display, sync::atomic::*};
 
 use cheers_pregen::LMR;
@@ -103,6 +104,7 @@ impl Search {
         let mut last_pv = PrincipalVariation::new();
 
         let mut search = self.clone();
+        let start = Instant::now();
         for i in 0.. {
             let mut pv = PrincipalVariation::new();
             let score = search.negamax(MINUS_INF, INF, i as i32, 0, Move::null(), &mut pv);
@@ -110,12 +112,18 @@ impl Search {
                 // can't trust results from a partial search
                 break;
             }
-
+            let end = Instant::now();
+            let score_string = if CHECKMATE_SCORE - score.abs() < 100 {
+                format!("mate {}", (score.signum() * CHECKMATE_SCORE) - score)
+            } else {
+                format!("cp {score}")
+            };
             // we can trust the results from the previous search
             if self.output {
                 println!(
-                    "info depth {i} score cp {score} pv {pv} nodes {}",
-                    NODE_COUNT.load(Ordering::Relaxed)
+                    "info depth {i} score {score_string} pv {pv} nodes {} time {}",
+                    NODE_COUNT.load(Ordering::Relaxed),
+                    (end - start).as_millis(),
                 )
             };
 
