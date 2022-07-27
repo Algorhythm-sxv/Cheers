@@ -237,8 +237,7 @@ impl Search {
 
         // Null move pruning
         // don't search the null move in the PV, when in check or only down to pawn/kings
-        if !pv_node
-            && depth >= 3
+        if depth >= 3
             && !self.game.in_check(self.game.current_player())
             && self.game.has_non_pawn_material(self.game.current_player())
         {
@@ -310,7 +309,7 @@ impl Search {
             let move_ = self.move_lists[ply][i];
 
             // SEE pruning
-            if depth < 6 && ply != 0 && !pv_node && move_.promotion() == NoPiece {
+            if depth < 6 && ply != 0 && move_.promotion() == NoPiece {
                 let see = self.game.see(move_);
                 let depth_margin = depth * if move_.capture() { 100 } else { 50 };
                 if see <= -depth * depth_margin {
