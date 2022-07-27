@@ -105,7 +105,7 @@ impl ChessGame {
         }
 
         // mask of square a piece can capture on
-        let mut capture_mask = BitBoard(0xFFFFFFFFFFFFFFFFu64);
+        let mut capture_mask = self.color_masks[!color];
         // mask of squares a piece can move to
         let mut push_mask = BitBoard(0xFFFFFFFFFFFFFFFFu64);
         // - Single Check
@@ -154,22 +154,28 @@ impl ChessGame {
                 if pinned_rook_or_queen.is_not_empty() {
                     let rook_square = pinned_rook_or_queen.first_square();
                     let rook_moves = (pin_ray | pinner_square.bitboard())
-                        & (push_mask | capture_mask)
+                        & if T::CAPTURE {
+                            capture_mask
+                        } else {
+                            capture_mask | push_mask
+                        }
                         & pinned_rook_or_queen.inverse();
                     for target in rook_moves {
-                        let capture = target == pinner_square;
-                        if !T::CAPTURE || (T::CAPTURE && capture) {
-                            moves.push(Move::new(
-                                rook_square,
-                                target,
-                                self.piece_at(rook_square),
-                                NoPiece,
-                                capture,
-                                false,
-                                false,
-                                false,
-                            ));
-                        }
+                        let capture = if !T::CAPTURE {
+                            target == pinner_square
+                        } else {
+                            true
+                        };
+                        moves.push(Move::new(
+                            rook_square,
+                            target,
+                            self.piece_at(rook_square),
+                            NoPiece,
+                            capture,
+                            false,
+                            false,
+                            false,
+                        ));
                     }
                 }
                 // no pawn pushes are captures
@@ -229,22 +235,28 @@ impl ChessGame {
                 if pinned_bishop_or_queen.is_not_empty() {
                     let bishop_square = pinned_bishop_or_queen.first_square();
                     let bishop_moves = (pin_ray | pinner_square.bitboard())
-                        & (push_mask | capture_mask)
+                        & if T::CAPTURE {
+                            capture_mask
+                        } else {
+                            capture_mask | push_mask
+                        }
                         & pinned_bishop_or_queen.inverse();
                     for target in bishop_moves {
-                        let capture = target == pinner_square;
-                        if !T::CAPTURE || (T::CAPTURE && capture) {
-                            moves.push(Move::new(
-                                bishop_square,
-                                target,
-                                self.piece_at(bishop_square),
-                                NoPiece,
-                                capture,
-                                false,
-                                false,
-                                false,
-                            ));
-                        }
+                        let capture = if !T::CAPTURE {
+                            target == pinner_square
+                        } else {
+                            true
+                        };
+                        moves.push(Move::new(
+                            bishop_square,
+                            target,
+                            self.piece_at(bishop_square),
+                            NoPiece,
+                            capture,
+                            false,
+                            false,
+                            false,
+                        ));
                     }
                 }
 
@@ -479,12 +491,18 @@ impl ChessGame {
         for knight_square in knights {
             let attacks = lookup_knight(knight_square)
                 & self.color_masks[color].inverse()
-                & (push_mask | capture_mask);
+                & if T::CAPTURE {
+                    capture_mask
+                } else {
+                    capture_mask | push_mask
+                };
             for target in attacks {
-                let capture = (self.color_masks[!color] & target.bitboard()).is_not_empty();
-                if !T::CAPTURE || (T::CAPTURE && capture) {
-                    moves.push(Move::knight_move(knight_square, target, capture));
-                }
+                let capture = if !T::CAPTURE {
+                    (self.color_masks[!color] & target.bitboard()).is_not_empty()
+                } else {
+                    true
+                };
+                moves.push(Move::knight_move(knight_square, target, capture));
             }
         }
 
@@ -493,12 +511,18 @@ impl ChessGame {
         for bishop_square in bishops {
             let attacks = lookup_bishop(bishop_square, self.combined)
                 & self.color_masks[color].inverse()
-                & (push_mask | capture_mask);
+                & if T::CAPTURE {
+                    capture_mask
+                } else {
+                    capture_mask | push_mask
+                };
             for target in attacks {
-                let capture = (self.color_masks[!color] & target.bitboard()).is_not_empty();
-                if !T::CAPTURE || (T::CAPTURE && capture) {
-                    moves.push(Move::bishop_move(bishop_square, target, capture));
-                }
+                let capture = if !T::CAPTURE {
+                    (self.color_masks[!color] & target.bitboard()).is_not_empty()
+                } else {
+                    true
+                };
+                moves.push(Move::bishop_move(bishop_square, target, capture));
             }
         }
 
@@ -507,12 +531,18 @@ impl ChessGame {
         for rook_square in rooks {
             let attacks = lookup_rook(rook_square, self.combined)
                 & self.color_masks[color].inverse()
-                & (push_mask | capture_mask);
+                & if T::CAPTURE {
+                    capture_mask
+                } else {
+                    capture_mask | push_mask
+                };
             for target in attacks {
-                let capture = (self.color_masks[!color] & target.bitboard()).is_not_empty();
-                if !T::CAPTURE || (T::CAPTURE && capture) {
-                    moves.push(Move::rook_move(rook_square, target, capture));
-                }
+                let capture = if !T::CAPTURE {
+                    (self.color_masks[!color] & target.bitboard()).is_not_empty()
+                } else {
+                    true
+                };
+                moves.push(Move::rook_move(rook_square, target, capture));
             }
         }
 
@@ -521,12 +551,18 @@ impl ChessGame {
         for queen_square in queens {
             let attacks = lookup_queen(queen_square, self.combined)
                 & self.color_masks[color].inverse()
-                & (push_mask | capture_mask);
+                & if T::CAPTURE {
+                    capture_mask
+                } else {
+                    capture_mask | push_mask
+                };
             for target in attacks {
-                let capture = (self.color_masks[!color] & target.bitboard()).is_not_empty();
-                if !T::CAPTURE || (T::CAPTURE && capture) {
-                    moves.push(Move::queen_move(queen_square, target, capture));
-                }
+                let capture = if !T::CAPTURE {
+                    (self.color_masks[!color] & target.bitboard()).is_not_empty()
+                } else {
+                    true
+                };
+                moves.push(Move::queen_move(queen_square, target, capture));
             }
         }
     }
