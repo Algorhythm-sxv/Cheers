@@ -187,6 +187,7 @@ impl Search {
 
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
+        self.seldepth = self.seldepth.max(ply);
 
         // check 50 move and repetition draws
         if self.game.halfmove_clock() == 100
@@ -235,8 +236,9 @@ impl Search {
         let pv_node = alpha != beta - 1;
 
         // Null move pruning
-        // don't search the null move when in check or only down to pawn/kings
-        if depth >= 3
+        // don't search the null move in the PV, when in check or only down to pawn/kings
+        if !pv_node
+            && depth >= 3
             && !self.game.in_check(self.game.current_player())
             && self.game.has_non_pawn_material(self.game.current_player())
         {
@@ -264,7 +266,7 @@ impl Search {
             pv.len = 0;
             if self.game.in_check(self.game.current_player()) {
                 // checkmate, preferring shorter mating sequences
-                return -(CHECKMATE_SCORE - ply as i32);
+                return -(CHECKMATE_SCORE - (ply as i32 + 1) / 2);
             } else {
                 // stalemate
                 return DRAW_SCORE;
@@ -308,7 +310,7 @@ impl Search {
             let move_ = self.move_lists[ply][i];
 
             // SEE pruning
-            if depth < 6 && ply != 0 && i > 0 && move_.promotion() == NoPiece {
+            if depth < 6 && ply != 0 && !pv_node && move_.promotion() == NoPiece {
                 let see = self.game.see(move_);
                 let depth_margin = depth * if move_.capture() { 100 } else { 50 };
                 if see <= -depth * depth_margin {
@@ -430,6 +432,7 @@ impl Search {
         if !T::TRACING {
             if let Some(tt_entry) = self.transposition_table.get(self.game.hash()) {
                 if tt_entry.depth as i32 >= depth
+                    && ply != 0
                     && (tt_entry.node_type == Exact
                         || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
                         || (tt_entry.node_type == UpperBound && tt_entry.score <= alpha))
