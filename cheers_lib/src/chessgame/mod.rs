@@ -16,9 +16,12 @@ use cheers_bitboards::{BitBoard, Square};
 pub mod eval_params;
 pub mod eval_types;
 pub mod evaluate;
+pub mod movegen;
 pub mod see;
+pub mod fen;
 
 pub use self::eval_params::*;
+use self::movegen::{All, MoveList};
 
 #[derive(Clone)]
 pub struct ChessGame {
@@ -49,9 +52,7 @@ impl ChessGame {
             unmove_history: Vec::new(),
         };
         boards.combined = boards.color_masks[White] | boards.color_masks[Black];
-        boards
-            .set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-            .unwrap();
+        boards.reset();
         boards
     }
 
@@ -60,243 +61,6 @@ impl ChessGame {
             .unwrap()
     }
 
-    pub fn set_from_fen(
-        &mut self,
-        fen: impl Into<String>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        *self = Self {
-            color_masks: ColorMasks::default(),
-            combined: BitBoard::empty(),
-            piece_masks: PieceMasks::default(),
-            current_player: ColorIndex::default(),
-            castling_rights: CastlingRights::default(),
-            en_passent_mask: BitBoard::empty(),
-            halfmove_clock: 0,
-            hash: 0,
-            position_history: Vec::new(),
-            unmove_history: Vec::new(),
-        };
-
-        self.piece_masks = PieceMasks([[BitBoard::empty(); 6]; 2]);
-        self.color_masks = ColorMasks([BitBoard::empty(); 2]);
-
-        let fen = fen.into();
-        let mut lines = fen.split(&['/', ' '][..]);
-
-        for (i, line) in lines.clone().take(8).enumerate() {
-            let mut index = 56 - i * 8;
-            for chr in line.chars() {
-                match chr {
-                    'n' => {
-                        self.piece_masks[(Black, Knight)] |= BitBoard(1 << index);
-                        self.color_masks[Black] |= BitBoard(1 << index);
-                    }
-                    'N' => {
-                        self.piece_masks[(White, Knight)] |= BitBoard(1 << index);
-                        self.color_masks[White] |= BitBoard(1 << index);
-                    }
-                    'b' => {
-                        self.piece_masks[(Black, Bishop)] |= BitBoard(1 << index);
-                        self.color_masks[Black] |= BitBoard(1 << index);
-                    }
-                    'B' => {
-                        self.piece_masks[(White, Bishop)] |= BitBoard(1 << index);
-                        self.color_masks[White] |= BitBoard(1 << index);
-                    }
-                    'r' => {
-                        self.piece_masks[(Black, Rook)] |= BitBoard(1 << index);
-                        self.color_masks[Black] |= BitBoard(1 << index);
-                    }
-                    'R' => {
-                        self.piece_masks[(White, Rook)] |= BitBoard(1 << index);
-                        self.color_masks[White] |= BitBoard(1 << index);
-                    }
-                    'q' => {
-                        self.piece_masks[(Black, Queen)] |= BitBoard(1 << index);
-                        self.color_masks[Black] |= BitBoard(1 << index);
-                    }
-                    'Q' => {
-                        self.piece_masks[(White, Queen)] |= BitBoard(1 << index);
-                        self.color_masks[White] |= BitBoard(1 << index);
-                    }
-                    'k' => {
-                        self.piece_masks[(Black, King)] |= BitBoard(1 << index);
-                        self.color_masks[Black] |= BitBoard(1 << index);
-                    }
-                    'K' => {
-                        self.piece_masks[(White, King)] |= BitBoard(1 << index);
-                        self.color_masks[White] |= BitBoard(1 << index);
-                    }
-                    'p' => {
-                        self.piece_masks[(Black, Pawn)] |= BitBoard(1 << index);
-                        self.color_masks[Black] |= BitBoard(1 << index);
-                    }
-                    'P' => {
-                        self.piece_masks[(White, Pawn)] |= BitBoard(1 << index);
-                        self.color_masks[White] |= BitBoard(1 << index);
-                    }
-                    digit @ '1'..='8' => index += digit.to_digit(10).unwrap() as usize - 1,
-                    other => eprintln!("Unexpected character in FEN: {}", other),
-                }
-                index += 1;
-            }
-        }
-
-        match lines.nth(8).ok_or_else(|| String::from("No metadata!"))? {
-            "w" => self.current_player = White,
-            "b" => self.current_player = Black,
-            other => return Err(format!("Invalid player character: {}", other).into()),
-        }
-
-        self.castling_rights = CastlingRights([[false, false], [false, false]]);
-        match lines
-            .next()
-            .ok_or_else(|| String::from("Insufficient metadata for castling rights!"))?
-        {
-            "-" => self.castling_rights = CastlingRights([[false, false], [false, false]]),
-            other => other.chars().try_for_each(|chr| match chr {
-                'K' => {
-                    self.castling_rights[(White, Kingside)] = true;
-                    Ok(())
-                }
-                'k' => {
-                    self.castling_rights[(Black, Kingside)] = true;
-                    Ok(())
-                }
-                'Q' => {
-                    self.castling_rights[(White, Queenside)] = true;
-                    Ok(())
-                }
-                'q' => {
-                    self.castling_rights[(Black, Queenside)] = true;
-                    Ok(())
-                }
-                _ => Err(format!("Invalid player character: {}", other)),
-            })?,
-        }
-
-        match lines
-            .next()
-            .ok_or_else(|| String::from("Insufficient metadata for en passent square!"))?
-        {
-            "-" => self.en_passent_mask = BitBoard::empty(),
-            other => {
-                let mut square = 0;
-                match other
-                    .as_bytes()
-                    .get(0)
-                    .ok_or_else(|| "Empty en passent string!".to_string())?
-                {
-                    file @ b'a'..=b'h' => square += file - b'a',
-                    other => return Err(format!("Invalid en passent file: {}", other).into()),
-                }
-                match other
-                    .as_bytes()
-                    .get(1)
-                    .ok_or_else(|| "En passent string too short".to_string())?
-                {
-                    rank @ b'1'..=b'8' => square += 8 * (rank - b'1'),
-                    other => return Err(format!("Invalid en passent rank: {}", other).into()),
-                }
-                self.en_passent_mask = BitBoard(1 << square);
-            }
-        }
-
-        self.halfmove_clock = lines
-            .next()
-            .ok_or_else(|| String::from("No halfmove clock!"))?
-            .parse::<u8>()?;
-
-        self.combined = self.color_masks[White] | self.color_masks[Black];
-        let hash = self.zobrist_hash();
-        self.hash = hash;
-
-        Ok(())
-    }
-
-    pub fn fen(&self) -> String {
-        let mut fen = String::new();
-        // get pieces by square
-        for rank in (0..8).rev() {
-            let mut empty_counter = 0;
-            for file in 0..8 {
-                let square = 8u8 * rank + file;
-                let piece = self.piece_at(square.into());
-
-                match piece {
-                    NoPiece => empty_counter += 1,
-                    piece => {
-                        if empty_counter != 0 {
-                            fen.push(char::from_digit(empty_counter, 10).unwrap());
-                            empty_counter = 0;
-                        }
-                        let mut letter = match piece {
-                            Pawn => 'p',
-                            Knight => 'n',
-                            Bishop => 'b',
-                            Rook => 'r',
-                            Queen => 'q',
-                            King => 'k',
-                            NoPiece => unreachable!(),
-                        };
-                        if self.color_at(square.into()) == White {
-                            letter = letter.to_ascii_uppercase();
-                        }
-                        fen.push(letter);
-                    }
-                }
-            }
-            if empty_counter != 0 {
-                fen.push(char::from_digit(empty_counter, 10).unwrap());
-            }
-            fen.push('/');
-        }
-        // remove trailing '/'
-        fen.pop();
-        fen.push(' ');
-
-        // metadata
-        // side to move
-        fen.push(match self.current_player() {
-            White => 'w',
-            Black => 'b',
-        });
-        fen.push(' ');
-
-        // castling rights
-        if self.castling_rights[(White, Kingside)] {
-            fen.push('K')
-        }
-        if self.castling_rights[(White, Queenside)] {
-            fen.push('Q')
-        }
-        if self.castling_rights[(Black, Kingside)] {
-            fen.push('k')
-        }
-        if self.castling_rights[(Black, Kingside)] {
-            fen.push('q')
-        }
-        if self.castling_rights == CastlingRights([[false, false], [false, false]]) {
-            fen.push('-')
-        }
-        fen.push(' ');
-
-        // en passent square
-        match self.en_passent_square() {
-            None => fen.push('-'),
-            Some(sq) => fen.push_str(&coord(sq)),
-        }
-        fen.push(' ');
-
-        // halfmove clock
-        fen.push_str(&self.halfmove_clock.to_string());
-        fen.push(' ');
-
-        // fullmove number
-        fen.push_str(&(self.position_history.len() / 2).to_string());
-
-        fen
-    }
 
     #[inline]
     pub fn piece_masks(&self) -> PieceMasks {
@@ -572,447 +336,6 @@ impl ChessGame {
             }
             NoPiece => false,
         }
-    }
-
-    pub fn legal_moves(&self) -> Vec<Move> {
-        let mut moves = Vec::with_capacity(64);
-        let color = self.current_player;
-
-        let king_square = self.piece_masks[(color, King)].first_square();
-
-        // King moves
-        let kingless_blocking_mask =
-            (self.color_masks[color] ^ self.piece_masks[(color, King)]) | self.color_masks[!color];
-        let attacked_squares = self.all_attacks(!color, kingless_blocking_mask);
-        let king_moves =
-            self.king_attacks(color) & (attacked_squares | self.color_masks[color]).inverse();
-        for target in king_moves {
-            let capture = (target.bitboard() & self.color_masks[!color]).is_not_empty();
-            moves.push(Move::king_move(king_square, target, capture));
-        }
-
-        // Check evasions
-        let checkers = (lookup_pawn_attack(king_square, color) & self.piece_masks[(!color, Pawn)])
-            | (lookup_knight(king_square) & self.piece_masks[(!color, Knight)])
-            | (lookup_bishop(king_square, self.combined)
-                & (self.piece_masks[(!color, Bishop)] | self.piece_masks[(!color, Queen)]))
-            | (lookup_rook(king_square, self.combined)
-                & (self.piece_masks[(!color, Rook)] | self.piece_masks[(!color, Queen)]));
-
-        let num_checkers = checkers.count_ones();
-        // - Double Check
-        // only king moves are legal in double+ check
-        if num_checkers > 1 {
-            return moves;
-        }
-
-        // mask of square a piece can capture on
-        let mut capture_mask = BitBoard(0xFFFFFFFFFFFFFFFFu64);
-        // mask of squares a piece can move to
-        let mut push_mask = BitBoard(0xFFFFFFFFFFFFFFFFu64);
-        // - Single Check
-        if num_checkers == 1 {
-            capture_mask = checkers;
-
-            let checker_square = checkers.first_square();
-            if self.piece_at(checker_square).is_slider() {
-                // if the checking piece is a slider, we can push a piece to block it
-                let slider_rays;
-                if (king_square.rank()) == checker_square.rank()
-                    || (king_square.file()) == checker_square.file()
-                {
-                    // orthogonal slider
-                    slider_rays = lookup_rook(king_square, checker_square.bitboard());
-                    push_mask = lookup_rook(checker_square, king_square.bitboard()) & slider_rays;
-                } else {
-                    // diagonal slider
-                    slider_rays = lookup_bishop(king_square, checker_square.bitboard());
-                    push_mask = lookup_bishop(checker_square, king_square.bitboard()) & slider_rays;
-                }
-            } else {
-                // if the piece is not a slider, we can only capture
-                push_mask = BitBoard::empty();
-            }
-        }
-        // Pinned pieces
-        let mut pinned_pieces = BitBoard::empty();
-
-        let orthogonal_pin_rays = lookup_rook(king_square, self.color_masks[!color]);
-        let pinning_orthogonals = (self.piece_masks[(!color, Rook)]
-            | self.piece_masks[(!color, Queen)])
-            & orthogonal_pin_rays;
-        for pinner_square in pinning_orthogonals {
-            let pin_ray = lookup_between(king_square, pinner_square);
-
-            if (pin_ray & self.color_masks[color]).count_ones() == 1 {
-                // there is only one piece on this ray so there is a pin
-                // we only need to generate moves for rooks, queens and pawn pushes in this case
-
-                // add any pinned piece to the mask
-                pinned_pieces |= pin_ray & self.color_masks[color];
-
-                let pinned_rook_or_queen =
-                    pin_ray & (self.piece_masks[(color, Rook)] | self.piece_masks[(color, Queen)]);
-                if pinned_rook_or_queen.is_not_empty() {
-                    let rook_square = pinned_rook_or_queen.first_square();
-                    let rook_moves = (pin_ray | pinner_square.bitboard())
-                        & (push_mask | capture_mask)
-                        & pinned_rook_or_queen.inverse();
-                    for target in rook_moves {
-                        let capture = target == pinner_square;
-                        moves.push(Move::new(
-                            rook_square,
-                            target,
-                            self.piece_at(rook_square),
-                            NoPiece,
-                            capture,
-                            false,
-                            false,
-                            false,
-                        ));
-                    }
-                }
-                let pinned_pawn = pin_ray & self.piece_masks[(color, Pawn)];
-                if pinned_pawn.is_not_empty() {
-                    let pawn_square = pinned_pawn.first_square();
-                    let mut pawn_moves = lookup_pawn_push(pawn_square, color)
-                        & pin_ray
-                        & push_mask
-                        & self.combined.inverse();
-                    if pawn_moves.is_not_empty()
-                        && ((color == White
-                            && pawn_square.rank() == 1
-                            && (self.combined & pawn_square.offset(0, 2).bitboard()).is_empty())
-                            || (color == Black
-                                && pawn_square.rank() == 6
-                                && (self.combined & pawn_square.offset(0, -2).bitboard())
-                                    .is_empty()))
-                    {
-                        pawn_moves |= lookup_pawn_push(pawn_moves.first_square(), color)
-                    }
-                    for target in pawn_moves {
-                        moves.push(Move::new(
-                            pawn_square,
-                            target,
-                            Pawn,
-                            NoPiece,
-                            false,
-                            // double pawn push
-                            target.abs_diff(*pawn_square) == 16,
-                            false,
-                            false,
-                        ));
-                    }
-                }
-            }
-        }
-        let diagonal_pin_rays = lookup_bishop(king_square, self.color_masks[!color]);
-        let pinning_diagonals = (self.piece_masks[(!color, Bishop)]
-            | self.piece_masks[(!color, Queen)])
-            & diagonal_pin_rays;
-        for pinner_square in pinning_diagonals {
-            let pin_ray = lookup_between(king_square, pinner_square);
-
-            if (pin_ray & self.color_masks[color]).count_ones() == 1 {
-                // there is only the king and one piece on this ray so there is a pin
-                // we only need to generate moves for bishops, queens and pawn captures in this case
-
-                // add any pinned piece to the mask
-                pinned_pieces |= pin_ray & self.color_masks[color];
-
-                let pinned_bishop_or_queen = pin_ray
-                    & (self.piece_masks[(color, Bishop)] | self.piece_masks[(color, Queen)]);
-                if pinned_bishop_or_queen.is_not_empty() {
-                    let bishop_square = pinned_bishop_or_queen.first_square();
-                    let bishop_moves = (pin_ray | pinner_square.bitboard())
-                        & (push_mask | capture_mask)
-                        & pinned_bishop_or_queen.inverse();
-                    for target in bishop_moves {
-                        let capture = target == pinner_square;
-                        moves.push(Move::new(
-                            bishop_square,
-                            target,
-                            self.piece_at(bishop_square),
-                            NoPiece,
-                            capture,
-                            false,
-                            false,
-                            false,
-                        ));
-                    }
-                }
-
-                let pinned_pawn = pin_ray & self.piece_masks[(color, Pawn)];
-                if pinned_pawn.is_not_empty() {
-                    let pawn_square = pinned_pawn.first_square();
-                    let pawn_moves = lookup_pawn_attack(pawn_square, color)
-                        & pinner_square.bitboard()
-                        & capture_mask
-                        & (self.color_masks[!color] | self.en_passent_mask);
-                    for target in pawn_moves {
-                        let target: Square = target;
-                        if target.rank() == !color as usize * 7 {
-                            // pinned pawn capture promotions
-                            moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
-                            moves.push(Move::pawn_capture_promotion(pawn_square, target, Bishop));
-                            moves.push(Move::pawn_capture_promotion(pawn_square, target, Rook));
-                            moves.push(Move::pawn_capture_promotion(pawn_square, target, Queen));
-                        } else {
-                            moves.push(Move::new(
-                                pawn_square,
-                                target,
-                                Pawn,
-                                NoPiece,
-                                true,
-                                false,
-                                // en passent capture
-                                match self.en_passent_mask {
-                                    BitBoard(0) => false,
-                                    _ => target == self.en_passent_mask.first_square(),
-                                },
-                                false,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-
-        // Other moves
-        // Castling if not in check
-        if num_checkers == 0 {
-            let king = self.piece_masks[(color, King)];
-            if self.castling_rights[(color, Kingside)]
-                && (self.combined & (king << 1 | king << 2)).is_empty()
-                && (attacked_squares & (king << 1 | king << 2)).is_empty()
-            {
-                // generate castling kingside if rights remain, the way is clear and the squares aren't attacked
-                let start = king.first_square();
-                moves.push(Move::king_castle(start, start.offset(2, 0)));
-            }
-            if self.castling_rights[(color, Queenside)]
-                && ((self.combined) & (king >> 1 | king >> 2 | king >> 3)).is_empty()
-                && (attacked_squares & (king >> 1 | king >> 2)).is_empty()
-            {
-                // generate castling queenside if rights remain, the way is clear and the squares aren't attacked
-                let start = king.first_square();
-                moves.push(Move::king_castle(start, start.offset(-2, 0)));
-            }
-        }
-        // Pawn moves
-        let pawns = self.piece_masks[(color, Pawn)] & pinned_pieces.inverse();
-        if color == White {
-            // white pawn moves
-            for pawn_square in pawns {
-                let pawn_square: Square = pawn_square;
-                let pawn = pawn_square.bitboard();
-
-                // single pawn pushes
-                let pawn_push_one = (pawn << 8) & push_mask & (self.combined).inverse();
-                if pawn_push_one.is_not_empty() {
-                    let target: Square = pawn_push_one.first_square();
-                    // promotions
-                    if target.rank() == 7 {
-                        moves.push(Move::pawn_push_promotion(pawn_square, target, Knight));
-                        moves.push(Move::pawn_push_promotion(pawn_square, target, Bishop));
-                        moves.push(Move::pawn_push_promotion(pawn_square, target, Rook));
-                        moves.push(Move::pawn_push_promotion(pawn_square, target, Queen));
-                    } else {
-                        // no promotion
-                        moves.push(Move::pawn_push(pawn_square, target));
-                    }
-                }
-                // double pawn pushes
-                let pawn_push_two = ((((pawn & SECOND_RANK) << 8) & (self.combined).inverse())
-                    << 8)
-                    & (self.combined).inverse()
-                    & push_mask;
-
-                if pawn_push_two.is_not_empty() {
-                    moves.push(Move::pawn_double_push(
-                        pawn_square,
-                        pawn_push_two.first_square(),
-                    ));
-                }
-                // pawn captures
-                let pawn_captures = (((pawn & NOT_A_FILE) << 7) | ((pawn & NOT_H_FILE) << 9))
-                    // if a double-pushed pawn is giving check, mark it as takeable by en passent
-                    & (capture_mask | (self.en_passent_mask & (capture_mask << 8)))
-                    & (self.color_masks[!color] | self.en_passent_mask);
-                for target in pawn_captures {
-                    let target: Square = target;
-                    if target.rank() == 7 {
-                        // promotions
-                        moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
-                        moves.push(Move::pawn_capture_promotion(pawn_square, target, Bishop));
-                        moves.push(Move::pawn_capture_promotion(pawn_square, target, Rook));
-                        moves.push(Move::pawn_capture_promotion(pawn_square, target, Queen));
-                    } else if target.bitboard() == self.en_passent_mask {
-                        // en passent capture
-                        if self.piece_masks[(color, King)].first_square().rank() == 4 {
-                            let mut en_passent_pinned = false;
-                            let blocking_mask = self.combined
-                                & (pawn_square.bitboard() | (self.en_passent_mask >> 8)).inverse();
-                            let attacking_rooks_or_queens = (self.piece_masks[(!color, Rook)]
-                                | self.piece_masks[(!color, Queen)])
-                                & FIFTH_RANK;
-                            for rook_square in attacking_rooks_or_queens {
-                                if (lookup_rook(rook_square, blocking_mask)
-                                    & self.piece_masks[(color, King)])
-                                    .is_not_empty()
-                                {
-                                    en_passent_pinned = true;
-                                    break;
-                                }
-                            }
-                            let attacking_queens = self.piece_masks[(!color, Queen)] & FOURTH_RANK;
-                            for queen_square in attacking_queens {
-                                if (lookup_queen(queen_square, blocking_mask)
-                                    & self.piece_masks[(color, King)])
-                                    .is_not_empty()
-                                {
-                                    en_passent_pinned = true;
-                                    break;
-                                }
-                            }
-                            if !en_passent_pinned {
-                                moves.push(Move::pawn_enpassent_capture(pawn_square, target));
-                            }
-                        } else {
-                            moves.push(Move::pawn_enpassent_capture(pawn_square, target));
-                        }
-                    } else {
-                        // normal captures
-                        moves.push(Move::pawn_capture(pawn_square, target));
-                    }
-                }
-            }
-        } else {
-            // black pawn moves
-            for pawn_square in pawns {
-                let pawn_square: Square = pawn_square;
-                let pawn = pawn_square.bitboard();
-
-                // single pawn pushes
-                let pawn_push_one = pawn >> 8 & push_mask & (self.combined).inverse();
-                if pawn_push_one.is_not_empty() {
-                    let target: Square = pawn_push_one.first_square();
-                    // promotions
-                    if target.rank() == 0 {
-                        moves.push(Move::pawn_push_promotion(pawn_square, target, Knight));
-                        moves.push(Move::pawn_push_promotion(pawn_square, target, Bishop));
-                        moves.push(Move::pawn_push_promotion(pawn_square, target, Rook));
-                        moves.push(Move::pawn_push_promotion(pawn_square, target, Queen));
-                    } else {
-                        // no promotion
-                        moves.push(Move::pawn_push(pawn_square, target));
-                    }
-                }
-                // double pawn pushes
-                let pawn_push_two = ((((pawn & SEVENTH_RANK) >> 8) & (self.combined).inverse())
-                    >> 8)
-                    & (self.combined).inverse()
-                    & push_mask;
-                if pawn_push_two.is_not_empty() {
-                    moves.push(Move::pawn_double_push(
-                        pawn_square,
-                        pawn_push_two.first_square(),
-                    ));
-                }
-                // pawn captures
-                let pawn_captures = (((pawn & NOT_A_FILE) >> 9) | ((pawn & NOT_H_FILE) >> 7))
-                    // if a double-pushed pawn is giving check, mark it as takeable by en passent
-                    & (capture_mask | (self.en_passent_mask & (capture_mask >> 8)))
-                    & (self.color_masks[!color] | self.en_passent_mask);
-                for target in pawn_captures {
-                    let target: Square = target;
-                    if target.rank() == 0 {
-                        // promotions
-                        moves.push(Move::pawn_capture_promotion(pawn_square, target, Knight));
-                        moves.push(Move::pawn_capture_promotion(pawn_square, target, Bishop));
-                        moves.push(Move::pawn_capture_promotion(pawn_square, target, Rook));
-                        moves.push(Move::pawn_capture_promotion(pawn_square, target, Queen));
-                    } else if target.bitboard() == self.en_passent_mask {
-                        // en passent capture
-                        if self.piece_masks[(color, King)].first_square().rank() == 3 {
-                            let mut en_passent_pinned = false;
-                            let blocking_mask = (self.combined)
-                                & (pawn_square.bitboard() | self.en_passent_mask << 8).inverse();
-                            let attacking_rooks_or_queens = (self.piece_masks[(!color, Rook)]
-                                | self.piece_masks[(!color, Queen)])
-                                & FOURTH_RANK;
-                            for rook_square in attacking_rooks_or_queens {
-                                if (lookup_rook(rook_square, blocking_mask)
-                                    & self.piece_masks[(color, King)])
-                                    .is_not_empty()
-                                {
-                                    en_passent_pinned = true;
-                                    break;
-                                }
-                            }
-                            if !en_passent_pinned {
-                                moves.push(Move::pawn_enpassent_capture(pawn_square, target));
-                            }
-                        } else {
-                            moves.push(Move::pawn_enpassent_capture(pawn_square, target));
-                        }
-                    } else {
-                        // normal captures
-                        moves.push(Move::pawn_capture(pawn_square, target));
-                    }
-                }
-            }
-        }
-
-        // Knight moves
-        let knights = self.piece_masks[(color, Knight)] & pinned_pieces.inverse();
-        for knight_square in knights {
-            let attacks = lookup_knight(knight_square)
-                & self.color_masks[color].inverse()
-                & (push_mask | capture_mask);
-            for target in attacks {
-                let capture = (self.color_masks[!color] & target.bitboard()).is_not_empty();
-                moves.push(Move::knight_move(knight_square, target, capture));
-            }
-        }
-
-        // Bishop moves
-        let bishops = self.piece_masks[(color, Bishop)] & pinned_pieces.inverse();
-        for bishop_square in bishops {
-            let attacks = lookup_bishop(bishop_square, self.combined)
-                & self.color_masks[color].inverse()
-                & (push_mask | capture_mask);
-            for target in attacks {
-                let capture = (self.color_masks[!color] & target.bitboard()).is_not_empty();
-                moves.push(Move::bishop_move(bishop_square, target, capture));
-            }
-        }
-
-        // Rook moves
-        let rooks = self.piece_masks[(color, Rook)] & pinned_pieces.inverse();
-        for rook_square in rooks {
-            let attacks = lookup_rook(rook_square, self.combined)
-                & self.color_masks[color].inverse()
-                & (push_mask | capture_mask);
-            for target in attacks {
-                let capture = (self.color_masks[!color] & target.bitboard()).is_not_empty();
-                moves.push(Move::rook_move(rook_square, target, capture));
-            }
-        }
-
-        // queen moves
-        let queens = self.piece_masks[(color, Queen)] & pinned_pieces.inverse();
-        for queen_square in queens {
-            let attacks = lookup_queen(queen_square, self.combined)
-                & self.color_masks[color].inverse()
-                & (push_mask | capture_mask);
-            for target in attacks {
-                let capture = (self.color_masks[!color] & target.bitboard()).is_not_empty();
-                moves.push(Move::queen_move(queen_square, target, capture));
-            }
-        }
-
-        moves
     }
 
     pub fn make_move(&mut self, move_: Move) {
@@ -1323,22 +646,11 @@ impl ChessGame {
         hash
     }
 
-    pub fn perft(&mut self, depth: usize) -> usize {
-        if depth == 1 {
-            return self.legal_moves().len();
-        } else if depth == 0 {
-            return 1;
-        }
+    pub fn perft(&self, depth: usize) -> usize {
+        let copy = self.clone();
 
-        let moves = self.legal_moves();
-        let mut nodes = 0;
-
-        for move_ in moves {
-            self.make_move(move_);
-            nodes += self.perft(depth - 1);
-            self.unmake_move();
-        }
-        nodes
+        let mut perft = Perft::new(copy, depth);
+        perft.run()
     }
 
     pub fn divide(&mut self, depth: usize) {
@@ -1348,7 +660,7 @@ impl ChessGame {
         let moves = self.legal_moves();
         let mut move_count = 0;
         let mut node_count = 0;
-        for move_ in moves {
+        for &move_ in moves.inner() {
             move_count += 1;
             self.make_move(move_);
             let nodes = self.perft(depth - 1);
@@ -1368,6 +680,48 @@ impl ChessGame {
             );
         }
         println!("Moves: {}, Nodes: {}\n", move_count, node_count);
+    }
+}
+
+pub struct Perft {
+    game: ChessGame,
+    depth: usize,
+    move_lists: Vec<MoveList>,
+}
+
+impl Perft {
+    pub fn new(game: ChessGame, depth: usize) -> Self {
+        Self {
+            game,
+            depth,
+            move_lists: vec![MoveList::new(); depth + 1],
+        }
+    }
+
+    pub fn perft(&mut self, depth: usize) -> usize {
+        if depth == 1 {
+            self.game
+                .generate_legal_moves::<All>(&mut self.move_lists[depth]);
+            return self.move_lists[depth].len();
+        } else if depth == 0 {
+            return 1;
+        }
+
+        let mut nodes = 0;
+        self.game
+            .generate_legal_moves::<All>(&mut self.move_lists[depth]);
+
+        for i in 0..self.move_lists[depth].len() {
+            let move_ = self.move_lists[depth][i];
+            self.game.make_move(move_);
+            nodes += self.perft(depth - 1);
+            self.game.unmake_move();
+        }
+        nodes
+    }
+
+    pub fn run(&mut self) -> usize {
+        self.perft(self.depth)
     }
 }
 

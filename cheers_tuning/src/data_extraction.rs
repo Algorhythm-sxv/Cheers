@@ -114,7 +114,7 @@ impl Visitor for FENWriter {
 }
 
 fn san_to_move(san: San, game: &ChessGame) -> Option<Move> {
-    let mut candidates = game.legal_moves();
+    let mut candidates = game.legal_moves().inner().to_vec();
     candidates.retain(|m| match san {
         San::Normal {
             role,
