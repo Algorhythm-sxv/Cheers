@@ -330,7 +330,8 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let relative_king = relative_board_index(info.king_square[color], color);
         eval.mg += params.piece_tables[(Midgame, King, relative_king)];
         eval.eg += params.piece_tables[(Endgame, King, relative_king)];
-        self.trace.term(|t| t.king_placement[relative_king][color] += 1);
+        self.trace
+            .term(|t| t.king_placement[relative_king][color] += 1);
 
         // pawn and minor piece defenders
         let defenders = (info.king_area[color]
@@ -342,13 +343,31 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         eval.eg += params.king_defenders[defenders][Endgame];
         self.trace.term(|t| t.king_defenders[defenders][color] += 1);
 
+        // (half-) open files
+        if (self.game.piece_masks[(color, Pawn)] & FILES[info.king_square[color].file()]).is_empty()
+        {
+            let open = (self.game.piece_masks()[(!color, Pawn)]
+                & FILES[info.king_square[color].file()])
+            .is_empty() as usize;
+            eval.mg += params.king_open_file[open][Midgame];
+            eval.eg += params.king_open_file[open][Endgame];
+            self.trace.term(|t| t.king_open_file[open][color] += 1);
+        }
+
+        // no enemy queen
+        if self.game.piece_masks[(!color, Queen)].is_empty() {
+            eval.mg += params.no_enemy_queen[Midgame];
+            eval.eg += params.no_enemy_queen[Endgame];
+            self.trace.term(|t| t.no_enemy_queen[color] += 1);
+        }
+
         // mobility
         let attacks = lookup_king(info.king_square[color]);
         let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
         eval.mg += params.king_mobility[mobility][Midgame];
         eval.eg += params.king_mobility[mobility][Endgame];
         self.trace.term(|t| t.king_mobility[mobility][color] += 1);
-        
+
         eval
     }
 
@@ -377,19 +396,7 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         eval.eg += params.passed_pawn[Endgame] * passers;
         self.trace.term(|t| t.passed_pawns[color] = passers);
 
-        // unsupported double pawns
         let pawns = self.game.piece_masks()[(color, Pawn)];
-        let shifted = if color == White {
-            pawns >> 8
-        } else {
-            pawns << 8
-        };
-        let double_pawns =
-            (pawns & shifted & ((pawns & NOT_H_FILE) << 1 | (pawns & NOT_A_FILE >> 1)).inverse())
-                .count_ones() as i32;
-        eval.mg += params.double_pawn[Midgame] * double_pawns;
-        eval.eg += params.double_pawn[Endgame] * double_pawns;
-        self.trace.term(|t| t.double_pawns[color] = double_pawns);
 
         for pawn in self.game.piece_masks()[(color, Pawn)] {
             // placement
@@ -399,13 +406,36 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
             self.trace
                 .term(|t| t.pawn_placement[relative_pawn][color] += 1);
 
+            let file = pawn.file();
             let board = pawn.bitboard();
-            let attacks = match color {
-                White => ((board & NOT_H_FILE) << 9) | ((board & NOT_A_FILE) << 7),
-                Black => ((board & NOT_A_FILE) >> 9) | ((board & NOT_H_FILE) >> 7),
-            };
+            let attacks = lookup_pawn_attack(pawn, color);
             let threats = attacks & self.game.piece_masks()[(!color, Pawn)];
-            let neighbors = self.game.piece_masks()[(color, Pawn)] & adjacent_files(pawn.file());
+            let neighbors = pawns & adjacent_files(file);
+            let phalanx = pawns & ((board & NOT_A_FILE >> 1) | board | (board & NOT_H_FILE << 1));
+            let supporters = lookup_pawn_attack(pawn, !color) & pawns;
+
+            // connected pawns
+            if supporters.is_not_empty() {
+                eval.mg += params.connected_pawn[file][Midgame];
+                eval.eg += params.connected_pawn[file][Endgame];
+                self.trace.term(|t| t.connected_pawn[file][color] += 1);
+            }
+
+            if phalanx.is_not_empty() {
+                eval.mg += params.phalanx_pawn[file][Midgame];
+                eval.eg += params.phalanx_pawn[file][Endgame];
+                self.trace.term(|t| t.phalanx_pawn[file][color] += 1);
+            }
+
+            // double pawns
+            let behind = board >> 8 << 16 * color as u8;
+            if supporters.is_empty()
+                && (self.game.piece_masks[(color, Pawn)] & behind).is_not_empty()
+            {
+                eval.mg += params.double_pawn[file][Midgame];
+                eval.eg += params.double_pawn[file][Endgame];
+                self.trace.term(|t| t.double_pawns[file][color] += 1);
+            }
 
             // isolated pawns
             if threats.is_empty() && neighbors.is_empty() {
