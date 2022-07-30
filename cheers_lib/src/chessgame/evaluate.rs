@@ -375,7 +375,7 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
     pub fn evaluate_pawns(
         &mut self,
         color: ColorIndex,
-        _info: &EvalInfo,
+        info: &EvalInfo,
         params: &EvalParams,
     ) -> EvalScore {
         let mut eval = EvalScore::zero();
@@ -390,11 +390,6 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let front_spans = self.game.pawn_front_spans(!color);
         let all_front_spans =
             front_spans | (front_spans & NOT_H_FILE) << 1 | (front_spans & NOT_A_FILE) >> 1;
-        let passers = (self.game.piece_masks()[(color, Pawn)] & all_front_spans.inverse())
-            .count_ones() as i32;
-        eval.mg += params.passed_pawn[Midgame] * passers;
-        eval.eg += params.passed_pawn[Endgame] * passers;
-        self.trace.term(|t| t.passed_pawns[color] = passers);
 
         let pawns = self.game.piece_masks()[(color, Pawn)];
 
@@ -407,24 +402,63 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
                 .term(|t| t.pawn_placement[relative_pawn][color] += 1);
 
             let file = pawn.file();
+            let relative_rank = relative_pawn.rank();
             let board = pawn.bitboard();
             let attacks = lookup_pawn_attack(pawn, color);
             let threats = attacks & self.game.piece_masks()[(!color, Pawn)];
             let neighbors = pawns & adjacent_files(file);
-            let phalanx = pawns & ((board & NOT_A_FILE >> 1) | board | (board & NOT_H_FILE << 1));
             let supporters = lookup_pawn_attack(pawn, !color) & pawns;
+            let front_span = self.game.pawn_push_span(pawn, color);
+            let rear_span = self.game.pawn_push_span(pawn, !color);
+
+            // passed pawns
+            if (board & all_front_spans).is_empty() && (front_span & pawns).is_empty() {
+                eval.mg += params.passed_pawn[file][Midgame];
+                eval.eg += params.passed_pawn[file][Endgame];
+                self.trace.term(|t| t.passed_pawn[file][color] += 1);
+
+                eval.mg += params.passed_pawn_advanced[relative_rank - 1][Midgame];
+                eval.eg += params.passed_pawn_advanced[relative_rank - 1][Endgame];
+                self.trace
+                    .term(|t| t.passed_pawn_advanced[relative_rank - 1][color] += 1);
+
+                if supporters.is_not_empty() {
+                    eval.mg += params.passed_pawn_connected[Midgame];
+                    eval.eg += params.passed_pawn_connected[Endgame];
+                    self.trace.term(|t| t.passed_pawn_connected[color] += 1);
+                }
+
+                let unblocked = (lookup_pawn_push(pawn, color) & self.game.combined()).is_empty();
+                if unblocked {
+                    eval.mg += params.passed_pawn_unblocked[Midgame];
+                    eval.eg += params.passed_pawn_unblocked[Endgame];
+                    self.trace.term(|t| t.passed_pawn_unblocked[color] += 1);
+                }
+
+                if (rear_span & self.game.piece_masks()[(color, Rook)]).is_not_empty() {
+                    eval.mg += params.passed_pawn_friendly_rook[Midgame];
+                    eval.eg += params.passed_pawn_friendly_rook[Endgame];
+                    self.trace.term(|t| t.passed_pawn_friendly_rook[color] += 1);
+                }
+
+                let king_file_distance = info.king_square[!color].file().abs_diff(file);
+                let enemy_king_relative_rank =
+                    relative_board_index(info.king_square[!color], color).rank();
+                if enemy_king_relative_rank < relative_rank
+                    || king_file_distance > front_span.count_ones() as usize
+                {
+                    eval.mg += params.passed_pawn_enemy_king_too_far[Midgame];
+                    eval.eg += params.passed_pawn_enemy_king_too_far[Endgame];
+                    self.trace
+                        .term(|t| t.passed_pawn_enemy_king_too_far[color] += 1);
+                }
+            }
 
             // connected pawns
             if supporters.is_not_empty() {
                 eval.mg += params.connected_pawn[file][Midgame];
                 eval.eg += params.connected_pawn[file][Endgame];
                 self.trace.term(|t| t.connected_pawn[file][color] += 1);
-            }
-
-            if phalanx.is_not_empty() {
-                eval.mg += params.phalanx_pawn[file][Midgame];
-                eval.eg += params.phalanx_pawn[file][Endgame];
-                self.trace.term(|t| t.phalanx_pawn[file][color] += 1);
             }
 
             // double pawns
@@ -434,7 +468,7 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
             {
                 eval.mg += params.double_pawn[file][Midgame];
                 eval.eg += params.double_pawn[file][Endgame];
-                self.trace.term(|t| t.double_pawns[file][color] += 1);
+                self.trace.term(|t| t.double_pawn[file][color] += 1);
             }
 
             // isolated pawns
@@ -442,7 +476,7 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
                 eval.mg += params.isolated_pawn[pawn.file()][Midgame];
                 eval.eg += params.isolated_pawn[pawn.file()][Endgame];
                 self.trace
-                    .term(|t| t.isolated_pawns[pawn.file()][color] += 1);
+                    .term(|t| t.isolated_pawn[pawn.file()][color] += 1);
             }
         }
 

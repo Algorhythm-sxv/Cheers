@@ -16,9 +16,9 @@ use cheers_bitboards::{BitBoard, Square};
 pub mod eval_params;
 pub mod eval_types;
 pub mod evaluate;
+pub mod fen;
 pub mod movegen;
 pub mod see;
-pub mod fen;
 
 pub use self::eval_params::*;
 use self::movegen::{All, MoveList};
@@ -60,7 +60,6 @@ impl ChessGame {
         self.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
             .unwrap()
     }
-
 
     #[inline]
     pub fn piece_masks(&self) -> PieceMasks {
@@ -163,6 +162,23 @@ impl ChessGame {
                 west_attacks | east_attacks
             }
         }
+    }
+
+    pub fn pawn_push_span(&self, square: Square, color: ColorIndex) -> BitBoard {
+        let start = square.bitboard();
+
+        let mut board = BitBoard::empty();
+        if color == White {
+            board |= start << 8 | start << 16;
+            board |= board << 16;
+            board |= board << 32;
+        } else {
+            board |= start >> 8 | start >> 16;
+            board |= board >> 16;
+            board |= board >> 32;
+        }
+
+        board
     }
 
     pub fn pawn_front_spans(&self, color: ColorIndex) -> BitBoard {
