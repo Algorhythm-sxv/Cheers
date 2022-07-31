@@ -23,6 +23,7 @@ impl ChessGame {
             en_passent_mask: BitBoard::empty(),
             halfmove_clock: 0,
             hash: 0,
+            pawn_hash: 0,
             position_history: Vec::new(),
             unmove_history: Vec::new(),
         };
@@ -160,6 +161,8 @@ impl ChessGame {
         self.combined = self.color_masks[White] | self.color_masks[Black];
         let hash = self.zobrist_hash();
         self.hash = hash;
+
+        self.pawn_hash = self.zobrist_pawn_hash();
 
         Ok(())
     }

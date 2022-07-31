@@ -2,9 +2,11 @@ use std::sync::{atomic::*, Arc, RwLock};
 
 use cheers_bitboards::Square;
 
-use crate::{moves::Move, types::PieceIndex};
-
-pub const TT_DEFAULT_SIZE: usize = 1 << 22; // 2^22 entries for ~64MB
+use crate::{
+    chessgame::eval_types::EvalScore,
+    moves::Move,
+    types::{ColorIndex, PieceIndex},
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NodeType {
@@ -134,5 +136,61 @@ impl TranspositionTable {
             // key and data didn't match, invalid entry
             None
         }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct PawnHashEntry {
+    pub hash: u64,
+    pub mg: i32,
+    pub eg: i32,
+}
+impl Default for PawnHashEntry {
+    fn default() -> Self {
+        Self {
+            hash: 1,
+            mg: 0,
+            eg: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PawnHashTable {
+    table: Vec<PawnHashEntry>,
+    mask: u64,
+}
+
+impl PawnHashTable {
+    pub fn new(table_size_mb: usize) -> Self {
+        let mut length = table_size_mb * 1024 * 1024 / std::mem::size_of::<PawnHashEntry>();
+        if length != 0 {
+            length = length.next_power_of_two();
+        }
+        Self {
+            table: vec![PawnHashEntry::default(); length],
+            mask: length as u64 - 1,
+        }
+    }
+
+    pub fn get(&self, hash: u64, player: ColorIndex) -> Option<EvalScore> {
+        let entry = self.table[(hash & self.mask) as usize];
+        if entry.hash == hash {
+            let sign = if player == ColorIndex::Black { -1 } else { 1 };
+            Some(EvalScore {
+                mg: sign * entry.mg,
+                eg: sign * entry.eg,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn set(&mut self, hash: u64, mg: i32, eg: i32, player: ColorIndex) {
+        let (mg, eg) = match player {
+            ColorIndex::White => (mg, eg),
+            ColorIndex::Black => (-mg, -eg),
+        };
+        self.table[(hash & self.mask) as usize] = PawnHashEntry { hash, mg, eg };
     }
 }

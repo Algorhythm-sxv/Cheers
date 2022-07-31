@@ -25,9 +25,10 @@ pub struct EvalInfo {
     pub seventh_rank: [BitBoard; 2],
     pub king_square: [Square; 2],
     pub king_area: [BitBoard; 2],
+    pub passed_pawns: [BitBoard; 2],
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct EvalScore {
     pub mg: i32,
     pub eg: i32,

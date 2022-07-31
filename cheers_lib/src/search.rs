@@ -5,8 +5,8 @@ use cheers_pregen::LMR;
 
 use crate::chessgame::movegen::{All, Captures, MoveList};
 use crate::chessgame::see::SEE_PIECE_VALUES;
+use crate::hash_tables::{NodeType::*, PawnHashTable, TranspositionTable};
 use crate::moves::{pick_move, KillerMoves};
-use crate::transposition_table::{NodeType::*, TranspositionTable};
 use crate::{
     chessgame::{
         eval_types::{GamePhase::*, TraceTarget},
@@ -56,6 +56,7 @@ pub struct Search {
     pub move_lists: Vec<MoveList>,
     pub seldepth: usize,
     transposition_table: TranspositionTable,
+    pawn_hash_table: PawnHashTable,
     killer_moves: KillerMoves<2>,
     history_tables: [[[i32; 64]; 6]; 2],
     pub max_depth: Option<usize>,
@@ -72,6 +73,7 @@ impl Search {
             move_lists: vec![MoveList::new(); 128],
             seldepth: 0,
             transposition_table: TranspositionTable::new(0),
+            pawn_hash_table: PawnHashTable::new(0),
             killer_moves: KillerMoves::new(),
             history_tables: [[[0; 64]; 6]; 2],
             max_depth: None,
@@ -84,6 +86,7 @@ impl Search {
 
     pub fn tt_size_mb(mut self, tt_size_mb: usize) -> Self {
         self.transposition_table.set_size(tt_size_mb);
+        self.pawn_hash_table = PawnHashTable::new(tt_size_mb / 8);
         self
     }
 
@@ -419,7 +422,8 @@ impl Search {
 
         self.seldepth = self.seldepth.max(ply);
 
-        let (stand_pat_score, mut best_trace) = self.game.evaluate_impl::<T>();
+        let (stand_pat_score, mut best_trace) =
+            self.game.evaluate_impl::<T>(&mut self.pawn_hash_table);
 
         if stand_pat_score >= beta {
             return (beta, best_trace);

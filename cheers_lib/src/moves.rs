@@ -274,6 +274,7 @@ pub struct UnMove {
     pub castling: bool,
     pub castling_rights: CastlingRights,
     pub halfmove_clock: u8,
+    pub pawn_hash: u64,
 }
 
 impl UnMove {
@@ -288,6 +289,7 @@ impl UnMove {
         castling: bool,
         castling_rights: CastlingRights,
         halfmove_clock: u8,
+        pawn_hash: u64,
     ) -> Self {
         Self {
             start,
@@ -299,6 +301,7 @@ impl UnMove {
             castling,
             castling_rights,
             halfmove_clock,
+            pawn_hash,
         }
     }
 }

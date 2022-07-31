@@ -1,21 +1,25 @@
+use crate::hash_tables::PawnHashTable;
+
 pub use self::eval_params::*;
 use self::GamePhase::*;
 
 use super::{eval_types::*, *};
 
-pub struct EvalContext<'g, T> {
-    game: &'g ChessGame,
-    trace: &'g mut T,
-    params: &'g EvalParams,
+pub struct EvalContext<'search, T> {
+    game: &'search ChessGame,
+    pawn_hash_table: &'search mut PawnHashTable,
+    trace: &'search mut T,
+    params: &'search EvalParams,
 }
 
-impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
+impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     #[inline]
     pub fn evaluate(&mut self) -> i32 {
         let mut eval = EvalScore::zero();
 
-        self.trace
-            .term(|t| t.turn = self.game.current_player() as i32);
+        let color = self.game.current_player();
+
+        self.trace.term(|t| t.turn = color as i32);
 
         let phase = self.game.game_phase();
 
@@ -25,8 +29,36 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         let white_king_attacks = lookup_king(white_king_square);
         let black_king_attacks = lookup_king(black_king_square);
 
+        let front_spans_black = self
+            .game
+            .pawn_front_spans(Black, self.game.piece_masks()[(Black, Pawn)]);
+        let all_front_spans_black = front_spans_black
+            | (front_spans_black & NOT_H_FILE) << 1
+            | (front_spans_black & NOT_A_FILE) >> 1;
+        let rear_spans_black = self
+            .game
+            .pawn_push_spans(self.game.piece_masks()[(Black, Pawn)], White);
+
+        let front_spans_white = self
+            .game
+            .pawn_front_spans(White, self.game.piece_masks()[(White, Pawn)]);
+
+        let all_front_spans_white = front_spans_white
+            | (front_spans_white & NOT_H_FILE) << 1
+            | (front_spans_white & NOT_A_FILE) >> 1;
+        let rear_spans_white = self
+            .game
+            .pawn_push_spans(self.game.piece_masks()[(White, Pawn)], Black);
+
+        let white_passers = self.game.piece_masks()[(White, Pawn)]
+            & all_front_spans_black.inverse()
+            & rear_spans_white.inverse();
+        let black_passers = self.game.piece_masks()[(Black, Pawn)]
+            & all_front_spans_white.inverse()
+            & rear_spans_black.inverse();
+
         // initialise eval info
-        let info = EvalInfo {
+        let mut info = EvalInfo {
             mobility_area: [
                 self.game.mobility_area(White),
                 self.game.mobility_area(Black),
@@ -45,25 +77,63 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
                 white_king_attacks | (white_king_attacks << 8),
                 black_king_attacks | (black_king_attacks >> 8),
             ],
+            passed_pawns: [white_passers, black_passers],
         };
 
-        eval += self.evaluate_knights(self.game.current_player(), &info, self.params)
-            - self.evaluate_knights(!self.game.current_player(), &info, self.params);
+        if !T::TRACING {
+            match self
+                .pawn_hash_table
+                .get(self.game.zobrist_pawn_hash(), color)
+            {
+                None => {
+                    let score = self.evaluate_pawns_only(color, &mut info, self.params)
+                        - self.evaluate_pawns_only(!color, &mut info, self.params);
+                    self.pawn_hash_table.set(
+                        self.game.zobrist_pawn_hash(),
+                        score.mg,
+                        score.eg,
+                        color,
+                    );
+                    eval += score;
+                }
+                Some(val) => {
+                    // let score = self.evaluate_pawns_only(color, &mut info, self.params)
+                    //     - self.evaluate_pawns_only(!color, &mut info, self.params);
+                    // if val != score {
+                    //     println!("{}", self.game.fen());
+                    //     println!("{val:?}");
+                    //     println!("{score:?}");
+                    //     println!(
+                    //         "{} => {}",
+                    //         self.game.zobrist_pawn_hash(),
+                    //         self.game.zobrist_pawn_hash() & (65536 - 1)
+                    //     )
+                    // }
+                    eval += val;
+                }
+            }
+        } else {
+            eval += self.evaluate_pawns_only(color, &mut info, self.params)
+                - self.evaluate_pawns_only(!color, &mut info, self.params);
+        }
 
-        eval += self.evaluate_bishops(self.game.current_player(), &info, self.params)
-            - self.evaluate_bishops(!self.game.current_player(), &info, self.params);
+        eval += self.evaluate_passed_pawn_extras(color, &info, self.params)
+            - self.evaluate_passed_pawn_extras(!color, &info, self.params);
 
-        eval += self.evaluate_rooks(self.game.current_player(), &info, self.params)
-            - self.evaluate_rooks(!self.game.current_player(), &info, self.params);
+        eval += self.evaluate_knights(color, &info, self.params)
+            - self.evaluate_knights(!color, &info, self.params);
 
-        eval += self.evaluate_queens(self.game.current_player(), &info, self.params)
-            - self.evaluate_queens(!self.game.current_player(), &info, self.params);
+        eval += self.evaluate_bishops(color, &info, self.params)
+            - self.evaluate_bishops(!color, &info, self.params);
 
-        eval += self.evaluate_pawns(self.game.current_player(), &info, self.params)
-            - self.evaluate_pawns(!self.game.current_player(), &info, self.params);
+        eval += self.evaluate_rooks(color, &info, self.params)
+            - self.evaluate_rooks(!color, &info, self.params);
 
-        eval += self.evaluate_king(self.game.current_player(), &info, self.params)
-            - self.evaluate_king(!self.game.current_player(), &info, self.params);
+        eval += self.evaluate_queens(color, &info, self.params)
+            - self.evaluate_queens(!color, &info, self.params);
+
+        eval += self.evaluate_king(color, &info, self.params)
+            - self.evaluate_king(!color, &info, self.params);
 
         ((eval.mg * (256 - phase)) + (eval.eg * phase)) / 256
     }
@@ -372,10 +442,10 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
     }
 
     #[inline]
-    pub fn evaluate_pawns(
+    pub fn evaluate_pawns_only(
         &mut self,
         color: ColorIndex,
-        info: &EvalInfo,
+        info: &mut EvalInfo,
         params: &EvalParams,
     ) -> EvalScore {
         let mut eval = EvalScore::zero();
@@ -385,11 +455,6 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
         eval.mg += params.piece_values[(Midgame, Pawn)] * count;
         eval.eg += params.piece_values[(Endgame, Pawn)] * count;
         self.trace.term(|t| t.pawn_count[color] = count);
-
-        // passed pawns
-        let front_spans = self.game.pawn_front_spans(!color);
-        let all_front_spans =
-            front_spans | (front_spans & NOT_H_FILE) << 1 | (front_spans & NOT_A_FILE) >> 1;
 
         let pawns = self.game.piece_masks()[(color, Pawn)];
 
@@ -408,11 +473,10 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
             let threats = attacks & self.game.piece_masks()[(!color, Pawn)];
             let neighbors = pawns & adjacent_files(file);
             let supporters = lookup_pawn_attack(pawn, !color) & pawns;
-            let front_span = self.game.pawn_push_span(pawn, color);
-            let rear_span = self.game.pawn_push_span(pawn, !color);
 
             // passed pawns
-            if (board & all_front_spans).is_empty() && (front_span & pawns).is_empty() {
+            if (board & info.passed_pawns[color]).is_not_empty() {
+                info.passed_pawns[color] |= board;
                 eval.mg += params.passed_pawn[file][Midgame];
                 eval.eg += params.passed_pawn[file][Endgame];
                 self.trace.term(|t| t.passed_pawn[file][color] += 1);
@@ -426,31 +490,6 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
                     eval.mg += params.passed_pawn_connected[Midgame];
                     eval.eg += params.passed_pawn_connected[Endgame];
                     self.trace.term(|t| t.passed_pawn_connected[color] += 1);
-                }
-
-                let unblocked = (lookup_pawn_push(pawn, color) & self.game.combined()).is_empty();
-                if unblocked {
-                    eval.mg += params.passed_pawn_unblocked[Midgame];
-                    eval.eg += params.passed_pawn_unblocked[Endgame];
-                    self.trace.term(|t| t.passed_pawn_unblocked[color] += 1);
-                }
-
-                if (rear_span & self.game.piece_masks()[(color, Rook)]).is_not_empty() {
-                    eval.mg += params.passed_pawn_friendly_rook[Midgame];
-                    eval.eg += params.passed_pawn_friendly_rook[Endgame];
-                    self.trace.term(|t| t.passed_pawn_friendly_rook[color] += 1);
-                }
-
-                let king_file_distance = info.king_square[!color].file().abs_diff(file);
-                let enemy_king_relative_rank =
-                    relative_board_index(info.king_square[!color], color).rank();
-                if enemy_king_relative_rank < relative_rank
-                    || king_file_distance > front_span.count_ones() as usize
-                {
-                    eval.mg += params.passed_pawn_enemy_king_too_far[Midgame];
-                    eval.eg += params.passed_pawn_enemy_king_too_far[Endgame];
-                    self.trace
-                        .term(|t| t.passed_pawn_enemy_king_too_far[color] += 1);
                 }
             }
 
@@ -482,6 +521,49 @@ impl<'g, T: TraceTarget + Default> EvalContext<'g, T> {
 
         eval
     }
+
+    pub fn evaluate_passed_pawn_extras(
+        &mut self,
+        color: ColorIndex,
+        info: &EvalInfo,
+        params: &EvalParams,
+    ) -> EvalScore {
+        let mut eval = EvalScore::zero();
+
+        for pawn in info.passed_pawns[color] {
+            let relative_rank = relative_board_index(pawn, color).rank();
+            let file = pawn.file();
+            let front_span = self.game.pawn_push_span(pawn, color);
+            let rear_span = self.game.pawn_push_span(pawn, !color);
+
+            let unblocked = (lookup_pawn_push(pawn, color) & self.game.combined()).is_empty();
+            if unblocked {
+                eval.mg += params.passed_pawn_unblocked[Midgame];
+                eval.eg += params.passed_pawn_unblocked[Endgame];
+                self.trace.term(|t| t.passed_pawn_unblocked[color] += 1);
+            }
+
+            if (rear_span & self.game.piece_masks()[(color, Rook)]).is_not_empty() {
+                eval.mg += params.passed_pawn_friendly_rook[Midgame];
+                eval.eg += params.passed_pawn_friendly_rook[Endgame];
+                self.trace.term(|t| t.passed_pawn_friendly_rook[color] += 1);
+            }
+
+            let king_file_distance = info.king_square[!color].file().abs_diff(file);
+            let enemy_king_relative_rank =
+                relative_board_index(info.king_square[!color], color).rank();
+            if enemy_king_relative_rank < relative_rank
+                || king_file_distance > front_span.count_ones() as usize
+            {
+                eval.mg += params.passed_pawn_enemy_king_too_far[Midgame];
+                eval.eg += params.passed_pawn_enemy_king_too_far[Endgame];
+                self.trace
+                    .term(|t| t.passed_pawn_enemy_king_too_far[color] += 1);
+            }
+        }
+
+        eval
+    }
 }
 
 impl ChessGame {
@@ -497,15 +579,19 @@ impl ChessGame {
     }
 
     #[inline]
-    pub fn evaluate(&self) -> i32 {
-        self.evaluate_impl::<()>().0
+    pub fn evaluate(&self, pawn_hash_table: &mut PawnHashTable) -> i32 {
+        self.evaluate_impl::<()>(pawn_hash_table).0
     }
 
     #[inline]
-    pub fn evaluate_impl<T: TraceTarget + Default>(&self) -> (i32, T) {
+    pub fn evaluate_impl<T: TraceTarget + Default>(
+        &self,
+        pawn_hash_table: &mut PawnHashTable,
+    ) -> (i32, T) {
         let mut trace = T::default();
         let mut eval = EvalContext {
             game: self,
+            pawn_hash_table,
             trace: &mut trace,
             params: &EVAL_PARAMS,
         };

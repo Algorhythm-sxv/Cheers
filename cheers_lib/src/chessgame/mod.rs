@@ -33,6 +33,7 @@ pub struct ChessGame {
     en_passent_mask: BitBoard,
     halfmove_clock: u8,
     hash: u64,
+    pawn_hash: u64,
     position_history: Vec<u64>,
     unmove_history: Vec<UnMove>,
 }
@@ -48,6 +49,7 @@ impl ChessGame {
             en_passent_mask: BitBoard::empty(),
             halfmove_clock: 0,
             hash: 0,
+            pawn_hash: 0,
             position_history: Vec::new(),
             unmove_history: Vec::new(),
         };
@@ -97,6 +99,11 @@ impl ChessGame {
     #[inline]
     pub fn hash(&self) -> u64 {
         self.hash
+    }
+
+    #[inline]
+    pub fn pawn_hash(&self) -> u64 {
+        self.pawn_hash
     }
 
     #[inline]
@@ -181,8 +188,22 @@ impl ChessGame {
         board
     }
 
-    pub fn pawn_front_spans(&self, color: ColorIndex) -> BitBoard {
-        let mut spans = self.piece_masks[(color, Pawn)];
+    pub fn pawn_push_spans(&self, pawns: BitBoard, color: ColorIndex) -> BitBoard {
+        let mut board = BitBoard::empty();
+        if color == White {
+            board |= pawns << 8 | pawns << 16;
+            board |= board << 16;
+            board |= board << 32;
+        } else {
+            board |= pawns >> 8 | pawns >> 16;
+            board |= board >> 16;
+            board |= board >> 32;
+        }
+        board
+    }
+
+    pub fn pawn_front_spans(&self, color: ColorIndex, pawns: BitBoard) -> BitBoard {
+        let mut spans = pawns;
         if color == White {
             spans |= spans << 8;
             spans |= spans << 16;
@@ -377,6 +398,7 @@ impl ChessGame {
             move_.castling(),
             self.castling_rights,
             self.halfmove_clock,
+            self.pawn_hash,
         ));
 
         // add the last position into the history
@@ -417,11 +439,13 @@ impl ChessGame {
         // Remove captured piece (en passent, rule 50)
         if captured != NoPiece {
             let cap_square = if move_.en_passent() {
-                if color == White {
+                let target = if color == White {
                     target.offset(0, -1)
                 } else {
                     target.offset(0, 1)
-                }
+                };
+                self.pawn_hash ^= zobrist_piece(Pawn, !color, target);
+                target
             } else {
                 target
             };
@@ -461,22 +485,30 @@ impl ChessGame {
                 self.hash ^= zobrist_castling(self.castling_rights);
             }
         }
-        if captured == Rook {
-            if self.castling_rights[(!color, Kingside)]
-                && *target as usize == 7 + 56 * !color as usize
-            {
-                // kingside rook has been captured
-                self.hash ^= zobrist_castling(self.castling_rights);
-                self.castling_rights[(!color, Kingside)] = false;
-                self.hash ^= zobrist_castling(self.castling_rights);
-            } else if self.castling_rights[(!color, Queenside)]
-                && *target as usize == 56 * !color as usize
-            {
-                // queenside rook has been captured
-                self.hash ^= zobrist_castling(self.castling_rights);
-                self.castling_rights[(!color, Queenside)] = false;
-                self.hash ^= zobrist_castling(self.castling_rights);
+        match captured {
+            Rook => {
+                if self.castling_rights[(!color, Kingside)]
+                    && *target as usize == 7 + 56 * !color as usize
+                {
+                    // kingside rook has been captured
+                    self.hash ^= zobrist_castling(self.castling_rights);
+                    self.castling_rights[(!color, Kingside)] = false;
+                    self.hash ^= zobrist_castling(self.castling_rights);
+                } else if self.castling_rights[(!color, Queenside)]
+                    && *target as usize == 56 * !color as usize
+                {
+                    // queenside rook has been captured
+                    self.hash ^= zobrist_castling(self.castling_rights);
+                    self.castling_rights[(!color, Queenside)] = false;
+                    self.hash ^= zobrist_castling(self.castling_rights);
+                }
             }
+            Pawn => {
+                if !move_.en_passent() {
+                    self.pawn_hash ^= zobrist_piece(Pawn, !color, target)
+                }
+            }
+            _ => {}
         }
 
         // move the piece
@@ -488,6 +520,8 @@ impl ChessGame {
 
         // pawn special cases
         if piece == Pawn {
+            self.pawn_hash ^=
+                zobrist_piece(Pawn, color, start) ^ zobrist_piece(Pawn, color, target);
             // en passent square
             if move_.double_pawn_push() {
                 let ep_square: Square = if color == White {
@@ -505,6 +539,7 @@ impl ChessGame {
             if move_.promotion() != NoPiece {
                 self.hash ^= zobrist_piece(Pawn, color, target)
                     ^ zobrist_piece(move_.promotion(), color, target);
+                self.pawn_hash ^= zobrist_piece(Pawn, color, target);
                 self.piece_masks[(color, Pawn)] ^= target.bitboard();
                 self.piece_masks[(color, move_.promotion())] |= target.bitboard();
             }
@@ -518,8 +553,6 @@ impl ChessGame {
 
         // update combined mask
         self.combined = self.color_masks[White] | self.color_masks[Black];
-
-        // debug_assert!(self.hash == self.zobrist_hash());
     }
 
     pub fn unmake_move(&mut self) {
@@ -596,7 +629,7 @@ impl ChessGame {
 
         self.combined = self.color_masks[White] | self.color_masks[Black];
 
-        // debug_assert!(self.hash == self.zobrist_hash());
+        self.pawn_hash = unmove.pawn_hash;
     }
 
     pub fn make_null_move(&mut self) {
@@ -610,6 +643,7 @@ impl ChessGame {
             false,
             self.castling_rights,
             0,
+            self.pawn_hash,
         );
 
         self.unmove_history.push(unmove);
@@ -659,6 +693,16 @@ impl ChessGame {
             hash ^= zobrist_enpassent(self.en_passent_mask);
         }
 
+        hash
+    }
+
+    pub fn zobrist_pawn_hash(&self) -> u64 {
+        let mut hash = 0u64;
+        for color in [White, Black] {
+            for pawn in self.piece_masks[(color, Pawn)] {
+                hash ^= zobrist_piece(Pawn, color, pawn);
+            }
+        }
         hash
     }
 
