@@ -1,7 +1,9 @@
 use cheers_lib::{
     chessgame::ChessGame,
     moves::Move,
-    search::{Search, ABORT_SEARCH, NODE_COUNT, NPS_COUNT, SEARCH_COMPLETE, TIME_ELAPSED},
+    search::{
+        EngineOptions, Search, ABORT_SEARCH, NODE_COUNT, NPS_COUNT, SEARCH_COMPLETE, TIME_ELAPSED,
+    },
     types::ColorIndex,
 };
 
@@ -15,14 +17,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Clone, Copy, Default)]
-struct EngineOptions {
-    pub tt_size_mb: usize,
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     let mut position = ChessGame::new();
-    let mut options = EngineOptions { tt_size_mb: 64 };
+    let mut options = EngineOptions::default();
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
@@ -181,7 +178,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     let mut search = Search::new(position.clone())
                         .tt_size_mb(options.tt_size_mb)
-                        .output(true);
+                        .output(true)
+                        .options(options);
                     search.max_depth = depth;
                     match position.current_player() {
                         ColorIndex::White => {
@@ -219,6 +217,90 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 options.tt_size_mb = val
                             } else {
                                 println!("Invalid value for hash table size");
+                            }
+                        }
+                        "nmpdepth" => {
+                            let option_value = words
+                                .iter()
+                                .position(|&w| w == "value")
+                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
+                                .flatten();
+                            if let Some(val) = option_value {
+                                options.nmp_depth = val
+                            } else {
+                                println!("Invalid value for NMP depth");
+                            }
+                        }
+                        "nmpreduction" => {
+                            let option_value = words
+                                .iter()
+                                .position(|&w| w == "value")
+                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
+                                .flatten();
+                            if let Some(val) = option_value {
+                                options.nmp_reduction = val
+                            } else {
+                                println!("Invalid value for NMP reduction");
+                            }
+                        }
+                        "seepruningdepth" => {
+                            let option_value = words
+                                .iter()
+                                .position(|&w| w == "value")
+                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
+                                .flatten();
+                            if let Some(val) = option_value {
+                                options.see_pruning_depth = val
+                            } else {
+                                println!("Invalid value for SEE pruning depth");
+                            }
+                        }
+                        "seecapturemargin" => {
+                            let option_value = words
+                                .iter()
+                                .position(|&w| w == "value")
+                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<i32>().ok()))
+                                .flatten();
+                            if let Some(val) = option_value {
+                                options.see_capture_margin = val
+                            } else {
+                                println!("Invalid value for SEE capture margin");
+                            }
+                        }
+                        "seequietmargin" => {
+                            let option_value = words
+                                .iter()
+                                .position(|&w| w == "value")
+                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<i32>().ok()))
+                                .flatten();
+                            if let Some(val) = option_value {
+                                options.see_quiet_margin = val
+                            } else {
+                                println!("Invalid value for SEE quiet margin");
+                            }
+                        }
+                        "pvsfulldepth" => {
+                            let option_value = words
+                                .iter()
+                                .position(|&w| w == "value")
+                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
+                                .flatten();
+                            if let Some(val) = option_value {
+                                options.pvs_fulldepth = val
+                            } else {
+                                println!("Invalid value for PVS full depth");
+                            }
+                        }
+                        "deltapruningmargin" => {
+                            let option_value = words
+                                .iter()
+                                .position(|&w| w == "value")
+                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<i32>().ok()))
+                                .flatten();
+                            if let Some(val) = option_value {
+                                options.delta_pruning_margin = val
+                            } else {
+                                println!("Invalid value for delta pruning margin");
                             }
                         }
                         other => {

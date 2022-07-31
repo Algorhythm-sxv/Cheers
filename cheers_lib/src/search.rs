@@ -50,6 +50,33 @@ impl Display for PrincipalVariation {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct EngineOptions {
+    pub tt_size_mb: usize,
+    pub nmp_depth: usize,
+    pub nmp_reduction: usize,
+    pub see_pruning_depth: usize,
+    pub see_capture_margin: i32,
+    pub see_quiet_margin: i32,
+    pub pvs_fulldepth: usize,
+    pub delta_pruning_margin: i32,
+}
+
+impl Default for EngineOptions {
+    fn default() -> Self {
+        Self {
+            tt_size_mb: 8,
+            nmp_depth: 3,
+            nmp_reduction: 3,
+            see_pruning_depth: 6,
+            see_capture_margin: 100,
+            see_quiet_margin: 50,
+            pvs_fulldepth: 2,
+            delta_pruning_margin: 200,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Search {
     pub game: ChessGame,
@@ -63,6 +90,7 @@ pub struct Search {
     pub max_time_ms: Option<usize>,
     pub abort_time_ms: Option<usize>,
     output: bool,
+    options: EngineOptions,
 }
 
 impl Search {
@@ -79,6 +107,7 @@ impl Search {
             max_time_ms: None,
             abort_time_ms: None,
             output: false,
+            options: EngineOptions::default(),
         }
     }
 
@@ -101,6 +130,11 @@ impl Search {
 
     pub fn output(mut self, output: bool) -> Self {
         self.output = output;
+        self
+    }
+
+    pub fn options(mut self, options: EngineOptions) -> Self {
+        self.options = options;
         self
     }
 
@@ -237,7 +271,7 @@ impl Search {
 
         // Null move pruning
         // don't search the null move in the PV, when in check or only down to pawn/kings
-        if depth >= 3
+        if depth >= self.options.nmp_depth as i32
             && !self.game.in_check(self.game.current_player())
             && self.game.has_non_pawn_material(self.game.current_player())
         {
@@ -245,7 +279,7 @@ impl Search {
             let null_score = -self.negamax(
                 -beta,
                 -beta + 1,
-                depth - 3,
+                (depth - self.options.nmp_reduction as i32).max(0),
                 ply + 1,
                 Move::null(),
                 &mut line,
@@ -309,9 +343,17 @@ impl Search {
             let move_ = self.move_lists[ply][i];
 
             // SEE pruning
-            if depth < 6 && ply != 0 && move_.promotion() == NoPiece {
+            if depth < self.options.see_pruning_depth as i32
+                && ply != 0
+                && move_.promotion() == NoPiece
+            {
                 let see = self.game.see(move_);
-                let depth_margin = depth * if move_.capture() { 100 } else { 50 };
+                let depth_margin = depth
+                    * if move_.capture() {
+                        self.options.see_capture_margin as i32
+                    } else {
+                        self.options.see_quiet_margin as i32
+                    };
                 if see <= -depth * depth_margin {
                     continue;
                 }
@@ -320,7 +362,7 @@ impl Search {
             self.game.make_move(move_);
             let mut score = MINUS_INF;
             // reduced-depth null-window search on most moves outside of PV nodes
-            let full_depth = if depth > 2 && i > 0 && ply != 0 {
+            let full_depth = if depth > self.options.pvs_fulldepth as i32 && i > 0 && ply != 0 {
                 // reductions and extensions
                 let reduction = {
                     let mut r = 0;
@@ -461,7 +503,11 @@ impl Search {
             }
 
             // Delta pruning: if this capture immediately falls short by some margin, skip it
-            if stand_pat_score + SEE_PIECE_VALUES[self.game.piece_at(m.target())] + 200 <= alpha {
+            if stand_pat_score
+                + SEE_PIECE_VALUES[self.game.piece_at(m.target())]
+                + self.options.delta_pruning_margin
+                <= alpha
+            {
                 m.score = -1000;
             } else {
                 let see = self.game.see(*m);
