@@ -66,13 +66,13 @@ impl Default for EngineOptions {
     fn default() -> Self {
         Self {
             tt_size_mb: 8,
-            nmp_depth: 3,
-            nmp_reduction: 3,
+            nmp_depth: 2,
+            nmp_reduction: 4,
             see_pruning_depth: 6,
-            see_capture_margin: 100,
-            see_quiet_margin: 50,
+            see_capture_margin: 82,
+            see_quiet_margin: 38,
             pvs_fulldepth: 2,
-            delta_pruning_margin: 200,
+            delta_pruning_margin: 173,
         }
     }
 }
