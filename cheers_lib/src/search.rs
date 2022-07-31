@@ -461,7 +461,7 @@ impl Search {
 
         self.seldepth = self.seldepth.max(ply);
 
-        let (stand_pat_score, mut best_trace) = self.game.evaluate::<T>();
+        let (stand_pat_score, mut best_trace) = self.game.evaluate_impl::<T>();
 
         if stand_pat_score >= beta {
             return (beta, best_trace);
