@@ -47,7 +47,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some(&"uci") => {
                 println!("id name cheers");
                 println!("id author Algorhythm");
-                println!("option name Hash type spin default 64 min 1 max 32768");
+                println!("option name Hash type spin default 8 min 1 max 32768");
+                println!("option name nmpdepth type spin default 3 min 1 max 10");
+                println!("option name nmpreduction type spin default 3 min 1 max 5");
+                println!("option name seepruningdepth type spin default 6 min 1 max 10");
+                println!("option name seecapturemargin type spin default 100 min 0 max 1000");
+                println!("option name seequietmargin type spin default 50 min 0 max 1000");
+                println!("option name pvsfulldepth type spin default 2 min 1 max 5");
+                println!("option name deltapruningmargin type spin default 200 min 0 max 1000");
                 println!("uciok");
             }
             Some(&"quit") => break,
