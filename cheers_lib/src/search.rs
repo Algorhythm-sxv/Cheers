@@ -22,8 +22,8 @@ pub static SEARCH_COMPLETE: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-const MINUS_INF: i32 = i32::MIN + 1;
-const INF: i32 = i32::MAX - 1;
+const INF: i32 = i32::MAX;
+const MINUS_INF: i32 = -INF;
 
 pub const PV_MAX_LEN: usize = 16;
 #[derive(Copy, Clone, Default, Debug)]
@@ -148,7 +148,7 @@ impl Search {
                     break;
                 }
             }
-            if i > pv.len + 10 && pv.len != PV_MAX_LEN {
+            if i > pv.len + 100 && pv.len != PV_MAX_LEN {
                 ABORT_SEARCH.store(false, Ordering::Relaxed);
                 break;
             }
@@ -203,15 +203,16 @@ impl Search {
             pv.len = 0;
             return DRAW_SCORE;
         }
-
+        
         let mut line = PrincipalVariation::new();
+        let pv_node = alpha != beta - 1;
 
         // transposition table lookup
         let mut tt_move = Move::null();
         if let Some(tt_entry) = self.transposition_table.get(self.game.hash()) {
             // prune on exact score/beta cutoff with equal/higher depth, unless we are at the root
             if tt_entry.depth as i32 >= depth
-                && ply != 0
+                && !pv_node
                 && (tt_entry.node_type == Exact
                     || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
                     || (tt_entry.node_type == UpperBound && tt_entry.score <= alpha))
@@ -232,8 +233,6 @@ impl Search {
                 tt_entry.castling,
             );
         }
-
-        let pv_node = alpha != beta - 1;
 
         // Null move pruning
         // don't search the null move in the PV, when in check or only down to pawn/kings
@@ -309,7 +308,7 @@ impl Search {
             let move_ = self.move_lists[ply][i];
 
             // SEE pruning
-            if depth < 6 && ply != 0 && move_.promotion() == NoPiece {
+            if depth < 6 && ply != 0 && i > 0 && move_.promotion() == NoPiece {
                 let see = self.game.see(move_);
                 let depth_margin = depth * if move_.capture() { 100 } else { 50 };
                 if see <= -depth * depth_margin {
@@ -356,7 +355,7 @@ impl Search {
                     self.game.hash(),
                     move_,
                     depth as i8,
-                    beta,
+                    score,
                     LowerBound,
                 );
                 if !move_.capture() {
@@ -388,7 +387,7 @@ impl Search {
             }
         }
         self.transposition_table
-            .set(self.game.hash(), best_move, depth as i8, alpha, UpperBound);
+            .set(self.game.hash(), best_move, depth as i8, alpha, Exact);
         alpha
     }
 
@@ -496,7 +495,7 @@ impl Search {
                         self.game.hash(),
                         move_,
                         depth as i8,
-                        beta,
+                        score,
                         LowerBound,
                     );
                 }
@@ -509,13 +508,8 @@ impl Search {
             }
         }
         if !T::TRACING {
-            self.transposition_table.set(
-                self.game.hash(),
-                best_move,
-                depth as i8,
-                alpha,
-                UpperBound,
-            );
+            self.transposition_table
+                .set(self.game.hash(), best_move, depth as i8, alpha, Exact);
         }
         (alpha, best_trace)
     }
