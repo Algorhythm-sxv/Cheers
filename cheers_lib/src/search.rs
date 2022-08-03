@@ -203,7 +203,7 @@ impl Search {
             pv.len = 0;
             return DRAW_SCORE;
         }
-        
+
         let mut line = PrincipalVariation::new();
         let pv_node = alpha != beta - 1;
 
@@ -212,13 +212,21 @@ impl Search {
         if let Some(tt_entry) = self.transposition_table.get(self.game.hash()) {
             // prune on exact score/beta cutoff with equal/higher depth, unless we are at the root
             if tt_entry.depth as i32 >= depth
-                && !pv_node
+                && ply != 0
                 && (tt_entry.node_type == Exact
                     || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
                     || (tt_entry.node_type == UpperBound && tt_entry.score <= alpha))
             {
                 // exact score (?) so we must reset the pv
                 pv.len = 0;
+                // mate score adustment: re-distance mates relative to the current ply
+                // let mate_distance = CHECKMATE_SCORE - tt_entry.score.abs();
+                // let score = if mate_distance < 100 {
+                //     tt_entry.score.signum()
+                //         * (CHECKMATE_SCORE - (mate_distance - (ply as i32 + 1) / 2))
+                // } else {
+                //     tt_entry.score
+                // };
                 return tt_entry.score;
             }
 
@@ -303,6 +311,7 @@ impl Search {
         // make sure the reported best move is at least legal
         let mut best_move = *self.move_lists[ply].inner().first().unwrap();
 
+        let old_alpha = alpha;
         for i in 0..self.move_lists[ply].len() {
             pick_move(self.move_lists[ply].inner_mut(), i);
             let move_ = self.move_lists[ply][i];
@@ -386,8 +395,17 @@ impl Search {
                 best_move = move_;
             }
         }
-        self.transposition_table
-            .set(self.game.hash(), best_move, depth as i8, alpha, Exact);
+        self.transposition_table.set(
+            self.game.hash(),
+            best_move,
+            depth as i8,
+            alpha,
+            if alpha != old_alpha {
+                Exact
+            } else {
+                UpperBound
+            },
+        );
         alpha
     }
 
@@ -474,6 +492,7 @@ impl Search {
             }
         });
 
+        let old_alpha = alpha;
         let mut best_move = Move::null();
         for i in 0..self.move_lists[ply].len() {
             pick_move(self.move_lists[ply].inner_mut(), i);
@@ -508,8 +527,17 @@ impl Search {
             }
         }
         if !T::TRACING {
-            self.transposition_table
-                .set(self.game.hash(), best_move, depth as i8, alpha, Exact);
+            self.transposition_table.set(
+                self.game.hash(),
+                best_move,
+                depth as i8,
+                alpha,
+                if alpha != old_alpha {
+                    Exact
+                } else {
+                    UpperBound
+                },
+            );
         }
         (alpha, best_trace)
     }
