@@ -67,7 +67,7 @@ impl Default for EngineOptions {
         Self {
             tt_size_mb: 8,
             nmp_depth: 2,
-            nmp_reduction: 3,
+            nmp_reduction: 4,
             see_pruning_depth: 6,
             see_capture_margin: 93,
             see_quiet_margin: 32,
