@@ -119,8 +119,9 @@ impl Search {
                 break;
             }
             let end = Instant::now();
-            let score_string = if CHECKMATE_SCORE - score.abs() < 100 {
-                format!("mate {}", (score.signum() * CHECKMATE_SCORE) - score)
+            let mate_distance = CHECKMATE_SCORE - score.abs();
+            let score_string = if mate_distance < 100 {
+                format!("mate {}", score.signum() * ((mate_distance + 1) / 2))
             } else {
                 format!("cp {score}")
             };
@@ -220,14 +221,13 @@ impl Search {
                 // exact score (?) so we must reset the pv
                 pv.len = 0;
                 // mate score adustment: re-distance mates relative to the current ply
-                // let mate_distance = CHECKMATE_SCORE - tt_entry.score.abs();
-                // let score = if mate_distance < 100 {
-                //     tt_entry.score.signum()
-                //         * (CHECKMATE_SCORE - (mate_distance - (ply as i32 + 1) / 2))
-                // } else {
-                //     tt_entry.score
-                // };
-                return tt_entry.score;
+                let mate_distance = CHECKMATE_SCORE - tt_entry.score.abs();
+                let score = if mate_distance < 100 {
+                    tt_entry.score.signum() * (CHECKMATE_SCORE - (mate_distance + ply as i32))
+                } else {
+                    tt_entry.score
+                };
+                return score;
             }
 
             tt_move = Move::new(
@@ -272,7 +272,7 @@ impl Search {
             pv.len = 0;
             if self.game.in_check(self.game.current_player()) {
                 // checkmate, preferring shorter mating sequences
-                return -(CHECKMATE_SCORE - (ply as i32 + 1) / 2);
+                return -(CHECKMATE_SCORE - (ply as i32));
             } else {
                 // stalemate
                 return DRAW_SCORE;
