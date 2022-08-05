@@ -161,7 +161,7 @@ impl Search {
     fn negamax(
         &mut self,
         mut alpha: i32,
-        beta: i32,
+        mut beta: i32,
         depth: i32,
         ply: usize,
         last_move: Move,
@@ -205,6 +205,16 @@ impl Search {
             return DRAW_SCORE;
         }
 
+        // Mate distance pruning
+        if ply != 0 {
+            alpha = alpha.max(-CHECKMATE_SCORE + ply as i32);
+            beta = beta.min(CHECKMATE_SCORE - ply as i32);
+
+            if alpha >= beta {
+                return alpha;
+            }
+        }
+
         let mut line = PrincipalVariation::new();
         let pv_node = alpha != beta - 1;
 
@@ -221,9 +231,10 @@ impl Search {
                 // exact score (?) so we must reset the pv
                 pv.len = 0;
                 // mate score adustment: re-distance mates relative to the current ply
-                let mate_distance = CHECKMATE_SCORE - tt_entry.score.abs();
-                let score = if mate_distance < 100 {
-                    tt_entry.score.signum() * (CHECKMATE_SCORE - (mate_distance + ply as i32))
+                let score = if tt_entry.score > CHECKMATE_SCORE - 500 {
+                    tt_entry.score - ply as i32
+                } else if tt_entry.score < -CHECKMATE_SCORE + 500 {
+                    tt_entry.score + ply as i32
                 } else {
                     tt_entry.score
                 };
@@ -364,7 +375,13 @@ impl Search {
                     self.game.hash(),
                     move_,
                     depth as i8,
-                    score,
+                    if score > CHECKMATE_SCORE - 500 {
+                        score + ply as i32
+                    } else if score < -CHECKMATE_SCORE + 500 {
+                        score - ply as i32
+                    } else {
+                        score
+                    },
                     LowerBound,
                 );
                 if !move_.capture() {
@@ -399,7 +416,13 @@ impl Search {
             self.game.hash(),
             best_move,
             depth as i8,
-            alpha,
+            if alpha > CHECKMATE_SCORE - 500 {
+                alpha + ply as i32
+            } else if alpha < -CHECKMATE_SCORE + 500 {
+                alpha - ply as i32
+            } else {
+                alpha
+            },
             if alpha != old_alpha {
                 Exact
             } else {
