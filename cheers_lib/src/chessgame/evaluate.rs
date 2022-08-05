@@ -15,11 +15,14 @@ pub struct EvalContext<'search, T> {
 impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     #[inline]
     pub fn evaluate(&mut self) -> i32 {
-        let mut eval = EvalScore::zero();
-
         let color = self.game.current_player();
-
         self.trace.term(|t| t.turn = color as i32);
+
+        let pawn_cache = if !T::TRACING {
+            self.pawn_hash_table.get(self.game.pawn_hash(), color)
+        } else {
+            None
+        };
 
         let phase = self.game.game_phase();
 
@@ -29,34 +32,42 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let white_king_attacks = lookup_king(white_king_square);
         let black_king_attacks = lookup_king(black_king_square);
 
-        let front_spans_black = self
-            .game
-            .pawn_front_spans(Black, self.game.piece_masks()[(Black, Pawn)]);
-        let all_front_spans_black = front_spans_black
-            | (front_spans_black & NOT_H_FILE) << 1
-            | (front_spans_black & NOT_A_FILE) >> 1;
-        let rear_spans_black = self
-            .game
-            .pawn_push_spans(self.game.piece_masks()[(Black, Pawn)], White);
+        let (white_passers, black_passers) = if let Some(cache) = pawn_cache {
+            (
+                cache.1 & self.game.piece_masks[(White, Pawn)],
+                cache.1 & self.game.piece_masks[(Black, Pawn)],
+            )
+        } else {
+            let front_spans_black = self
+                .game
+                .pawn_front_spans(Black, self.game.piece_masks()[(Black, Pawn)]);
+            let all_front_spans_black = front_spans_black
+                | (front_spans_black & NOT_H_FILE) << 1
+                | (front_spans_black & NOT_A_FILE) >> 1;
+            let rear_spans_black = self
+                .game
+                .pawn_push_spans(self.game.piece_masks()[(Black, Pawn)], White);
 
-        let front_spans_white = self
-            .game
-            .pawn_front_spans(White, self.game.piece_masks()[(White, Pawn)]);
+            let front_spans_white = self
+                .game
+                .pawn_front_spans(White, self.game.piece_masks()[(White, Pawn)]);
 
-        let all_front_spans_white = front_spans_white
-            | (front_spans_white & NOT_H_FILE) << 1
-            | (front_spans_white & NOT_A_FILE) >> 1;
-        let rear_spans_white = self
-            .game
-            .pawn_push_spans(self.game.piece_masks()[(White, Pawn)], Black);
+            let all_front_spans_white = front_spans_white
+                | (front_spans_white & NOT_H_FILE) << 1
+                | (front_spans_white & NOT_A_FILE) >> 1;
+            let rear_spans_white = self
+                .game
+                .pawn_push_spans(self.game.piece_masks()[(White, Pawn)], Black);
 
-        let white_passers = self.game.piece_masks()[(White, Pawn)]
-            & all_front_spans_black.inverse()
-            & rear_spans_white.inverse();
-        let black_passers = self.game.piece_masks()[(Black, Pawn)]
-            & all_front_spans_white.inverse()
-            & rear_spans_black.inverse();
+            let white_passers = self.game.piece_masks()[(White, Pawn)]
+                & all_front_spans_black.inverse()
+                & rear_spans_white.inverse();
+            let black_passers = self.game.piece_masks()[(Black, Pawn)]
+                & all_front_spans_white.inverse()
+                & rear_spans_black.inverse();
 
+            (white_passers, black_passers)
+        };
         // initialise eval info
         let mut info = EvalInfo {
             mobility_area: [
@@ -80,35 +91,22 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             passed_pawns: [white_passers, black_passers],
         };
 
+        let mut eval = EvalScore::zero();
         if !T::TRACING {
-            match self
-                .pawn_hash_table
-                .get(self.game.zobrist_pawn_hash(), color)
-            {
+            match pawn_cache {
                 None => {
                     let score = self.evaluate_pawns_only(color, &mut info, self.params)
                         - self.evaluate_pawns_only(!color, &mut info, self.params);
                     self.pawn_hash_table.set(
-                        self.game.zobrist_pawn_hash(),
+                        self.game.pawn_hash(),
                         score.mg,
                         score.eg,
+                        white_passers | black_passers,
                         color,
                     );
                     eval += score;
                 }
-                Some(val) => {
-                    // let score = self.evaluate_pawns_only(color, &mut info, self.params)
-                    //     - self.evaluate_pawns_only(!color, &mut info, self.params);
-                    // if val != score {
-                    //     println!("{}", self.game.fen());
-                    //     println!("{val:?}");
-                    //     println!("{score:?}");
-                    //     println!(
-                    //         "{} => {}",
-                    //         self.game.zobrist_pawn_hash(),
-                    //         self.game.zobrist_pawn_hash() & (65536 - 1)
-                    //     )
-                    // }
+                Some((val, _)) => {
                     eval += val;
                 }
             }

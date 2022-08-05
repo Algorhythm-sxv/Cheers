@@ -1,6 +1,6 @@
 use std::sync::{atomic::*, Arc, RwLock};
 
-use cheers_bitboards::Square;
+use cheers_bitboards::{BitBoard, Square};
 
 use crate::{
     chessgame::eval_types::EvalScore,
@@ -144,6 +144,7 @@ pub struct PawnHashEntry {
     pub hash: u64,
     pub mg: i32,
     pub eg: i32,
+    passed_pawns: BitBoard,
 }
 impl Default for PawnHashEntry {
     fn default() -> Self {
@@ -151,6 +152,7 @@ impl Default for PawnHashEntry {
             hash: 1,
             mg: 0,
             eg: 0,
+            passed_pawns: BitBoard::empty(),
         }
     }
 }
@@ -173,24 +175,32 @@ impl PawnHashTable {
         }
     }
 
-    pub fn get(&self, hash: u64, player: ColorIndex) -> Option<EvalScore> {
+    pub fn get(&self, hash: u64, player: ColorIndex) -> Option<(EvalScore, BitBoard)> {
         let entry = self.table[(hash & self.mask) as usize];
         if entry.hash == hash {
             let sign = if player == ColorIndex::Black { -1 } else { 1 };
-            Some(EvalScore {
-                mg: sign * entry.mg,
-                eg: sign * entry.eg,
-            })
+            Some((
+                EvalScore {
+                    mg: sign * entry.mg,
+                    eg: sign * entry.eg,
+                },
+                entry.passed_pawns,
+            ))
         } else {
             None
         }
     }
 
-    pub fn set(&mut self, hash: u64, mg: i32, eg: i32, player: ColorIndex) {
+    pub fn set(&mut self, hash: u64, mg: i32, eg: i32, passed_pawns: BitBoard, player: ColorIndex) {
         let (mg, eg) = match player {
             ColorIndex::White => (mg, eg),
             ColorIndex::Black => (-mg, -eg),
         };
-        self.table[(hash & self.mask) as usize] = PawnHashEntry { hash, mg, eg };
+        self.table[(hash & self.mask) as usize] = PawnHashEntry {
+            hash,
+            mg,
+            eg,
+            passed_pawns,
+        };
     }
 }
