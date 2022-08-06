@@ -1,7 +1,9 @@
 use cheers_lib::{
     chessgame::ChessGame,
     moves::Move,
-    search::{Search, ABORT_SEARCH, NODE_COUNT, NPS_COUNT, SEARCH_COMPLETE, TIME_ELAPSED},
+    search::{
+        EngineOptions, Search, ABORT_SEARCH, NODE_COUNT, NPS_COUNT, SEARCH_COMPLETE, TIME_ELAPSED,
+    },
     types::ColorIndex,
 };
 
@@ -15,14 +17,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Clone, Copy, Default)]
-struct EngineOptions {
-    pub tt_size_mb: usize,
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     let mut position = ChessGame::new();
-    let mut options = EngineOptions { tt_size_mb: 64 };
+    let mut options = EngineOptions::default();
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
@@ -50,7 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some(&"uci") => {
                 println!("id name cheers");
                 println!("id author Algorhythm");
-                println!("option name Hash type spin default 64 min 1 max 32768");
+                println!("option name Hash type spin default 8 min 1 max 32768");
                 println!("uciok");
             }
             Some(&"quit") => break,
@@ -181,7 +178,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     let mut search = Search::new(position.clone())
                         .tt_size_mb(options.tt_size_mb)
-                        .output(true);
+                        .output(true)
+                        .options(options);
                     search.max_depth = depth;
                     match position.current_player() {
                         ColorIndex::White => {
