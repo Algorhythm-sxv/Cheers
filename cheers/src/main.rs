@@ -48,13 +48,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("id name cheers");
                 println!("id author Algorhythm");
                 println!("option name Hash type spin default 8 min 1 max 32768");
-                println!("option name nmpdepth type spin default 3 min 1 max 10");
-                println!("option name nmpreduction type spin default 3 min 1 max 5");
-                println!("option name seepruningdepth type spin default 6 min 1 max 10");
-                println!("option name seecapturemargin type spin default 100 min 0 max 1000");
-                println!("option name seequietmargin type spin default 50 min 0 max 1000");
-                println!("option name pvsfulldepth type spin default 2 min 1 max 5");
-                println!("option name deltapruningmargin type spin default 200 min 0 max 1000");
                 println!("uciok");
             }
             Some(&"quit") => break,
@@ -224,90 +217,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 options.tt_size_mb = val
                             } else {
                                 println!("Invalid value for hash table size");
-                            }
-                        }
-                        "nmpdepth" => {
-                            let option_value = words
-                                .iter()
-                                .position(|&w| w == "value")
-                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
-                                .flatten();
-                            if let Some(val) = option_value {
-                                options.nmp_depth = val
-                            } else {
-                                println!("Invalid value for NMP depth");
-                            }
-                        }
-                        "nmpreduction" => {
-                            let option_value = words
-                                .iter()
-                                .position(|&w| w == "value")
-                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
-                                .flatten();
-                            if let Some(val) = option_value {
-                                options.nmp_reduction = val
-                            } else {
-                                println!("Invalid value for NMP reduction");
-                            }
-                        }
-                        "seepruningdepth" => {
-                            let option_value = words
-                                .iter()
-                                .position(|&w| w == "value")
-                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
-                                .flatten();
-                            if let Some(val) = option_value {
-                                options.see_pruning_depth = val
-                            } else {
-                                println!("Invalid value for SEE pruning depth");
-                            }
-                        }
-                        "seecapturemargin" => {
-                            let option_value = words
-                                .iter()
-                                .position(|&w| w == "value")
-                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<i32>().ok()))
-                                .flatten();
-                            if let Some(val) = option_value {
-                                options.see_capture_margin = val
-                            } else {
-                                println!("Invalid value for SEE capture margin");
-                            }
-                        }
-                        "seequietmargin" => {
-                            let option_value = words
-                                .iter()
-                                .position(|&w| w == "value")
-                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<i32>().ok()))
-                                .flatten();
-                            if let Some(val) = option_value {
-                                options.see_quiet_margin = val
-                            } else {
-                                println!("Invalid value for SEE quiet margin");
-                            }
-                        }
-                        "pvsfulldepth" => {
-                            let option_value = words
-                                .iter()
-                                .position(|&w| w == "value")
-                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<usize>().ok()))
-                                .flatten();
-                            if let Some(val) = option_value {
-                                options.pvs_fulldepth = val
-                            } else {
-                                println!("Invalid value for PVS full depth");
-                            }
-                        }
-                        "deltapruningmargin" => {
-                            let option_value = words
-                                .iter()
-                                .position(|&w| w == "value")
-                                .and_then(|i| words.get(i + 1).map(|w| w.parse::<i32>().ok()))
-                                .flatten();
-                            if let Some(val) = option_value {
-                                options.delta_pruning_margin = val
-                            } else {
-                                println!("Invalid value for delta pruning margin");
                             }
                         }
                         other => {
