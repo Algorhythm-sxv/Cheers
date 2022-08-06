@@ -22,8 +22,8 @@ pub static SEARCH_COMPLETE: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-const MINUS_INF: i32 = i32::MIN + 1;
-const INF: i32 = i32::MAX - 1;
+const INF: i32 = i32::MAX;
+const MINUS_INF: i32 = -INF;
 
 pub const PV_MAX_LEN: usize = 16;
 #[derive(Copy, Clone, Default, Debug)]
@@ -122,8 +122,9 @@ impl Search {
                 break;
             }
             let end = Instant::now();
-            let score_string = if CHECKMATE_SCORE - score.abs() < 100 {
-                format!("mate {}", (score.signum() * CHECKMATE_SCORE) - score)
+            let mate_distance = CHECKMATE_SCORE - score.abs();
+            let score_string = if mate_distance < 100 {
+                format!("mate {}", score.signum() * ((mate_distance + 1) / 2))
             } else {
                 format!("cp {score}")
             };
@@ -151,7 +152,7 @@ impl Search {
                     break;
                 }
             }
-            if i > pv.len + 10 && pv.len != PV_MAX_LEN {
+            if i > pv.len + 100 && pv.len != PV_MAX_LEN {
                 ABORT_SEARCH.store(false, Ordering::Relaxed);
                 break;
             }
@@ -163,7 +164,7 @@ impl Search {
     fn negamax(
         &mut self,
         mut alpha: i32,
-        beta: i32,
+        mut beta: i32,
         depth: i32,
         ply: usize,
         last_move: Move,
@@ -207,7 +208,18 @@ impl Search {
             return DRAW_SCORE;
         }
 
+        // Mate distance pruning
+        if ply != 0 {
+            alpha = alpha.max(-CHECKMATE_SCORE + ply as i32);
+            beta = beta.min(CHECKMATE_SCORE - ply as i32);
+
+            if alpha >= beta {
+                return alpha;
+            }
+        }
+
         let mut line = PrincipalVariation::new();
+        let pv_node = alpha != beta - 1;
 
         // transposition table lookup
         let mut tt_move = Move::null();
@@ -221,7 +233,15 @@ impl Search {
             {
                 // exact score (?) so we must reset the pv
                 pv.len = 0;
-                return tt_entry.score;
+                // mate score adustment: re-distance mates relative to the current ply
+                let score = if tt_entry.score > CHECKMATE_SCORE - 500 {
+                    tt_entry.score - ply as i32
+                } else if tt_entry.score < -CHECKMATE_SCORE + 500 {
+                    tt_entry.score + ply as i32
+                } else {
+                    tt_entry.score
+                };
+                return score;
             }
 
             tt_move = Move::new(
@@ -235,8 +255,6 @@ impl Search {
                 tt_entry.castling,
             );
         }
-
-        let pv_node = alpha != beta - 1;
 
         // Null move pruning
         // don't search the null move in the PV, when in check or only down to pawn/kings
@@ -268,7 +286,7 @@ impl Search {
             pv.len = 0;
             if self.game.in_check(self.game.current_player()) {
                 // checkmate, preferring shorter mating sequences
-                return -(CHECKMATE_SCORE - (ply as i32 + 1) / 2);
+                return -(CHECKMATE_SCORE - (ply as i32));
             } else {
                 // stalemate
                 return DRAW_SCORE;
@@ -307,12 +325,13 @@ impl Search {
         // make sure the reported best move is at least legal
         let mut best_move = *self.move_lists[ply].inner().first().unwrap();
 
+        let old_alpha = alpha;
         for i in 0..self.move_lists[ply].len() {
             pick_move(self.move_lists[ply].inner_mut(), i);
             let move_ = self.move_lists[ply][i];
 
             // SEE pruning
-            if depth < 6 && ply != 0 && move_.promotion() == NoPiece {
+            if depth < 6 && ply != 0 && i > 0 && move_.promotion() == NoPiece {
                 let see = self.game.see(move_);
                 let depth_margin = depth * if move_.capture() { 100 } else { 50 };
                 if see <= -depth * depth_margin {
@@ -359,7 +378,13 @@ impl Search {
                     self.game.hash(),
                     move_,
                     depth as i8,
-                    beta,
+                    if score > CHECKMATE_SCORE - 500 {
+                        score + ply as i32
+                    } else if score < -CHECKMATE_SCORE + 500 {
+                        score - ply as i32
+                    } else {
+                        score
+                    },
                     LowerBound,
                 );
                 if !move_.capture() {
@@ -390,8 +415,23 @@ impl Search {
                 best_move = move_;
             }
         }
-        self.transposition_table
-            .set(self.game.hash(), best_move, depth as i8, alpha, UpperBound);
+        self.transposition_table.set(
+            self.game.hash(),
+            best_move,
+            depth as i8,
+            if alpha > CHECKMATE_SCORE - 500 {
+                alpha + ply as i32
+            } else if alpha < -CHECKMATE_SCORE + 500 {
+                alpha - ply as i32
+            } else {
+                alpha
+            },
+            if alpha != old_alpha {
+                Exact
+            } else {
+                UpperBound
+            },
+        );
         alpha
     }
 
@@ -479,6 +519,7 @@ impl Search {
             }
         });
 
+        let old_alpha = alpha;
         let mut best_move = Move::null();
         for i in 0..self.move_lists[ply].len() {
             pick_move(self.move_lists[ply].inner_mut(), i);
@@ -500,7 +541,7 @@ impl Search {
                         self.game.hash(),
                         move_,
                         depth as i8,
-                        beta,
+                        score,
                         LowerBound,
                     );
                 }
@@ -518,7 +559,11 @@ impl Search {
                 best_move,
                 depth as i8,
                 alpha,
-                UpperBound,
+                if alpha != old_alpha {
+                    Exact
+                } else {
+                    UpperBound
+                },
             );
         }
         (alpha, best_trace)
