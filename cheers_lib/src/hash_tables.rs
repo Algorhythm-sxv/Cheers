@@ -137,6 +137,13 @@ impl TranspositionTable {
             None
         }
     }
+
+    pub fn sample_fill(&self) -> usize {
+        self.table.read().unwrap()[..1000]
+            .iter()
+            .filter(|e| e.data.load(Ordering::Relaxed) != 0)
+            .count()
+    }
 }
 
 #[derive(Copy, Clone, Debug)]

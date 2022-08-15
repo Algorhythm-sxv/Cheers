@@ -154,12 +154,14 @@ impl Search {
             } else {
                 format!("cp {score}")
             };
+            let hash_fill = self.transposition_table.sample_fill();
             // we can trust the results from the previous search
             if self.output {
                 println!(
-                    "info depth {i} seldepth {} score {score_string} pv {pv} nodes {} time {}",
+                    "info depth {i} seldepth {} score {score_string} pv {pv} nodes {} hashfull {} time {}",
                     search.seldepth,
                     NODE_COUNT.load(Ordering::Relaxed),
+                    hash_fill,
                     (end - start).as_millis(),
                 )
             };
