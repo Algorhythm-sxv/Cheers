@@ -211,7 +211,7 @@ impl Search {
         if depth == 0 {
             // exact score so we must reset the pv
             pv.len = 0;
-            let score = self.quiesce(alpha, beta, 0, ply, last_move, EVAL_PARAMS);
+            let score = self.quiesce(alpha, beta, ply, last_move, EVAL_PARAMS);
             // self.transposition_table
             //     .set(self.hash, Move::null(), depth as i8, score, Exact);
             return score;
@@ -472,12 +472,11 @@ impl Search {
         &mut self,
         alpha: i32,
         beta: i32,
-        depth: i32,
         ply: usize,
         last_move: Move,
         eval_params: EvalParams,
     ) -> i32 {
-        self.quiesce_impl::<()>(alpha, beta, depth, ply, last_move, eval_params)
+        self.quiesce_impl::<()>(alpha, beta, ply, last_move, eval_params)
             .0
     }
 
@@ -485,7 +484,6 @@ impl Search {
         &mut self,
         mut alpha: i32,
         beta: i32,
-        depth: i32,
         ply: usize,
         _last_move: Move,
         eval_params: EvalParams,
@@ -507,11 +505,9 @@ impl Search {
         let mut tt_move = Move::null();
         if !T::TRACING {
             if let Some(tt_entry) = self.transposition_table.get(self.game.hash()) {
-                if tt_entry.depth as i32 >= depth
-                    && ply != 0
-                    && (tt_entry.node_type == Exact
-                        || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
-                        || (tt_entry.node_type == UpperBound && tt_entry.score <= alpha))
+                if tt_entry.node_type == Exact
+                    || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
+                    || (tt_entry.node_type == UpperBound && tt_entry.score <= alpha)
                 {
                     // TT isn't used in tracing eval so we can return a blank trace
                     return (tt_entry.score, T::default());
@@ -569,18 +565,13 @@ impl Search {
 
             self.game.make_move(move_);
             let (mut score, trace) =
-                self.quiesce_impl::<T>(-beta, -alpha, depth - 1, ply + 1, move_, eval_params);
+                self.quiesce_impl::<T>(-beta, -alpha, ply + 1, move_, eval_params);
             score = -score;
             self.game.unmake_move();
             if score >= beta {
                 if !T::TRACING {
-                    self.transposition_table.set(
-                        self.game.hash(),
-                        move_,
-                        depth as i8,
-                        score,
-                        LowerBound,
-                    );
+                    self.transposition_table
+                        .set(self.game.hash(), move_, -1, score, LowerBound);
                 }
                 return (beta, trace);
             }
@@ -594,7 +585,7 @@ impl Search {
             self.transposition_table.set(
                 self.game.hash(),
                 best_move,
-                depth as i8,
+                -1,
                 alpha,
                 if alpha != old_alpha {
                     Exact
