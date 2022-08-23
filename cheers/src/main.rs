@@ -14,7 +14,7 @@ use std::{
     path::PathBuf,
     sync::atomic::Ordering,
     thread,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
         let search = Search::new(bench_game)
-            .max_depth(12)
+            .max_depth(Some(12))
             .tt_size_mb(8)
             .output(false);
         let start = Instant::now();
@@ -113,6 +113,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                         },
                         None => None,
                     };
+                    let nodes = words
+                        .iter()
+                        .enumerate()
+                        .skip_while(|(_, &w)| w != "nodes")
+                        .nth(1);
+                    let nodes = match nodes {
+                        Some((i, w)) => match w.parse::<usize>() {
+                            Ok(n) => Some(n),
+                            _ => {
+                                println!("Invalid value for nodes: {}", words[i]);
+                                continue;
+                            }
+                        },
+                        None => None,
+                    };
                     let wtime = words
                         .iter()
                         .enumerate()
@@ -177,22 +192,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                     };
 
                     let mut search = Search::new(position.clone())
+                        .max_depth(depth)
+                        .max_nodes(nodes)
                         .tt_size_mb(options.tt_size_mb)
                         .output(true)
                         .options(options);
-                    search.max_depth = depth;
                     match position.current_player() {
                         ColorIndex::White => {
-                            move_time(wtime, winc).map(|(move_time, abort_time)| {
-                                search.max_time_ms = Some(move_time);
-                                search.abort_time_ms = Some(abort_time);
-                            })
+                            search.max_time_ms = move_time(wtime, winc);
                         }
                         ColorIndex::Black => {
-                            move_time(btime, binc).map(|(move_time, abort_time)| {
-                                search.max_time_ms = Some(move_time);
-                                search.abort_time_ms = Some(abort_time);
-                            })
+                            search.max_time_ms = move_time(btime, binc);
                         }
                     };
                     let _ = thread::spawn(move || engine_thread(search).unwrap());
@@ -293,57 +303,10 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
     NODE_COUNT.store(0, Ordering::Relaxed);
     NPS_COUNT.store(0, Ordering::Relaxed);
 
-    let search_start = Instant::now();
-    let max_time_ms = search.max_time_ms.map(|ms| {
-        // limit the time of a search with 1 legal move
-        if search.game.legal_moves().len() == 1 {
-            ms.min(500)
-        } else {
-            ms
-        }
-    });
-    let abort_time_ms = search.abort_time_ms;
-    // spawn another thread to do the actual searching
-    thread::spawn(move || {
-        let (_, pv) = search.search();
-        println!("bestmove {}", pv.moves[0].coords(),);
-    });
+    let (_, pv) = search.search();
 
-    let mut nodes_report = Instant::now();
-    while !SEARCH_COMPLETE.load(Ordering::Relaxed) {
-        let now = Instant::now();
+    println!("bestmove {}", pv.moves[0].coords());
 
-        // Emergency search abort when extemely low on time
-        if let Some(abort_time) = abort_time_ms {
-            if (now - search_start).as_millis() as usize > abort_time {
-                ABORT_SEARCH.store(true, Ordering::Relaxed);
-                break;
-            }
-        }
-
-        let node_report_time = now.duration_since(nodes_report);
-        if node_report_time > Duration::from_millis(500) {
-            nodes_report = now;
-            let nodes = NODE_COUNT.load(Ordering::Relaxed);
-            let nps = (NPS_COUNT.swap(0, Ordering::Relaxed) as f32 / node_report_time.as_secs_f32())
-                as usize;
-            println!("info nodes {nodes} nps {nps}");
-        }
-
-        // hint to terminate search after max time elapsed
-        if let Some(max_time) = max_time_ms {
-            if (now - search_start).as_millis() as usize > max_time {
-                TIME_ELAPSED.store(true, Ordering::Relaxed);
-            }
-        }
-
-        // search has ended cleanly after max time elapsed
-        if SEARCH_COMPLETE.load(Ordering::Relaxed) {
-            break;
-        }
-
-        thread::sleep(Duration::from_millis(1));
-    }
     Ok(())
 }
 

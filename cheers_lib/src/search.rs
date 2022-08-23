@@ -80,8 +80,9 @@ pub struct Search {
     history_tables: [[[i32; 64]; 6]; 2],
     pub max_depth: Option<usize>,
     pub max_nodes: Option<usize>,
-    pub max_time_ms: Option<usize>,
+    pub max_time_ms: Option<(usize, usize)>,
     pub abort_time_ms: Option<usize>,
+    start_time: Instant,
     output: bool,
     options: EngineOptions,
 }
@@ -100,6 +101,7 @@ impl Search {
             max_nodes: None,
             max_time_ms: None,
             abort_time_ms: None,
+            start_time: Instant::now(),
             output: false,
             options: EngineOptions::default(),
         }
@@ -111,15 +113,13 @@ impl Search {
         self
     }
 
-    pub fn max_depth(mut self, depth: usize) -> Self {
-        self.max_depth = Some(depth);
+    pub fn max_depth(mut self, depth: Option<usize>) -> Self {
+        self.max_depth = depth;
         self
     }
 
-    pub fn max_nodes(mut self, nodes: usize) -> Self {
-        self.max_nodes = Some(nodes);
-        unimplemented!("Max nodes is currently unsupported!");
-        #[allow(unreachable_code)]
+    pub fn max_nodes(mut self, nodes: Option<usize>) -> Self {
+        self.max_nodes = nodes;
         self
     }
 
@@ -168,9 +168,12 @@ impl Search {
 
             last_pv = pv;
             last_score = score;
+            let time = Instant::now();
             // terminate search if we are hinted to do so
-            if TIME_ELAPSED.load(Ordering::Relaxed) && i > 1 {
-                break;
+            if let Some((stop_hint, _)) = self.max_time_ms {
+                if (time - start).as_millis() as usize >= stop_hint {
+                    break;
+                }
             }
 
             // terminate search at max depth or with forced mate/draw
@@ -198,6 +201,22 @@ impl Search {
         last_move: Move,
         pv: &mut PrincipalVariation,
     ) -> i32 {
+        // check time and max nodes every 2048 nodes
+        let nodes = NODE_COUNT.load(Ordering::Relaxed);
+        if nodes & 2047 == 2047 {
+            if let Some((_, abort_time)) = self.max_time_ms {
+                if Instant::now().duration_since(self.start_time).as_millis() as usize > abort_time
+                {
+                    ABORT_SEARCH.store(true, Ordering::Relaxed);
+                }
+            }
+            if let Some(max_nodes) = self.max_nodes {
+                if nodes >= max_nodes {
+                    ABORT_SEARCH.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+
         // terminate search early
         if ABORT_SEARCH.load(Ordering::Relaxed) && depth > 1 {
             return 0;
@@ -488,6 +507,22 @@ impl Search {
         _last_move: Move,
         eval_params: EvalParams,
     ) -> (i32, T) {
+        // check time and max nodes every 2048 nodes
+        let nodes = NODE_COUNT.load(Ordering::Relaxed);
+        if nodes & 2047 == 2047 {
+            if let Some((_, abort_time)) = self.max_time_ms {
+                if Instant::now().duration_since(self.start_time).as_millis() as usize > abort_time
+                {
+                    ABORT_SEARCH.store(true, Ordering::Relaxed);
+                }
+            }
+            if let Some(max_nodes) = self.max_nodes {
+                if nodes >= max_nodes {
+                    ABORT_SEARCH.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+
         NODE_COUNT.fetch_add(1, Ordering::Relaxed);
         NPS_COUNT.fetch_add(1, Ordering::Relaxed);
 
