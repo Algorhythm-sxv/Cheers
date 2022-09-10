@@ -69,7 +69,7 @@ impl Default for EngineOptions {
     fn default() -> Self {
         Self {
             tt_size_mb: 8,
-            rfp_margin: 300,
+            rfp_margin: 100,
             rfp_offset: 0,
         }
     }
