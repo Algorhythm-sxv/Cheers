@@ -53,6 +53,8 @@ impl Display for PrincipalVariation {
 #[derive(Clone, Copy)]
 pub struct EngineOptions {
     pub tt_size_mb: usize,
+    pub rfp_margin: i32,
+    pub rfp_offset: i32,
 }
 
 pub const NMP_DEPTH: i32 = 2;
@@ -65,7 +67,11 @@ pub const DELTA_PRUNING_MARGIN: i32 = 118;
 
 impl Default for EngineOptions {
     fn default() -> Self {
-        Self { tt_size_mb: 8 }
+        Self {
+            tt_size_mb: 8,
+            rfp_margin: 300,
+            rfp_offset: 0,
+        }
     }
 }
 
@@ -155,12 +161,14 @@ impl Search {
                 format!("cp {score}")
             };
             let hash_fill = self.transposition_table.sample_fill();
+            let nodes = NODE_COUNT.load(Ordering::Relaxed);
             // we can trust the results from the previous search
             if self.output {
                 println!(
-                    "info depth {i} seldepth {} score {score_string} pv {pv} nodes {} hashfull {} time {}",
+                    "info depth {i} seldepth {} score {score_string} pv {pv} nodes {} nps {} hashfull {} time {}",
                     search.seldepth,
-                    NODE_COUNT.load(Ordering::Relaxed),
+                    nodes,
+                    ((nodes) as f32 / (end - start).as_secs_f32()) as usize,
                     hash_fill,
                     (end - start).as_millis(),
                 )
@@ -301,6 +309,13 @@ impl Search {
                 tt_entry.en_passent_capture,
                 tt_entry.castling,
             );
+        }
+
+        // Reverse Futility pruning
+        let eval = self.game.evaluate(&mut self.pawn_hash_table);
+        let rfp_score = eval - (depth * self.options.rfp_margin + self.options.rfp_offset);
+        if rfp_score >= beta {
+            return rfp_score;
         }
 
         // Null move pruning

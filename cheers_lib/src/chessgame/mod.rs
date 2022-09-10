@@ -793,7 +793,7 @@ mod tests {
     fn search_speed() -> Result<(), ()> {
         let game = ChessGame::new();
 
-        let search = Search::new(game).max_depth(8).tt_size_mb(64);
+        let search = Search::new(game).max_depth(Some(8)).tt_size_mb(64);
         search.search();
 
         Ok(())
