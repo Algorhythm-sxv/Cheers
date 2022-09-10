@@ -313,9 +313,11 @@ impl Search {
 
         // Reverse Futility pruning
         let eval = self.game.evaluate(&mut self.pawn_hash_table);
-        let rfp_score = eval - (depth * self.options.rfp_margin + self.options.rfp_offset);
-        if rfp_score >= beta {
-            return rfp_score;
+        if !pv_node
+            && ply != 0
+            && eval - (depth * self.options.rfp_margin + self.options.rfp_offset) >= beta
+        {
+            return eval - (depth * self.options.rfp_margin + self.options.rfp_offset);
         }
 
         // Null move pruning
