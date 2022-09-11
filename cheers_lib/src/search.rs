@@ -53,8 +53,6 @@ impl Display for PrincipalVariation {
 #[derive(Clone, Copy)]
 pub struct EngineOptions {
     pub tt_size_mb: usize,
-    pub rfp_margin: i32,
-    pub rfp_offset: i32,
 }
 
 pub const NMP_DEPTH: i32 = 2;
@@ -64,14 +62,11 @@ pub const SEE_CAPTURE_MARGIN: i32 = 93;
 pub const SEE_QUIET_MARGIN: i32 = 32;
 pub const PVS_FULLDEPTH: i32 = 1;
 pub const DELTA_PRUNING_MARGIN: i32 = 118;
+pub const RFP_MARGIN: i32 = 61;
 
 impl Default for EngineOptions {
     fn default() -> Self {
-        Self {
-            tt_size_mb: 8,
-            rfp_margin: 100,
-            rfp_offset: 0,
-        }
+        Self { tt_size_mb: 8 }
     }
 }
 
@@ -313,11 +308,8 @@ impl Search {
 
         // Reverse Futility pruning
         let eval = self.game.evaluate(&mut self.pawn_hash_table);
-        if !pv_node
-            && ply != 0
-            && eval - (depth * self.options.rfp_margin + self.options.rfp_offset) >= beta
-        {
-            return eval - (depth * self.options.rfp_margin + self.options.rfp_offset);
+        if !pv_node && ply != 0 && eval - (depth * RFP_MARGIN) >= beta {
+            return eval - (depth * RFP_MARGIN);
         }
 
         // Null move pruning
