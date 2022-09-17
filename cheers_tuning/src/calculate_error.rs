@@ -43,7 +43,6 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
         i32::MIN + 1,
         i32::MAX - 1,
         0,
-        0,
         Move::null(),
         EVAL_PARAMS,
     );
