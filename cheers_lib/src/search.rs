@@ -25,6 +25,8 @@ pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 const INF: i32 = i32::MAX;
 const MINUS_INF: i32 = -INF;
 
+const SEARCH_MAX_PLY: usize = 128;
+
 pub const PV_MAX_LEN: usize = 16;
 #[derive(Copy, Clone, Default, Debug)]
 pub struct PrincipalVariation {
@@ -225,7 +227,7 @@ impl Search {
         }
 
         // terminate search early
-        if ABORT_SEARCH.load(Ordering::Relaxed) && depth > 1 {
+        if ply >= SEARCH_MAX_PLY || ABORT_SEARCH.load(Ordering::Relaxed) && depth > 1 {
             return 0;
         }
 
