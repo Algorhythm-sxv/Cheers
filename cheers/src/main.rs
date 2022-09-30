@@ -50,6 +50,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("option name Hash type spin default 8 min 1 max 32768");
                 println!("uciok");
             }
+            Some(&"ucinewgame") => {
+                position.reset();
+            }
             Some(&"quit") => break,
             Some(&"isready") => {
                 println!("readyok");
