@@ -178,7 +178,7 @@ impl PawnHashTable {
         }
         Self {
             table: vec![PawnHashEntry::default(); length],
-            mask: length as u64 - 1,
+            mask: (length as u64).saturating_sub(1),
         }
     }
 
