@@ -289,7 +289,7 @@ impl Search {
             {
                 // exact score (?) so we must reset the pv
                 pv.len = 0;
-                // mate score adustment: re-distance mates relative to the current ply
+                // mate score adjustment: re-distance mates relative to the current ply
                 let score = if tt_entry.score > CHECKMATE_SCORE - 500 {
                     tt_entry.score - ply as i32
                 } else if tt_entry.score < -CHECKMATE_SCORE + 500 {
@@ -559,8 +559,16 @@ impl Search {
                     || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
                     || (tt_entry.node_type == UpperBound && tt_entry.score <= alpha)
                 {
+                    // mate score adjustment: re-distance mates relative to the current ply
+                    let score = if tt_entry.score > CHECKMATE_SCORE - 500 {
+                        tt_entry.score - ply as i32
+                    } else if tt_entry.score < -CHECKMATE_SCORE + 500 {
+                        tt_entry.score + ply as i32
+                    } else {
+                        tt_entry.score
+                    };
                     // TT isn't used in tracing eval so we can return a blank trace
-                    return (tt_entry.score, T::default());
+                    return (score, T::default());
                 }
                 tt_move = Move::new(
                     tt_entry.move_start,
@@ -620,8 +628,19 @@ impl Search {
             self.game.unmake_move();
             if score >= beta {
                 if !T::TRACING {
-                    self.transposition_table
-                        .set(self.game.hash(), move_, -1, score, LowerBound);
+                    self.transposition_table.set(
+                        self.game.hash(),
+                        move_,
+                        -1,
+                        if score > CHECKMATE_SCORE - 500 {
+                            score + ply as i32
+                        } else if score < -CHECKMATE_SCORE + 500 {
+                            score - ply as i32
+                        } else {
+                            score
+                        },
+                        LowerBound,
+                    );
                 }
                 return (beta, trace);
             }
@@ -636,7 +655,13 @@ impl Search {
                 self.game.hash(),
                 best_move,
                 -1,
-                alpha,
+                if alpha > CHECKMATE_SCORE - 500 {
+                    alpha + ply as i32
+                } else if alpha < -CHECKMATE_SCORE + 500 {
+                    alpha - ply as i32
+                } else {
+                    alpha
+                },
                 if alpha != old_alpha {
                     Exact
                 } else {
