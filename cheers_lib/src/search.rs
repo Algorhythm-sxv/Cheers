@@ -392,6 +392,10 @@ impl Search {
             pick_move(self.move_lists[ply].inner_mut(), i);
             let move_ = self.move_lists[ply][i];
 
+            // Late Move Pruning: skip quiet moves ordered late
+            if !pv_node && depth > 2 && i > 4 && !move_.capture() {
+                continue;
+            }
             // SEE pruning
             if depth < SEE_PRUNING_DEPTH && ply != 0 && i > 0 && move_.promotion() == NoPiece {
                 let see = self.game.see(move_);
