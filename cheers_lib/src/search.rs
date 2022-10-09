@@ -392,13 +392,20 @@ impl Search {
             pick_move(self.move_lists[ply].inner_mut(), i);
             let move_ = self.move_lists[ply][i];
 
+            let capture = move_.capture();
             // Late Move Pruning: skip quiet moves ordered late
-            if !pv_node && depth > 2 && i > 4 && !move_.capture() {
+            if !pv_node && i > (3 * depth * depth) as usize && !capture {
                 continue;
             }
             // SEE pruning
             if depth < SEE_PRUNING_DEPTH && ply != 0 && i > 0 && move_.promotion() == NoPiece {
-                let see = self.game.see(move_);
+                let see = if !move_.capture() {
+                    self.game.see(move_)
+                } else if move_.score > 0 {
+                    move_.score - 50_000
+                } else {
+                    move_.score + 50_000
+                };
                 let depth_margin = depth
                     * if move_.capture() {
                         SEE_CAPTURE_MARGIN
