@@ -66,6 +66,8 @@ pub const SEE_QUIET_MARGIN: i32 = 32;
 pub const PVS_FULLDEPTH: i32 = 1;
 pub const DELTA_PRUNING_MARGIN: i32 = 118;
 pub const RFP_MARGIN: i32 = 61;
+pub const LMP_DEPTH: i32 = 1;
+pub const LMP_MARGIN: i32 = 3;
 
 impl Default for EngineOptions {
     fn default() -> Self {
@@ -394,7 +396,7 @@ impl Search {
 
             let capture = move_.capture();
             // Late Move Pruning: skip quiet moves ordered late
-            if !pv_node && i > (3 * depth * depth) as usize && !capture {
+            if !pv_node && depth > LMP_DEPTH && i > (LMP_MARGIN * depth * depth) as usize && !capture {
                 continue;
             }
             // SEE pruning
