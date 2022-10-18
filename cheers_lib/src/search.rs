@@ -55,7 +55,7 @@ impl Display for PrincipalVariation {
 #[derive(Clone, Copy)]
 pub struct EngineOptions {
     pub tt_size_mb: usize,
-    pub rfp_margin: i32,
+    pub fp_margin: i32,
 }
 
 pub const NMP_DEPTH: i32 = 2;
@@ -65,7 +65,8 @@ pub const SEE_CAPTURE_MARGIN: i32 = 93;
 pub const SEE_QUIET_MARGIN: i32 = 32;
 pub const PVS_FULLDEPTH: i32 = 1;
 pub const DELTA_PRUNING_MARGIN: i32 = 118;
-pub const RFP_MARGIN: i32 = 61;
+pub const FP_MARGIN: i32 = 318;
+pub const RFP_MARGIN: i32 = 122;
 pub const LMP_DEPTH: i32 = 1;
 pub const LMP_MARGIN: i32 = 3;
 
@@ -73,7 +74,7 @@ impl Default for EngineOptions {
     fn default() -> Self {
         Self {
             tt_size_mb: 8,
-            rfp_margin: 122,
+            fp_margin: 100,
         }
     }
 }
@@ -314,10 +315,14 @@ impl Search {
             );
         }
 
-        // Reverse Futility pruning
         let eval = self.game.evaluate(&mut self.pawn_hash_table);
-        if !pv_node && ply != 0 && eval - (depth * self.options.rfp_margin) >= beta {
-            return eval - (depth * self.options.rfp_margin);
+        // Futility Pruning
+        if !pv_node && ply != 0 && eval + (depth * self.options.fp_margin) <= alpha {
+            return eval + (depth * self.options.fp_margin);
+        }
+        // Reverse Futility pruning
+        if !pv_node && ply != 0 && eval - (depth * RFP_MARGIN) >= beta {
+            return eval - (depth * RFP_MARGIN);
         }
 
         // Null move pruning
@@ -396,7 +401,11 @@ impl Search {
 
             let capture = move_.capture();
             // Late Move Pruning: skip quiet moves ordered late
-            if !pv_node && depth > LMP_DEPTH && i > (LMP_MARGIN * depth * depth) as usize && !capture {
+            if !pv_node
+                && depth > LMP_DEPTH
+                && i > (LMP_MARGIN * depth * depth) as usize
+                && !capture
+            {
                 continue;
             }
             // SEE pruning
