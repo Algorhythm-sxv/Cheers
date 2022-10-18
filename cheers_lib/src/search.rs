@@ -74,7 +74,7 @@ impl Default for EngineOptions {
     fn default() -> Self {
         Self {
             tt_size_mb: 8,
-            fp_margin: 100,
+            fp_margin: 312,
         }
     }
 }
@@ -316,10 +316,12 @@ impl Search {
         }
 
         let eval = self.game.evaluate(&mut self.pawn_hash_table);
-        // Futility Pruning
-        if !pv_node && ply != 0 && eval + (depth * self.options.fp_margin) <= alpha {
-            return eval + (depth * self.options.fp_margin);
+        // Futility pruning
+        if !pv_node && ply != 0 && depth == 1 && !in_check && eval + self.options.fp_margin <= alpha
+        {
+            return eval + self.options.fp_margin;
         }
+
         // Reverse Futility pruning
         if !pv_node && ply != 0 && eval - (depth * RFP_MARGIN) >= beta {
             return eval - (depth * RFP_MARGIN);
