@@ -55,7 +55,6 @@ impl Display for PrincipalVariation {
 #[derive(Clone, Copy)]
 pub struct EngineOptions {
     pub tt_size_mb: usize,
-    pub fp_margin: i32,
 }
 
 pub const NMP_DEPTH: i32 = 2;
@@ -65,17 +64,16 @@ pub const SEE_CAPTURE_MARGIN: i32 = 93;
 pub const SEE_QUIET_MARGIN: i32 = 32;
 pub const PVS_FULLDEPTH: i32 = 1;
 pub const DELTA_PRUNING_MARGIN: i32 = 118;
-pub const FP_MARGIN: i32 = 318;
+pub const FP_MARGIN_1: i32 = 100;
+pub const FP_MARGIN_2: i32 = 300;
+pub const FP_MARGIN_3: i32 = 700;
 pub const RFP_MARGIN: i32 = 122;
 pub const LMP_DEPTH: i32 = 1;
 pub const LMP_MARGIN: i32 = 3;
 
 impl Default for EngineOptions {
     fn default() -> Self {
-        Self {
-            tt_size_mb: 8,
-            fp_margin: 312,
-        }
+        Self { tt_size_mb: 8 }
     }
 }
 
@@ -316,11 +314,14 @@ impl Search {
         }
 
         let eval = self.game.evaluate(&mut self.pawn_hash_table);
-        // Futility pruning
-        if !pv_node && ply != 0 && depth == 1 && !in_check && eval + self.options.fp_margin <= alpha
-        {
-            return eval + self.options.fp_margin;
-        }
+
+        // Enable futility pruning
+        let fp_margins = [0, FP_MARGIN_1, FP_MARGIN_2, FP_MARGIN_3];
+        let futility_pruning = !pv_node
+            && ply != 0
+            && depth as usize <= 3
+            && !in_check
+            && eval + fp_margins[depth as usize] <= alpha;
 
         // Reverse Futility pruning
         if !pv_node && ply != 0 && eval - (depth * RFP_MARGIN) >= beta {
@@ -330,7 +331,7 @@ impl Search {
         // Null move pruning
         // don't search the null move in the PV, when in check or only down to pawn/kings
         if depth >= NMP_DEPTH
-            && !self.game.in_check(self.game.current_player())
+            && !in_check
             && self.game.has_non_pawn_material(self.game.current_player())
         {
             self.game.make_null_move();
@@ -355,7 +356,7 @@ impl Search {
         if self.move_lists[ply].is_empty() {
             // exact score, so we must reset the pv
             pv.len = 0;
-            if self.game.in_check(self.game.current_player()) {
+            if in_check {
                 // checkmate, preferring shorter mating sequences
                 return -(CHECKMATE_SCORE - (ply as i32));
             } else {
@@ -402,6 +403,7 @@ impl Search {
             let move_ = self.move_lists[ply][i];
 
             let capture = move_.capture();
+
             // Late Move Pruning: skip quiet moves ordered late
             if !pv_node
                 && depth > LMP_DEPTH
@@ -410,15 +412,15 @@ impl Search {
             {
                 continue;
             }
+
+            // Futility pruning: skip quiet moves when static eval is below alpha
+            if futility_pruning && !capture {
+                continue;
+            }
+
             // SEE pruning
             if depth < SEE_PRUNING_DEPTH && ply != 0 && i > 0 && move_.promotion() == NoPiece {
-                let see = if !move_.capture() {
-                    self.game.see(move_)
-                } else if move_.score > 0 {
-                    move_.score - 50_000
-                } else {
-                    move_.score + 50_000
-                };
+                let see = self.game.see(move_);
                 let depth_margin = depth
                     * if move_.capture() {
                         SEE_CAPTURE_MARGIN
