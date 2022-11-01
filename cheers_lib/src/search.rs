@@ -115,6 +115,25 @@ impl Search {
         }
     }
 
+    pub fn new_with_tt(game: ChessGame, tt: TranspositionTable) -> Self {
+        Self {
+            game,
+            move_lists: vec![MoveList::new(); 128],
+            seldepth: 0,
+            transposition_table: tt,
+            pawn_hash_table: PawnHashTable::new(0),
+            killer_moves: KillerMoves::new(),
+            history_tables: [[[0; 64]; 6]; 2],
+            max_depth: None,
+            max_nodes: None,
+            max_time_ms: None,
+            abort_time_ms: None,
+            start_time: Instant::now(),
+            output: false,
+            options: EngineOptions::default(),
+        }
+    }
+
     pub fn tt_size_mb(mut self, tt_size_mb: usize) -> Self {
         self.transposition_table.set_size(tt_size_mb);
         self.pawn_hash_table = PawnHashTable::new(tt_size_mb / 8);

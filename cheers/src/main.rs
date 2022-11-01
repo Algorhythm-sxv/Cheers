@@ -4,7 +4,7 @@ use cheers_lib::{
     search::{
         EngineOptions, Search, ABORT_SEARCH, NODE_COUNT, NPS_COUNT, SEARCH_COMPLETE, TIME_ELAPSED,
     },
-    types::ColorIndex,
+    types::ColorIndex, hash_tables::TranspositionTable,
 };
 
 use std::{
@@ -20,6 +20,8 @@ use std::{
 fn main() -> Result<(), Box<dyn Error>> {
     let mut position = ChessGame::new();
     let mut options = EngineOptions::default();
+
+    let mut tt = TranspositionTable::new(options.tt_size_mb);
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
@@ -52,6 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"ucinewgame") => {
                 position.reset();
+                tt = TranspositionTable::new(options.tt_size_mb);
             }
             Some(&"quit") => break,
             Some(&"isready") => {
@@ -194,7 +197,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         None => None,
                     };
 
-                    let mut search = Search::new(position.clone())
+                    let mut search = Search::new_with_tt(position.clone(), tt.clone())
                         .max_depth(depth)
                         .max_nodes(nodes)
                         .tt_size_mb(options.tt_size_mb)
