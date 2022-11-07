@@ -192,7 +192,7 @@ impl Search {
             // we can trust the results from the previous search
             if self.output {
                 println!(
-                    "info depth {i} seldepth {} score {score_string} pv {pv} nodes {} nps {} hashfull {} time {}",
+                    "info depth {i} seldepth {} score {score_string} nodes {} nps {} hashfull {} time {} pv {pv}",
                     search.seldepth,
                     nodes,
                     ((nodes) as f32 / (end - start).as_secs_f32()) as usize,
