@@ -1,4 +1,4 @@
-use std::sync::{atomic::*, Arc, RwLock};
+use std::sync::atomic::*;
 
 use cheers_bitboards::{BitBoard, Square};
 
@@ -60,9 +60,8 @@ struct Entry {
     data: AtomicU64,
 }
 
-#[derive(Clone)]
 pub struct TranspositionTable {
-    table: Arc<RwLock<Vec<Entry>>>,
+    table: Vec<Entry>,
 }
 
 impl TranspositionTable {
@@ -76,7 +75,7 @@ impl TranspositionTable {
             table.push(Entry::default());
         }
         Self {
-            table: Arc::new(RwLock::new(table)),
+            table,
         }
     }
 
@@ -84,17 +83,14 @@ impl TranspositionTable {
         let mut length = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
         length = length.next_power_of_two();
         self.table
-            .write()
-            .unwrap()
             .resize_with(length, Entry::default);
     }
 
     pub fn set(&self, hash: u64, best_move: Move, depth: i8, score: i32, node_type: NodeType) {
         use self::Ordering::*;
-        let table = self.table.read().unwrap();
-        let index = hash as usize & (table.len() - 1);
+        let index = hash as usize & (self.table.len() - 1);
 
-        let stored = match table.get(index) {
+        let stored = match self.table.get(index) {
             Some(entry) => entry,
             None => return,
         };
@@ -122,10 +118,9 @@ impl TranspositionTable {
 
     pub fn get(&self, hash: u64) -> Option<TTEntry> {
         use self::Ordering::*;
-        let table = self.table.read().unwrap();
-        let index = hash as usize & (table.len() - 1);
+        let index = hash as usize & (self.table.len() - 1);
 
-        let stored = table.get(index)?;
+        let stored = self.table.get(index)?;
 
         let data = stored.data.load(Acquire);
 
@@ -139,7 +134,7 @@ impl TranspositionTable {
     }
 
     pub fn sample_fill(&self) -> usize {
-        self.table.read().unwrap()[..1000]
+        self.table[..1000]
             .iter()
             .filter(|e| e.data.load(Ordering::Relaxed) != 0)
             .count()

@@ -12,7 +12,7 @@ use std::{
     fs::File,
     io::{prelude::*, stdin},
     path::PathBuf,
-    sync::atomic::Ordering,
+    sync::{atomic::Ordering, Arc, RwLock},
     thread,
     time::Instant,
 };
@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut position = ChessGame::new();
     let mut options = EngineOptions::default();
 
-    let mut tt = TranspositionTable::new(options.tt_size_mb);
+    let mut tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(&"ucinewgame") => {
                 position.reset();
-                tt = TranspositionTable::new(options.tt_size_mb);
+                tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
             }
             Some(&"quit") => break,
             Some(&"isready") => {

@@ -1,3 +1,4 @@
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use std::{fmt::Display, sync::atomic::*};
 
@@ -82,7 +83,7 @@ pub struct Search {
     pub game: ChessGame,
     pub move_lists: Vec<MoveList>,
     pub seldepth: usize,
-    transposition_table: TranspositionTable,
+    transposition_table: Arc<RwLock<TranspositionTable>>,
     pawn_hash_table: PawnHashTable,
     killer_moves: KillerMoves<2>,
     history_tables: [[[i32; 64]; 6]; 2],
@@ -101,7 +102,7 @@ impl Search {
             game,
             move_lists: vec![MoveList::new(); 128],
             seldepth: 0,
-            transposition_table: TranspositionTable::new(0),
+            transposition_table: Arc::new(RwLock::new(TranspositionTable::new(0))),
             pawn_hash_table: PawnHashTable::new(0),
             killer_moves: KillerMoves::new(),
             history_tables: [[[0; 64]; 6]; 2],
@@ -115,7 +116,7 @@ impl Search {
         }
     }
 
-    pub fn new_with_tt(game: ChessGame, tt: TranspositionTable) -> Self {
+    pub fn new_with_tt(game: ChessGame, tt: Arc<RwLock<TranspositionTable>>) -> Self {
         Self {
             game,
             move_lists: vec![MoveList::new(); 128],
@@ -135,7 +136,10 @@ impl Search {
     }
 
     pub fn tt_size_mb(mut self, tt_size_mb: usize) -> Self {
-        self.transposition_table.set_size(tt_size_mb);
+        self.transposition_table
+            .write()
+            .unwrap()
+            .set_size(tt_size_mb);
         self.pawn_hash_table = PawnHashTable::new(tt_size_mb / 8);
         self
     }
@@ -165,11 +169,13 @@ impl Search {
         let mut last_pv = PrincipalVariation::new();
 
         let mut search = self.clone();
+        let tt = &*self.transposition_table.read().unwrap();
+
         let start = Instant::now();
         for i in 0.. {
             search.seldepth = 0;
             let mut pv = PrincipalVariation::new();
-            let score = search.negamax(MINUS_INF, INF, i as i32, 0, Move::null(), &mut pv);
+            let score = search.negamax(MINUS_INF, INF, i as i32, 0, Move::null(), &mut pv, tt);
             if ABORT_SEARCH.load(Ordering::Relaxed) && i > 1 {
                 // can't trust results from a partial search
                 break;
@@ -181,7 +187,7 @@ impl Search {
             } else {
                 format!("cp {score}")
             };
-            let hash_fill = self.transposition_table.sample_fill();
+            let hash_fill = tt.sample_fill();
             let nodes = NODE_COUNT.load(Ordering::Relaxed);
             // we can trust the results from the previous search
             if self.output {
@@ -229,6 +235,7 @@ impl Search {
         ply: usize,
         last_move: Move,
         pv: &mut PrincipalVariation,
+        tt: &TranspositionTable,
     ) -> i32 {
         // check time and max nodes every 2048 nodes
         let nodes = NODE_COUNT.load(Ordering::Relaxed);
@@ -259,7 +266,7 @@ impl Search {
         if depth == 0 {
             // exact score so we must reset the pv
             pv.len = 0;
-            let score = self.quiesce(alpha, beta, ply, last_move, EVAL_PARAMS);
+            let score = self.quiesce(alpha, beta, ply, last_move, EVAL_PARAMS, tt);
             // self.transposition_table
             //     .set(self.hash, Move::null(), depth as i8, score, Exact);
             return score;
@@ -299,7 +306,7 @@ impl Search {
 
         // transposition table lookup
         let mut tt_move = Move::null();
-        if let Some(tt_entry) = self.transposition_table.get(self.game.hash()) {
+        if let Some(tt_entry) = tt.get(self.game.hash()) {
             // prune on exact score/beta cutoff with equal/higher depth, unless we are at the root
             if tt_entry.depth as i32 >= depth
                 && ply != 0
@@ -361,6 +368,7 @@ impl Search {
                 ply + 1,
                 Move::null(),
                 &mut line,
+                tt,
             );
             self.game.unmake_null_move();
 
@@ -468,7 +476,15 @@ impl Search {
                     r.max(1)
                 };
                 let reduced_depth = (depth - reduction).max(1);
-                score = -self.negamax(-alpha - 1, -alpha, reduced_depth, ply + 1, move_, &mut line);
+                score = -self.negamax(
+                    -alpha - 1,
+                    -alpha,
+                    reduced_depth,
+                    ply + 1,
+                    move_,
+                    &mut line,
+                    tt,
+                );
                 score > alpha && reduced_depth < depth - 1
             } else {
                 !pv_node || i > 0
@@ -476,17 +492,17 @@ impl Search {
 
             // full-depth null-window search on reduced moves that improved alpha, later moves or non-pv nodes
             if full_depth {
-                score = -self.negamax(-alpha - 1, -alpha, depth - 1, ply + 1, move_, &mut line);
+                score = -self.negamax(-alpha - 1, -alpha, depth - 1, ply + 1, move_, &mut line, tt);
             }
 
             // full-depth, full-window search on first move in PV nodes and reduced moves that improve alpha
             if pv_node && (i == 0 || (score > alpha && score < beta)) {
-                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line);
+                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line, tt);
             }
 
             self.game.unmake_move();
             if score >= beta {
-                self.transposition_table.set(
+                tt.set(
                     self.game.hash(),
                     move_,
                     depth as i8,
@@ -527,7 +543,7 @@ impl Search {
                 best_move = move_;
             }
         }
-        self.transposition_table.set(
+        tt.set(
             self.game.hash(),
             best_move,
             depth as i8,
@@ -554,8 +570,9 @@ impl Search {
         ply: usize,
         last_move: Move,
         eval_params: EvalParams,
+        tt: &TranspositionTable,
     ) -> i32 {
-        self.quiesce_impl::<()>(alpha, beta, ply, last_move, eval_params)
+        self.quiesce_impl::<()>(alpha, beta, ply, last_move, eval_params, tt)
             .0
     }
 
@@ -566,6 +583,7 @@ impl Search {
         ply: usize,
         _last_move: Move,
         eval_params: EvalParams,
+        tt: &TranspositionTable,
     ) -> (i32, T) {
         // check time and max nodes every 2048 nodes
         let nodes = NODE_COUNT.load(Ordering::Relaxed);
@@ -599,7 +617,7 @@ impl Search {
         // transposition table lookup
         let mut tt_move = Move::null();
         if !T::TRACING {
-            if let Some(tt_entry) = self.transposition_table.get(self.game.hash()) {
+            if let Some(tt_entry) = tt.get(self.game.hash()) {
                 if tt_entry.node_type == Exact
                     || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
                     || (tt_entry.node_type == UpperBound && tt_entry.score <= alpha)
@@ -668,12 +686,12 @@ impl Search {
 
             self.game.make_move(move_);
             let (mut score, trace) =
-                self.quiesce_impl::<T>(-beta, -alpha, ply + 1, move_, eval_params);
+                self.quiesce_impl::<T>(-beta, -alpha, ply + 1, move_, eval_params, tt);
             score = -score;
             self.game.unmake_move();
             if score >= beta {
                 if !T::TRACING {
-                    self.transposition_table.set(
+                    tt.set(
                         self.game.hash(),
                         move_,
                         -1,
@@ -696,7 +714,7 @@ impl Search {
             }
         }
         if !T::TRACING {
-            self.transposition_table.set(
+            tt.set(
                 self.game.hash(),
                 best_move,
                 -1,
