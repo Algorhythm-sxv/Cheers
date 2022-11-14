@@ -197,6 +197,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                         None => None,
                     };
 
+                    let movetime = words
+                        .iter()
+                        .enumerate()
+                        .skip_while(|(_, &w)| w != "movetime")
+                        .nth(1);
+                    let movetime = match movetime {
+                        Some((i, w)) => match w.parse::<usize>() {
+                            Ok(n) => Some(n),
+                            _ => {
+                                println!("Invalid value for movetime: {}", words[i]);
+                                continue;
+                            }
+                        },
+                        None => None,
+                    };
                     let mut search = Search::new_with_tt(position.clone(), tt.clone())
                         .max_depth(depth)
                         .max_nodes(nodes)
@@ -211,6 +226,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                             search.max_time_ms = move_time(btime, binc);
                         }
                     };
+                    if let Some(movetime) = movetime {
+                        search.max_time_ms = Some((movetime, movetime));
+                    }
+
                     let _ = thread::spawn(move || engine_thread(search).unwrap());
                 }
             }
