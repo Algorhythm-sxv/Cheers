@@ -172,7 +172,7 @@ impl Search {
         let tt = &*self.transposition_table.read().unwrap();
 
         let start = Instant::now();
-        for i in 0.. {
+        for i in 1.. {
             search.seldepth = 0;
             let mut pv = PrincipalVariation::new();
             let score = search.negamax(MINUS_INF, INF, i as i32, 0, Move::null(), &mut pv, tt);
@@ -213,7 +213,7 @@ impl Search {
 
             // terminate search at max depth or with forced mate/draw
             if let Some(max_depth) = self.max_depth {
-                if i == max_depth {
+                if i >= max_depth {
                     ABORT_SEARCH.store(false, Ordering::Relaxed);
                     break;
                 }
