@@ -95,12 +95,6 @@ impl TranspositionTable {
             None => return,
         };
 
-        let stored_depth = (stored.data.load(Acquire) >> 24) & 0xFF;
-        if stored_depth > depth as u64 {
-            // depth-preferred replacement
-            return;
-        }
-
         let mut data = 0u64;
         data |= score as u32 as u64;
         data |= ((depth as u8) as u64) << 32;
