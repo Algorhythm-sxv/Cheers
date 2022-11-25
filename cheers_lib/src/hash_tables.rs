@@ -74,19 +74,24 @@ impl TranspositionTable {
         for _ in 0..length {
             table.push(Entry::default());
         }
-        Self {
-            table,
-        }
+        Self { table }
     }
 
     pub fn set_size(&mut self, size_mb: usize) {
         let mut length = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
         length = length.next_power_of_two();
-        self.table
-            .resize_with(length, Entry::default);
+        self.table.resize_with(length, Entry::default);
     }
 
-    pub fn set(&self, hash: u64, best_move: Move, depth: i8, score: i32, node_type: NodeType) {
+    pub fn set(
+        &self,
+        hash: u64,
+        best_move: Move,
+        depth: i8,
+        score: i32,
+        node_type: NodeType,
+        pv: bool,
+    ) {
         use self::Ordering::*;
         let index = hash as usize & (self.table.len() - 1);
 
@@ -95,19 +100,25 @@ impl TranspositionTable {
             None => return,
         };
 
-        let mut data = 0u64;
-        data |= score as u32 as u64;
-        data |= ((depth as u8) as u64) << 32;
-        data |= (*best_move.start() as u64) << (32 + 8);
-        data |= (*best_move.target() as u64) << (32 + 8 + 8);
-        data |= (best_move.promotion() as u64) << (32 + 8 + 8 + 8);
-        data |= (node_type as u64) << (32 + 8 + 8 + 8 + 3);
-        data |= (best_move.double_pawn_push() as u64) << (32 + 8 + 8 + 8 + 3 + 2);
-        data |= (best_move.en_passent() as u64) << (32 + 8 + 8 + 8 + 3 + 2 + 1);
-        data |= (best_move.castling() as u64) << (32 + 8 + 8 + 8 + 3 + 2 + 1 + 1);
+        const DEPTH_OFFSET: i8 = 8;
+        if node_type == NodeType::Exact
+            || stored.key.load(Relaxed) ^ stored.data.load(Relaxed) != hash
+            || depth - DEPTH_OFFSET + 2 * (pv as i8) > ((stored.data.load(Relaxed) >> 32) & 0xFF) as i8
+        {
+            let mut data = 0u64;
+            data |= score as u32 as u64;
+            data |= ((depth as u8) as u64) << 32;
+            data |= (*best_move.start() as u64) << (32 + 8);
+            data |= (*best_move.target() as u64) << (32 + 8 + 8);
+            data |= (best_move.promotion() as u64) << (32 + 8 + 8 + 8);
+            data |= (node_type as u64) << (32 + 8 + 8 + 8 + 3);
+            data |= (best_move.double_pawn_push() as u64) << (32 + 8 + 8 + 8 + 3 + 2);
+            data |= (best_move.en_passent() as u64) << (32 + 8 + 8 + 8 + 3 + 2 + 1);
+            data |= (best_move.castling() as u64) << (32 + 8 + 8 + 8 + 3 + 2 + 1 + 1);
 
-        stored.key.store(hash ^ data, Release);
-        stored.data.store(data, Release);
+            stored.key.store(hash ^ data, Release);
+            stored.data.store(data, Release);
+        }
     }
 
     pub fn get(&self, hash: u64) -> Option<TTEntry> {

@@ -514,6 +514,7 @@ impl Search {
                         score
                     },
                     LowerBound,
+                    pv_node,
                 );
                 if !move_.capture() {
                     self.history_tables[self.game.current_player()][move_.piece()]
@@ -559,6 +560,7 @@ impl Search {
             } else {
                 UpperBound
             },
+            pv_node,
         );
         alpha
     }
@@ -703,6 +705,7 @@ impl Search {
                             score
                         },
                         LowerBound,
+                        false,
                     );
                 }
                 return (beta, trace);
@@ -730,6 +733,7 @@ impl Search {
                 } else {
                     UpperBound
                 },
+                false,
             );
         }
         (alpha, best_trace)
