@@ -56,6 +56,7 @@ impl Display for PrincipalVariation {
 #[derive(Clone, Copy)]
 pub struct EngineOptions {
     pub tt_size_mb: usize,
+    pub iir_depth: i32,
 }
 
 pub const NMP_DEPTH: i32 = 2;
@@ -71,10 +72,11 @@ pub const FP_MARGIN_3: i32 = 700;
 pub const RFP_MARGIN: i32 = 122;
 pub const LMP_DEPTH: i32 = 1;
 pub const LMP_MARGIN: i32 = 3;
+pub const IIR_DEPTH: i32 = 4;
 
 impl Default for EngineOptions {
     fn default() -> Self {
-        Self { tt_size_mb: 8 }
+        Self { tt_size_mb: 8, iir_depth: 4 }
     }
 }
 
@@ -231,7 +233,7 @@ impl Search {
         &mut self,
         mut alpha: i32,
         mut beta: i32,
-        depth: i32,
+        mut depth: i32,
         ply: usize,
         last_move: Move,
         pv: &mut PrincipalVariation,
@@ -260,7 +262,7 @@ impl Search {
 
         // check extension before quiescence
         let in_check = self.game.in_check(self.game.current_player());
-        let depth = if in_check { depth + 1 } else { depth };
+        if in_check { depth += 1; }
 
         // quiescence search at full depth
         if depth == 0 {
@@ -337,6 +339,11 @@ impl Search {
                 tt_entry.en_passent_capture,
                 tt_entry.castling,
             );
+        }
+
+        // IIR: reduce the depth if no TT move is found
+        if depth >= self.options.iir_depth && tt_move.is_null() {
+            depth -= 1;
         }
 
         let eval = self.game.evaluate(&mut self.pawn_hash_table);
