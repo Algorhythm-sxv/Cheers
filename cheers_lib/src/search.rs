@@ -56,7 +56,6 @@ impl Display for PrincipalVariation {
 #[derive(Clone, Copy)]
 pub struct EngineOptions {
     pub tt_size_mb: usize,
-    pub iir_depth: i32,
 }
 
 pub const NMP_DEPTH: i32 = 2;
@@ -72,11 +71,11 @@ pub const FP_MARGIN_3: i32 = 700;
 pub const RFP_MARGIN: i32 = 122;
 pub const LMP_DEPTH: i32 = 1;
 pub const LMP_MARGIN: i32 = 3;
-pub const IIR_DEPTH: i32 = 4;
+pub const IIR_DEPTH: i32 = 2;
 
 impl Default for EngineOptions {
     fn default() -> Self {
-        Self { tt_size_mb: 8, iir_depth: 4 }
+        Self { tt_size_mb: 8 }
     }
 }
 
@@ -342,7 +341,7 @@ impl Search {
         }
 
         // IIR: reduce the depth if no TT move is found
-        if depth >= self.options.iir_depth && tt_move.is_null() {
+        if depth >= IIR_DEPTH && tt_move.is_null() {
             depth -= 1;
         }
 

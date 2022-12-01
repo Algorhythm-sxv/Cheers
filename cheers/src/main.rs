@@ -50,6 +50,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("id name cheers");
                 println!("id author Algorhythm");
                 println!("option name Hash type spin default 8 min 1 max 32768");
+                println!("option name iir_depth type spin default 4 min 2 max 15");
                 println!("uciok");
             }
             Some(&"ucinewgame") => {
