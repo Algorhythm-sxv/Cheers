@@ -177,7 +177,7 @@ impl Search {
             let mut window = if i == 1 {
                 (MINUS_INF, INF)
             } else {
-                (last_score - 100, last_score + 100)
+                (last_score - 50, last_score + 50)
             };
 
             let mut pv = PrincipalVariation::new();
