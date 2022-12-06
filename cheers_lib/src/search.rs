@@ -173,14 +173,38 @@ impl Search {
         let tt = &*self.transposition_table.read().unwrap();
 
         let start = Instant::now();
-        for i in 1.. {
-            search.seldepth = 0;
+        'id_loop: for i in 1.. {
+            let mut window = if i == 1 {
+                (MINUS_INF, INF)
+            } else {
+                (last_score - 100, last_score + 100)
+            };
+
             let mut pv = PrincipalVariation::new();
-            let score = search.negamax(MINUS_INF, INF, i as i32, 0, Move::null(), &mut pv, tt);
-            if ABORT_SEARCH.load(Ordering::Relaxed) && i > 1 {
-                // can't trust results from a partial search
-                break;
-            }
+
+            let score = loop {
+                search.seldepth = 0;
+                let score =
+                    search.negamax(window.0, window.1, i as i32, 0, Move::null(), &mut pv, tt);
+                if ABORT_SEARCH.load(Ordering::Relaxed) && i > 1 {
+                    // can't trust results from a partial search
+                    break 'id_loop;
+                }
+                match (score > window.0, score < window.1) {
+                    // exact score within the window
+                    (true, true) => break score,
+                    // fail high, expand higher bound
+                    (true, false) => {
+                        window = (MINUS_INF, INF);
+                    }
+                    // fail low, expand lower bound
+                    (false, true) => {
+                        window = (MINUS_INF, INF);
+                    }
+                    _ => unreachable!(),
+                }
+            };
+
             let end = Instant::now();
             let mate_distance = CHECKMATE_SCORE - score.abs();
             let score_string = if mate_distance < 100 {
@@ -261,7 +285,9 @@ impl Search {
 
         // check extension before quiescence
         let in_check = self.game.in_check(self.game.current_player());
-        if in_check { depth += 1; }
+        if in_check {
+            depth += 1;
+        }
 
         // quiescence search at full depth
         if depth == 0 {
