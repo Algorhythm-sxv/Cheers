@@ -173,34 +173,47 @@ impl Search {
         let tt = &*self.transposition_table.read().unwrap();
 
         let start = Instant::now();
+
+        // Iterative Deepening: search with increasing depth, exploiting the results
+        // of shallower searches to speed up deeper ones
         'id_loop: for i in 1.. {
+            // Aspiration Window: search a narrow window around the score in hope of saving
+            // some search time
+            let mut window_size = 50;
             let mut window = if i == 1 {
                 (MINUS_INF, INF)
             } else {
-                (last_score - 50, last_score + 50)
+                (last_score - window_size, last_score + window_size)
             };
 
             let mut pv = PrincipalVariation::new();
 
+            // repeat failed searches with wider windows until a search succeeds
             let score = loop {
                 search.seldepth = 0;
+
                 let score =
                     search.negamax(window.0, window.1, i as i32, 0, Move::null(), &mut pv, tt);
+
                 if ABORT_SEARCH.load(Ordering::Relaxed) && i > 1 {
                     // can't trust results from a partial search
                     break 'id_loop;
                 }
+
+                // Expand the search window based on which bound the search failed on
                 match (score > window.0, score < window.1) {
-                    // exact score within the window
-                    (true, true) => break score,
-                    // fail high, expand higher bound
+                    // fail high, expand upper window
                     (true, false) => {
-                        window = (MINUS_INF, INF);
+                        window = (window.0, window.1 + window_size);
+                        window_size *= 2;
                     }
-                    // fail low, expand lower bound
+                    // fail low, expand lower window
                     (false, true) => {
-                        window = (MINUS_INF, INF);
+                        window = (window.0 - window_size, window.1);
+                        window_size *= 2;
                     }
+                    // exact score within the window, search success
+                    (true, true) => break score,
                     _ => unreachable!(),
                 }
             };
