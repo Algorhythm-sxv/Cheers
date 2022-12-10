@@ -456,23 +456,23 @@ impl Search {
                 }
                 // order queen and rook promotions ahead of quiet moves
                 else if m.promotion() == Queen || m.promotion() == Rook {
-                    m.score += 10_000 + EVAL_PARAMS.piece_values[(Midgame, m.promotion())];
+                    m.score += 20_000 + EVAL_PARAMS.piece_values[(Midgame, m.promotion())];
                 } else {
-                    // quiet killer moves get sorted before other quiet moves
+                    // quiet killer moves get sorted aove the other quiets
                     if self.killer_moves[ply.min(127)].contains(&m) {
-                        m.score += 5_000;
+                        m.score += 6_000;
                     }
-                    // quiet moves get ordered by their history and countermove heuristics
-                    m.score += self.history_tables[current_player][m.piece()][m.target()];
-
                     // the countermove get sorted above the other quiets
                     if !last_move.is_null() {
                         let countermove = self.countermove_tables[current_player]
                             [last_move.piece()][last_move.target()];
                         if m.start() == countermove.start() && m.target() == countermove.target() {
-                            m.score += 1_000;
+                            m.score += 3_000;
                         }
                     }
+
+                    // all quiets are sorted with their history heuristic
+                    m.score += self.history_tables[current_player][m.piece()][m.target()];
                 }
             });
         // make sure the reported best move is at least legal
