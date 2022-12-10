@@ -88,6 +88,7 @@ pub struct Search {
     pawn_hash_table: PawnHashTable,
     killer_moves: KillerMoves<2>,
     history_tables: [[[i32; 64]; 6]; 2],
+    countermove_tables: [[[Move; 64]; 6]; 2],
     pub max_depth: Option<usize>,
     pub max_nodes: Option<usize>,
     pub max_time_ms: Option<(usize, usize)>,
@@ -107,6 +108,7 @@ impl Search {
             pawn_hash_table: PawnHashTable::new(0),
             killer_moves: KillerMoves::new(),
             history_tables: [[[0; 64]; 6]; 2],
+            countermove_tables: [[[Move::null(); 64]; 6]; 2],
             max_depth: None,
             max_nodes: None,
             max_time_ms: None,
@@ -126,6 +128,7 @@ impl Search {
             pawn_hash_table: PawnHashTable::new(0),
             killer_moves: KillerMoves::new(),
             history_tables: [[[0; 64]; 6]; 2],
+            countermove_tables: [[[Move::null(); 64]; 6]; 2],
             max_depth: None,
             max_nodes: None,
             max_time_ms: None,
@@ -296,8 +299,9 @@ impl Search {
             return 0;
         }
 
+        let current_player = self.game.current_player();
         // check extension before quiescence
-        let in_check = self.game.in_check(self.game.current_player());
+        let in_check = self.game.in_check(current_player);
         if in_check {
             depth += 1;
         }
@@ -401,10 +405,7 @@ impl Search {
 
         // Null move pruning
         // don't search the null move in the PV, when in check or only down to pawn/kings
-        if depth >= NMP_DEPTH
-            && !in_check
-            && self.game.has_non_pawn_material(self.game.current_player())
-        {
+        if depth >= NMP_DEPTH && !in_check && self.game.has_non_pawn_material(current_player) {
             self.game.make_null_move();
             let null_score = -self.negamax(
                 -beta,
@@ -461,9 +462,17 @@ impl Search {
                     if self.killer_moves[ply.min(127)].contains(&m) {
                         m.score += 5_000;
                     }
-                    // quiet moves get ordered by their history heuristic
-                    m.score += self.history_tables[self.game.current_player()][m.piece()]
-                        [*m.target() as usize];
+                    // quiet moves get ordered by their history and countermove heuristics
+                    m.score += self.history_tables[current_player][m.piece()][m.target()];
+
+                    // the countermove get sorted above the other quiets
+                    if !last_move.is_null() {
+                        let countermove = self.countermove_tables[current_player]
+                            [last_move.piece()][last_move.target()];
+                        if m.start() == countermove.start() && m.target() == countermove.target() {
+                            m.score += 1_000;
+                        }
+                    }
                 }
             });
         // make sure the reported best move is at least legal
@@ -562,17 +571,23 @@ impl Search {
                     pv_node,
                 );
                 if !move_.capture() {
-                    self.history_tables[self.game.current_player()][move_.piece()]
-                        [*move_.target() as usize] += depth * depth;
-                    if self.history_tables[self.game.current_player()][move_.piece()]
-                        [move_.target()]
-                        > 2_000
-                    {
-                        self.history_tables[self.game.current_player()]
+                    // Update History Heuristic tables and scale to below 2000
+                    self.history_tables[current_player][move_.piece()][*move_.target() as usize] +=
+                        depth * depth;
+                    if self.history_tables[current_player][move_.piece()][move_.target()] > 2_000 {
+                        self.history_tables[current_player]
                             .iter_mut()
                             .flatten()
                             .for_each(|h| *h >>= 1);
                     }
+
+                    // Update Countermove Heuristic table with the previous move
+                    if !last_move.is_null() {
+                        self.countermove_tables[current_player][last_move.piece()]
+                            [last_move.target()] = move_;
+                    }
+
+                    // Update Killer Heuristic tables for this ply
                     if move_.promotion() == NoPiece {
                         self.killer_moves.push(move_, ply.min(127));
                     }
