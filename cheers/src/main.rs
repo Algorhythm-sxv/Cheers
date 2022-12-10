@@ -1,10 +1,11 @@
 use cheers_lib::{
     chessgame::ChessGame,
+    hash_tables::TranspositionTable,
     moves::Move,
     search::{
         EngineOptions, Search, ABORT_SEARCH, NODE_COUNT, NPS_COUNT, SEARCH_COMPLETE, TIME_ELAPSED,
     },
-    types::ColorIndex, hash_tables::TranspositionTable,
+    types::ColorIndex,
 };
 
 use std::{
@@ -255,6 +256,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 println!("Invalid value for hash table size");
                             }
                         }
+                        "threads" => {}
                         other => {
                             println!("Unrecognised engine option: {other}")
                         }
