@@ -10,9 +10,9 @@ use ColorIndex::*;
 use PieceIndex::*;
 
 impl ChessGame {
-    pub fn set_from_fen(
+    pub fn set_from_fen<T:AsRef<str>>(
         &mut self,
-        fen: impl Into<String>,
+        fen: T,
     ) -> Result<(), Box<dyn std::error::Error>> {
         *self = Self {
             color_masks: ColorMasks::default(),
@@ -31,7 +31,7 @@ impl ChessGame {
         self.piece_masks = PieceMasks([[BitBoard::empty(); 6]; 2]);
         self.color_masks = ColorMasks([BitBoard::empty(); 2]);
 
-        let fen = fen.into();
+        let fen = fen.as_ref().to_string();
         let mut lines = fen.split(&['/', ' '][..]);
 
         for (i, line) in lines.clone().take(8).enumerate() {
