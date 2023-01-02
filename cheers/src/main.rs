@@ -65,7 +65,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                     options.tt_size_mb = mb;
                     tt.write().unwrap().set_size(mb);
                 }
-                _ => {}
+                uci::UciOption::Threads(_) => {},
+                uci::UciOption::NmpDepth(n) => options.nmp_depth = n,
+                uci::UciOption::NmpReduction(n) => options.nmp_reduction = n,
+                uci::UciOption::SeePruningDepth(n) => options.see_pruning_depth = n,
+                uci::UciOption::SeeCaptureMargin(n) => options.see_capture_margin = n,
+                uci::UciOption::SeeQuietMargin(n) => options.see_quiet_margin = n,
+                uci::UciOption::PvsFulldepth(n) => options.pvs_fulldepth = n,
+                uci::UciOption::DeltaPruningMargin(n) => options.delta_pruning_margin = n,
+                uci::UciOption::FpMargin1(n) => options.fp_margin_1 = n,
+                uci::UciOption::FpMargin2(n) => options.fp_margin_2 = n,
+                uci::UciOption::FpMargin3(n) => options.fp_margin_3 = n,
+                uci::UciOption::RfpMargin(n) => options.rfp_margin = n,
+                uci::UciOption::LmpDepth(n) => options.lmp_depth = n,
+                uci::UciOption::LmpMargin(n) => options.lmp_margin = n,
+                uci::UciOption::IirDepth(n) => options.iir_depth = n,
             },
             uci::UciCommand::UciNewGame => {
                 position.reset();

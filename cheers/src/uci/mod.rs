@@ -8,6 +8,20 @@ mod macros;
 uci_options![
     Hash(Spin<usize> { default: 32, min: 1, max: 32768 }),
     Threads(Spin<usize> { default: 1, min: 1, max: 1 }),
+    NmpDepth(Spin<i32> { default: 2, min: 1, max: 5 }),
+    NmpReduction(Spin<i32> { default: 5, min: 1, max: 10 }),
+    SeePruningDepth(Spin<i32> { default: 6, min: 1, max: 10 }),
+    SeeCaptureMargin(Spin<i32> { default: 59, min: 0, max: 200 }),
+    SeeQuietMargin(Spin<i32> { default: 39, min: 0, max: 100 }),
+    PvsFulldepth(Spin<i32> { default: 1, min: 1, max: 5 }),
+    DeltaPruningMargin(Spin<i32> { default: 91, min: 0, max: 300 }),
+    FpMargin1(Spin<i32> { default: 115, min: 0, max: 300 }),
+    FpMargin2(Spin<i32> { default: 344, min: 0, max: 700 }),
+    FpMargin3(Spin<i32> { default: 723, min: 500, max: 1000 }),
+    RfpMargin(Spin<i32> { default: 106, min: 0, max: 300 }),
+    LmpDepth(Spin<i32> { default: 1, min: 1, max: 5 }),
+    LmpMargin(Spin<i32> { default: 2, min: 1, max: 10 }),
+    IirDepth(Spin<i32> { default: 4, min: 1, max: 10 }),
 ];
 
 pub enum UciCommand {
