@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, Index, IndexMut},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Ord, PartialOrd)]
 pub struct BitBoard(pub u64);
 
 impl BitBoard {
@@ -64,6 +64,11 @@ impl Iterator for BitBoard {
     #[inline(always)]
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.count_ones() as usize, Some(self.count_ones() as usize))
+    }
+
+    #[inline(always)]
+    fn count(self) -> usize {
+        self.count_ones() as usize
     }
 }
 impl ExactSizeIterator for BitBoard {}
@@ -127,6 +132,7 @@ macro_rules! bb_impl_shift {
     ($sh: ident, $fn: ident, $n: ty) => {
         impl std::ops::$sh<$n> for BitBoard {
             type Output = Self;
+            #[inline(always)]
             fn $fn(self, rhs: $n) -> Self::Output {
                 Self(self.0.$fn(rhs))
             }
@@ -137,7 +143,7 @@ macro_rules! bb_impl_shift {
 bb_impl_shift!(Shl, shl, u8);
 bb_impl_shift!(Shr, shr, u8);
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Square(u8);
 
 impl Square {
