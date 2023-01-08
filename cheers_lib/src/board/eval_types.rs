@@ -3,10 +3,10 @@ use std::ops::{Add, AddAssign, Index, IndexMut, Sub};
 #[cfg(feature = "eval-tracing")]
 use bytemuck::{Pod, Zeroable};
 
-use crate::types::PieceIndex;
+use crate::types::Piece;
 use cheers_bitboards::{BitBoard, Square};
 
-use super::EvalTrace;
+use super::eval_params::EvalTrace;
 
 pub struct CoeffArray<T, const N: usize>(pub [T; N]);
 
@@ -106,9 +106,9 @@ impl<T, const N: usize> IndexMut<GamePhase> for [T; N] {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct PieceTables(pub [[[i32; 2]; 64]; 6]);
-impl std::ops::Index<(GamePhase, PieceIndex, Square)> for PieceTables {
+impl std::ops::Index<(GamePhase, Piece, Square)> for PieceTables {
     type Output = i32;
-    fn index(&self, index: (GamePhase, PieceIndex, Square)) -> &Self::Output {
+    fn index(&self, index: (GamePhase, Piece, Square)) -> &Self::Output {
         &self.0[index.1 as usize][index.2][index.0 as usize]
     }
 }
@@ -124,9 +124,9 @@ impl Default for PieceTables {
 #[repr(C)]
 pub struct PieceValues(pub [[i32; 2]; 6]);
 
-impl std::ops::Index<(GamePhase, PieceIndex)> for PieceValues {
+impl std::ops::Index<(GamePhase, Piece)> for PieceValues {
     type Output = i32;
-    fn index(&self, index: (GamePhase, PieceIndex)) -> &Self::Output {
+    fn index(&self, index: (GamePhase, Piece)) -> &Self::Output {
         &self.0[index.1 as usize][index.0 as usize]
     }
 }

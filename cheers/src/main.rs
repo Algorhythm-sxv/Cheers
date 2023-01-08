@@ -1,10 +1,9 @@
 use cheers_lib::{
-    chessgame::ChessGame,
+    board::Board,
     hash_tables::TranspositionTable,
     search::{
         EngineOptions, Search, ABORT_SEARCH, NODE_COUNT, NPS_COUNT, SEARCH_COMPLETE, TIME_ELAPSED,
     },
-    types::ColorIndex,
 };
 
 use std::{
@@ -18,10 +17,11 @@ use std::{
 mod uci;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut position = ChessGame::new();
+    let mut position = Board::new();
     let mut options = EngineOptions::default();
 
-    let mut tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
+    let tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
+    let mut position_history = Vec::new();
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     options.tt_size_mb = mb;
                     tt.write().unwrap().set_size(mb);
                 }
-                uci::UciOption::Threads(_) => {},
+                uci::UciOption::Threads(_) => {}
                 uci::UciOption::NmpDepth(n) => options.nmp_depth = n,
                 uci::UciOption::NmpReduction(n) => options.nmp_reduction = n,
                 uci::UciOption::SeePruningDepth(n) => options.see_pruning_depth = n,
@@ -82,15 +82,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                 uci::UciOption::IirDepth(n) => options.iir_depth = n,
             },
             uci::UciCommand::UciNewGame => {
-                position.reset();
-                tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
+                position = Board::new();
+                // tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
             }
             uci::UciCommand::Position { fen, moves } => {
                 match fen {
-                    Some(fen) => position.set_from_fen(fen).unwrap(),
-                    None => position.reset(),
+                    Some(fen) => position = Board::from_fen(fen).unwrap(),
+                    None => position = Board::new(),
                 }
                 for m in moves {
+                    position_history.push(position.hash());
                     position.make_move(m);
                 }
             }
@@ -107,7 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 perft,
             } => {
                 if let Some(depth) = perft {
-                    position.divide(depth);
+                    position.perft(depth);
                     continue;
                 }
                 let movetime = if infinite {
@@ -117,14 +118,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                         Some(time) => Some((time, time)),
                         None => match movestogo {
                             Some(n) => {
-                                if position.current_player() == ColorIndex::White {
+                                if position.current_player() != 0 {
                                     Some((wtime.unwrap() / n, wtime.unwrap() / n))
                                 } else {
                                     Some((btime.unwrap() / n, btime.unwrap() / n))
                                 }
                             }
                             None => {
-                                if position.current_player() == ColorIndex::White {
+                                if position.current_player() != 0 {
                                     move_time(wtime, winc)
                                 } else {
                                     move_time(btime, binc)
@@ -136,6 +137,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let mut search = Search::new_with_tt(position.clone(), tt.clone())
                     .tt_size_mb(options.tt_size_mb)
+                    .position_history(position_history.clone())
                     .max_nodes(nodes)
                     .max_depth(depth)
                     .options(options)
@@ -144,6 +146,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let _ = thread::spawn(move || engine_thread(search).unwrap());
             }
+            uci::UciCommand::Fen => println!("{}", position.fen()),
             uci::UciCommand::Stop => ABORT_SEARCH.store(true, Ordering::Relaxed),
             uci::UciCommand::Quit => {
                 ABORT_SEARCH.store(true, Ordering::Relaxed);

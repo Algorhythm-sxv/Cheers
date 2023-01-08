@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use cheers_lib::{chessgame::ChessGame, moves::Move};
+use cheers_lib::{board::Board, moves::Move};
 
 #[macro_use]
 mod macros;
@@ -45,6 +45,7 @@ pub enum UciCommand {
         infinite: bool,
         perft: Option<usize>,
     },
+    Fen,
     Stop,
     Quit,
 }
@@ -244,32 +245,33 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                 }
                 "ucinewgame" => Ok(UciNewGame),
                 "position" => {
-                    let mut test = ChessGame::new();
+                    let mut test = Board::new();
                     let (startpos, fen) = match words.get(1) {
-                    Some(&"startpos") => (true, None),
-                    Some(&"fen") => {
-                        match words.get(2..=7) {
-                            Some(fen) => {
-                                let fen = fen.join(" ");
-                                match test.set_from_fen(&fen) {
-                                    Err(e) => return Err(UciParseError::Other(format!("Invalid FEN string in UCI position command: {}\n\t{}", fen, e))),
-                                    Ok(_) => {},
+                        Some(&"startpos") => (true, None),
+                        Some(&"fen") => {
+                            match words.get(2..=7) {
+                                Some(fen) => {
+                                    let fen = fen.join(" ");
+                                    let new = Board::from_fen(&fen);
+                                    match new {
+                                        None => return Err(UciParseError::Other(format!("Invalid FEN string in UCI position command: {}", fen))),
+                                        Some(b) => test = b,
+                                    }
+                                    (false, Some(fen))
                                 }
-                                (false, Some(fen))
+                                None => {
+                                    return Err(UciParseError::Other(format!("Incomplete or missing FEN string in UCI position command")))
+                                }
                             }
-                            None => {
-                                return Err(UciParseError::Other(format!("Incomplete or missing FEN string in UCI position command")))
-                            }
-                        }
 
-                    },
-                    Some(p) => return Err(UciParseError::Other(format!(
-                                "Invalid argument in UCI position command: {}\n\t \
-                                Valid arguments are: 'startpos', 'fen [FEN]'", p))),
-                    None => return Err(
-                        UciParseError::Other(format!(
-                                "Missing arguments in UCI position command, expected 'startpos' or 'fen'")))
-                };
+                        },
+                        Some(p) => return Err(UciParseError::Other(format!(
+                                    "Invalid argument in UCI position command: {}\n\t \
+                                    Valid arguments are: 'startpos', 'fen [FEN]'", p))),
+                        None => return Err(
+                            UciParseError::Other(format!(
+                                    "Missing arguments in UCI position command, expected 'startpos' or 'fen'")))
+                    };
                     let moves_index = if startpos { 2 } else { 8 };
                     let moves = match words.get(moves_index) {
                         Some(&"moves") => match words.get((moves_index + 1)..) {
@@ -277,8 +279,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                 let mut checked_moves = Vec::new();
                                 for move_string in moves {
                                     if test
-                                        .legal_moves()
-                                        .inner()
+                                        .legal_move_list()
                                         .iter()
                                         .map(|m| m.coords())
                                         .find(|m| m == move_string)
@@ -371,6 +372,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                         perft,
                     })
                 }
+                "fen" => Ok(Fen),
                 "stop" => Ok(Stop),
                 "quit" => Ok(Quit),
                 other => Err(UciParseError::Other(format!(

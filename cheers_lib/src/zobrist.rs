@@ -1,27 +1,58 @@
-use crate::types::{CastlingRights, ColorIndex, PieceIndex};
-use cheers_bitboards::{BitBoard, Square};
+use crate::types::*;
+use cheers_bitboards::*;
+use cheers_pregen::*;
 
-use cheers_pregen::ZOBRIST_NUMBERS;
-
-pub fn zobrist_piece(piece: PieceIndex, color: ColorIndex, square: Square) -> u64 {
+#[inline(always)]
+pub fn zobrist_piece<T: TypeColor>(piece: Piece, square: Square) -> u64 {
+    let color_offset = if T::WHITE { 0 } else { 64 };
+    #[cfg(debug_assertions)]
+    {
+        ZOBRIST_NUMBERS[64 * 2 * piece as usize + color_offset + *square as usize]
+    }
+    #[cfg(not(debug_assertions))]
     unsafe {
-        *ZOBRIST_NUMBERS
-            .get_unchecked(64 * 2 * (piece as usize) + 64 * (color as usize) + *square as usize)
+        *ZOBRIST_NUMBERS.get_unchecked(64 * 2 * piece as usize + color_offset + *square as usize)
     }
 }
 
+#[inline(always)]
 pub fn zobrist_player() -> u64 {
-    unsafe { *ZOBRIST_NUMBERS.get_unchecked(64 * 6 * 2) }
+    #[cfg(debug_assertions)]
+    {
+        ZOBRIST_NUMBERS[64 * 6 * 2]
+    }
+    #[cfg(not(debug_assertions))]
+    unsafe {
+        *ZOBRIST_NUMBERS.get_unchecked(64 * 6 * 2)
+    }
 }
 
-pub fn zobrist_castling(rights: CastlingRights) -> u64 {
-    let index = (rights.0[0][0] as usize)
-        + ((rights.0[0][1] as usize) << 1)
-        + ((rights.0[1][0] as usize) << 2)
-        + ((rights.0[1][1] as usize) << 3);
-    unsafe { *ZOBRIST_NUMBERS.get_unchecked(64 * 6 * 2 + 1 + index) }
+#[inline(always)]
+pub fn zobrist_castling(rights: [[BitBoard; 2]; 2]) -> u64 {
+    let index: usize = rights
+        .iter()
+        .flatten()
+        .enumerate()
+        .map(|(i, b)| (b.is_not_empty() as usize) << i)
+        .sum();
+    #[cfg(debug_assertions)]
+    {
+        ZOBRIST_NUMBERS[64 * 6 * 2 + 1 + index]
+    }
+    #[cfg(not(debug_assertions))]
+    unsafe {
+        *ZOBRIST_NUMBERS.get_unchecked(64 * 6 * 2 + 1 + index)
+    }
 }
 
-pub fn zobrist_enpassent(mask: BitBoard) -> u64 {
-    unsafe { *ZOBRIST_NUMBERS.get_unchecked(64 * 6 * 2 + 1 + 16 + mask.first_square().file()) }
+#[inline(always)]
+pub fn zobrist_ep(mask: BitBoard) -> u64 {
+    #[cfg(debug_assertions)]
+    {
+        ZOBRIST_NUMBERS[64 * 6 * 2 + 1 + 16 + mask.first_square().file()]
+    }
+    #[cfg(not(debug_assertions))]
+    unsafe {
+        *ZOBRIST_NUMBERS.get_unchecked(64 * 6 * 2 + 1 + 16 + mask.first_square().file())
+    }
 }

@@ -3,7 +3,7 @@ use std::ops::Index;
 use crate::{
     lookup_tables::*,
     moves::Move,
-    types::{CastlingIndex::*, ColorIndex::*, PieceIndex::*},
+    types::{CastlingIndex::*, ColorIndex::*, Piece::*},
 };
 use cheers_bitboards::*;
 

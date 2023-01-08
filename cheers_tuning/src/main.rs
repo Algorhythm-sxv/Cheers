@@ -3,7 +3,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{prelude::*, stdout, BufWriter};
 use std::{io::BufReader, path::PathBuf};
 
-use cheers_lib::chessgame::{EvalParams, EVAL_PARAMS};
+use cheers_lib::board::evaluate::{EVAL_PARAMS, EvalParams};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use pgn_reader::BufferedReader;

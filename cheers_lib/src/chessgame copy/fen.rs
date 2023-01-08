@@ -3,11 +3,11 @@ use cheers_bitboards::BitBoard;
 use super::ChessGame;
 use crate::{
     moves::coord,
-    types::{CastlingIndex, CastlingRights, ColorIndex, ColorMasks, PieceIndex, PieceMasks},
+    types::{CastlingIndex, CastlingRights, ColorIndex, ColorMasks, Piece, PieceMasks},
 };
 use CastlingIndex::*;
 use ColorIndex::*;
-use PieceIndex::*;
+use Piece::*;
 
 impl ChessGame {
     pub fn set_from_fen<T:AsRef<str>>(

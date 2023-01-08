@@ -1,40 +1,37 @@
-use crate::{
-    lookup_tables::{lookup_bishop, lookup_rook},
-    moves::Move,
-    types::{ColorIndex::*, PieceIndex::*, PIECES},
-};
+use crate::lookup_tables::*;
+use crate::moves::*;
+use crate::types::*;
 
-use super::ChessGame;
+use Piece::*;
 
-pub const SEE_PIECE_VALUES: [i32; 7] = [100, 300, 300, 500, 900, 20000, 0];
-impl ChessGame {
-    pub fn see(&self, move_: Move) -> i32 {
-        let target = move_.target();
+use super::Board;
+
+pub const SEE_PIECE_VALUES: [i32; 6] = [100, 300, 300, 500, 900, 200000];
+impl Board {
+    pub fn see(&self, mv: Move) -> i32 {
+        let target = mv.to;
         let mut swap_list = [0i32; 32];
 
-        let mut current_attacker = move_.piece();
-        let mut attacker_mask = move_.start().bitboard();
+        let mut current_attacker = mv.piece;
+        let mut attacker_mask = mv.from.bitboard();
 
-        let bishops = self.piece_masks[(White, Bishop)]
-            | self.piece_masks[(Black, Bishop)]
-            | self.piece_masks[(White, Queen)]
-            | self.piece_masks[(Black, Queen)];
+        let bishops =
+            self.white_bishops | self.black_bishops | self.white_queens | self.black_queens;
 
-        let rooks = self.piece_masks[(White, Rook)]
-            | self.piece_masks[(Black, Rook)]
-            | self.piece_masks[(White, Queen)]
-            | self.piece_masks[(Black, Queen)];
+        let rooks = self.white_rooks | self.black_rooks | self.white_queens | self.black_queens;
 
         // simulate the first capture
-        swap_list[0] = SEE_PIECE_VALUES[self.piece_at(target)];
-        let mut occupied = self.combined;
-        let mut color = !self.current_player;
+        swap_list[0] = match self.piece_on(target) {
+            Some(p) => SEE_PIECE_VALUES[p],
+            None => 0,
+        };
+        let mut occupied = self.occupied;
+        let mut color = !self.black_to_move;
 
         // correct for en passent capture
-        if move_.en_passent() {
+        if mv.piece == Pawn && mv.to.bitboard() == self.ep_mask {
             // shift the pawn back to the normal square for en passent
-            occupied ^= self.en_passent_mask
-                | (self.en_passent_mask >> 8 << 16 * (self.current_player as u8));
+            occupied ^= self.ep_mask | (self.ep_mask >> 8 << 16 * (self.black_to_move as u8));
             swap_list[0] = SEE_PIECE_VALUES[Pawn];
         }
 
@@ -66,11 +63,28 @@ impl ChessGame {
                 break;
             }
             for p in PIECES {
-                if (attackers & self.piece_masks[(color, p)]).is_not_empty() {
+                let mask = if color {
+                    match p {
+                        Pawn => self.black_pawns,
+                        Knight => self.black_knights,
+                        Bishop => self.black_bishops,
+                        Rook => self.black_rooks,
+                        Queen => self.black_queens,
+                        King => self.black_king,
+                    }
+                } else {
+                    match p {
+                        Pawn => self.white_pawns,
+                        Knight => self.white_knights,
+                        Bishop => self.white_bishops,
+                        Rook => self.white_rooks,
+                        Queen => self.white_queens,
+                        King => self.white_king,
+                    }
+                };
+                if (attackers & mask).is_not_empty() {
                     current_attacker = p;
-                    attacker_mask = (attackers & self.piece_masks[(color, p)])
-                        .first_square()
-                        .bitboard();
+                    attacker_mask = (attackers & mask).first_square().bitboard();
                     break;
                 }
             }
@@ -93,7 +107,7 @@ impl ChessGame {
 mod tests {
     use std::error::Error;
 
-    use crate::{chessgame::ChessGame, moves::Move};
+    use crate::{board::Board, moves::Move};
 
     #[test]
     fn test_see() -> Result<(), Box<dyn Error>> {
@@ -121,8 +135,7 @@ mod tests {
             ("8/8/8/2pk4/3P4/4P3/8/4K3 b - - 0 1", "c5d4", 100),
         ];
         for (fen, move_, score) in test_cases {
-            let mut game = ChessGame::new();
-            game.set_from_fen(fen)?;
+            let game = Board::from_fen(fen).unwrap();
             assert_eq!(game.see(Move::from_pair(&game, move_)), score);
         }
         Ok(())

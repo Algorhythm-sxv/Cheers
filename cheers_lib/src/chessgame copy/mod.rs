@@ -6,7 +6,7 @@ use crate::{
         CastlingRights, ColorIndex,
         ColorIndex::*,
         ColorMasks,
-        PieceIndex::{self, *},
+        Piece::{self, *},
         PieceMasks,
     },
     zobrist::*,
@@ -107,7 +107,7 @@ impl ChessGame {
     }
 
     #[inline]
-    pub fn piece_at(&self, square: Square) -> PieceIndex {
+    pub fn piece_at(&self, square: Square) -> Piece {
         let test = square.bitboard();
         if (self.combined & test).is_empty() {
             NoPiece

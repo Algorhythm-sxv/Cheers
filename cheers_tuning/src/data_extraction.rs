@@ -23,7 +23,7 @@ impl GameResult {
         }
     }
 }
-use cheers_lib::{chessgame::ChessGame, moves::Move, types::PieceIndex};
+use cheers_lib::{board::Board, moves::Move, types::Piece};
 use pgn_reader::*;
 use GameResult::*;
 
@@ -40,7 +40,7 @@ impl ToString for GameResult {
 
 pub struct FENWriter {
     move_counter: usize,
-    game: ChessGame,
+    game: Board,
     game_result: GameResult,
     fen_list: Vec<String>,
 }
@@ -49,13 +49,13 @@ impl FENWriter {
     pub fn new() -> Self {
         Self {
             move_counter: 0,
-            game: ChessGame::new(),
+            game: Board::new(),
             game_result: GameResult::Draw,
             fen_list: Vec::new(),
         }
     }
     fn reset(&mut self) {
-        self.game.reset();
+        self.game = Board::new();
         self.game_result = Draw;
         self.fen_list.clear();
         self.move_counter = 0;
@@ -113,57 +113,54 @@ impl Visitor for FENWriter {
     }
 }
 
-fn san_to_move(san: San, game: &ChessGame) -> Option<Move> {
-    let mut candidates = game.legal_moves().inner().to_vec();
+fn san_to_move(san: San, game: &Board) -> Option<Move> {
+    let mut candidates = game.legal_move_list();
     candidates.retain(|m| match san {
         San::Normal {
             role,
             file,
             rank,
-            capture,
+            capture: _,
             to,
             promotion,
         } => {
             let correct_file = if let Some(f) = file {
-                f as usize == m.start().file()
+                f as usize == m.from.file()
             } else {
                 true
             };
             let correct_rank = if let Some(r) = rank {
-                r as usize == m.start().rank()
+                r as usize == m.from.rank()
             } else {
                 true
             };
-            compare_roles(m.piece(), role)
-                && m.target() == (to as u8).into()
-                && m.capture() == capture
+            compare_roles(m.piece, role)
+                && m.to == (to as u8).into()
                 && correct_file
                 && correct_rank
                 && promotion
-                    .map(|p| compare_roles(m.promotion(), p))
+                    .map(|p| compare_roles(m.promotion, p))
                     .unwrap_or(true)
         }
         San::Castle(side) => {
-            m.castling()
-                && m.target().file()
-                    == match side {
-                        CastlingSide::KingSide => 6,
-                        CastlingSide::QueenSide => 2,
-                    }
+            m.to.file()
+                == match side {
+                    CastlingSide::KingSide => 6,
+                    CastlingSide::QueenSide => 2,
+                }
         }
         _ => false,
     });
     candidates.pop()
 }
 
-fn compare_roles(piece_index: PieceIndex, role: Role) -> bool {
+fn compare_roles(piece_index: Piece, role: Role) -> bool {
     match piece_index {
-        PieceIndex::Pawn => role == Role::Pawn,
-        PieceIndex::Knight => role == Role::Knight,
-        PieceIndex::Bishop => role == Role::Bishop,
-        PieceIndex::Rook => role == Role::Rook,
-        PieceIndex::Queen => role == Role::Queen,
-        PieceIndex::King => role == Role::King,
-        PieceIndex::NoPiece => unreachable!(),
+        Piece::Pawn => role == Role::Pawn,
+        Piece::Knight => role == Role::Knight,
+        Piece::Bishop => role == Role::Bishop,
+        Piece::Rook => role == Role::Rook,
+        Piece::Queen => role == Role::Queen,
+        Piece::King => role == Role::King,
     }
 }

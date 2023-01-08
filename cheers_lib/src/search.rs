@@ -3,18 +3,17 @@ use std::time::Instant;
 use std::{fmt::Display, sync::atomic::*};
 
 use cheers_pregen::LMR;
+use eval_params::{EvalParams, CHECKMATE_SCORE, DRAW_SCORE, EVAL_PARAMS};
 
-use crate::chessgame::movegen::{All, Captures, MoveList};
-use crate::chessgame::see::SEE_PIECE_VALUES;
-use crate::hash_tables::{NodeType::*, PawnHashTable, TranspositionTable};
-use crate::moves::{pick_move, KillerMoves};
 use crate::{
-    chessgame::{
+    board::{
         eval_types::{GamePhase::*, TraceTarget},
+        see::SEE_PIECE_VALUES,
         *,
     },
-    moves::Move,
-    types::PieceIndex::*,
+    hash_tables::{NodeType::*, PawnHashTable, TranspositionTable},
+    moves::{KillerMoves, Move, MoveList},
+    types::Piece::*,
 };
 
 pub static ABORT_SEARCH: AtomicBool = AtomicBool::new(false);
@@ -111,7 +110,8 @@ impl Default for EngineOptions {
 
 #[derive(Clone)]
 pub struct Search {
-    pub game: ChessGame,
+    pub game: Board,
+    pub position_history: Vec<u64>,
     pub move_lists: Vec<MoveList>,
     pub seldepth: usize,
     transposition_table: Arc<RwLock<TranspositionTable>>,
@@ -129,9 +129,10 @@ pub struct Search {
 }
 
 impl Search {
-    pub fn new(game: ChessGame) -> Self {
+    pub fn new(game: Board) -> Self {
         Self {
             game,
+            position_history: Vec::new(),
             move_lists: vec![MoveList::new(); 128],
             seldepth: 0,
             transposition_table: Arc::new(RwLock::new(TranspositionTable::new(0))),
@@ -149,9 +150,10 @@ impl Search {
         }
     }
 
-    pub fn new_with_tt(game: ChessGame, tt: Arc<RwLock<TranspositionTable>>) -> Self {
+    pub fn new_with_tt(game: Board, tt: Arc<RwLock<TranspositionTable>>) -> Self {
         Self {
             game,
+            position_history: Vec::new(),
             move_lists: vec![MoveList::new(); 128],
             seldepth: 0,
             transposition_table: tt,
@@ -175,6 +177,11 @@ impl Search {
             .unwrap()
             .set_size(tt_size_mb);
         self.pawn_hash_table = PawnHashTable::new(tt_size_mb / 8);
+        self
+    }
+
+    pub fn position_history(mut self, position_history: Vec<u64>) -> Self {
+        self.position_history = position_history;
         self
     }
 
@@ -331,7 +338,7 @@ impl Search {
 
         let current_player = self.game.current_player();
         // check extension before quiescence
-        let in_check = self.game.in_check(current_player);
+        let in_check = self.game.in_check();
         if in_check {
             depth += 1;
         }
@@ -353,8 +360,7 @@ impl Search {
         // check 50 move and repetition draws
         if self.game.halfmove_clock() == 100
             || self
-                .game
-                .position_history()
+                .position_history
                 .iter()
                 .filter(|&&p| p == self.game.hash())
                 .count()
@@ -401,16 +407,13 @@ impl Search {
                 return score;
             }
 
-            tt_move = Move::new(
-                tt_entry.move_start,
-                tt_entry.move_target,
-                self.game.piece_at(tt_entry.move_start),
-                tt_entry.promotion,
-                tt_entry.en_passent_capture || self.game.piece_at(tt_entry.move_target) != NoPiece,
-                tt_entry.double_pawn_push,
-                tt_entry.en_passent_capture,
-                tt_entry.castling,
-            );
+            tt_move = Move {
+                // TT moves are verified so fallinbg back to pawn is safe
+                piece: self.game.piece_on(tt_entry.move_from).unwrap_or(Pawn),
+                from: tt_entry.move_from,
+                to: tt_entry.move_to,
+                promotion: tt_entry.promotion,
+            };
         }
 
         // IIR: reduce the depth if no TT move is found
@@ -444,6 +447,8 @@ impl Search {
             && !in_check
             && self.game.has_non_pawn_material(current_player)
         {
+            self.position_history.push(self.game.hash());
+            let old = self.game;
             self.game.make_null_move();
             let null_score = -self.negamax(
                 -beta,
@@ -454,7 +459,8 @@ impl Search {
                 &mut line,
                 tt,
             );
-            self.game.unmake_null_move();
+            self.game = old;
+            self.position_history.pop();
 
             if null_score >= beta {
                 return null_score;
@@ -462,7 +468,7 @@ impl Search {
         }
 
         self.game
-            .generate_legal_moves::<All>(&mut self.move_lists[ply]);
+            .generate_legal_moves_into(&mut self.move_lists[ply]);
 
         if self.move_lists[ply].is_empty() {
             // exact score, so we must reset the pv
@@ -481,11 +487,11 @@ impl Search {
             .iter_mut()
             .for_each(|mut m| {
                 // try the transposition table move early
-                if m.start() == tt_move.start() && m.target() == tt_move.target() {
+                if m.mv.from == tt_move.from && m.mv.to == tt_move.to {
                     m.score += 100_000;
-                } else if m.capture() {
+                } else if self.game.piece_on(m.mv.to).is_some() {
                     // winning captures first, then equal, then quiets, then losing
-                    let see = self.game.see(*m);
+                    let see = self.game.see(m.mv);
                     if see < 0 {
                         m.score -= 50_000 - see;
                     } else {
@@ -493,35 +499,34 @@ impl Search {
                     }
                 }
                 // order queen and rook promotions ahead of quiet moves
-                else if m.promotion() == Queen || m.promotion() == Rook {
-                    m.score += 20_000 + EVAL_PARAMS.piece_values[(Midgame, m.promotion())];
+                else if m.mv.promotion == Queen || m.mv.promotion == Rook {
+                    m.score += 20_000 + EVAL_PARAMS.piece_values[(Midgame, m.mv.promotion)];
                 } else {
                     // quiet killer moves get sorted aove the other quiets
-                    if self.killer_moves[ply.min(127)].contains(&m) {
+                    if self.killer_moves[ply.min(127)].contains(&m.mv) {
                         m.score += 6_000;
                     }
                     // the countermove get sorted above the other quiets
                     if !last_move.is_null() {
-                        let countermove = self.countermove_tables[current_player]
-                            [last_move.piece()][last_move.target()];
-                        if m.start() == countermove.start() && m.target() == countermove.target() {
+                        let countermove =
+                            self.countermove_tables[current_player][last_move.piece][last_move.to];
+                        if m.mv.from == countermove.from && m.mv.to == countermove.to {
                             m.score += 3_000;
                         }
                     }
 
                     // all quiets are sorted with their history heuristic
-                    m.score += self.history_tables[current_player][m.piece()][m.target()];
+                    m.score += self.history_tables[current_player][m.mv.piece][m.mv.to];
                 }
             });
         // make sure the reported best move is at least legal
-        let mut best_move = *self.move_lists[ply].inner().first().unwrap();
+        let mut best_move = self.move_lists[ply][0];
 
         let old_alpha = alpha;
         for i in 0..self.move_lists[ply].len() {
-            pick_move(self.move_lists[ply].inner_mut(), i);
-            let move_ = self.move_lists[ply][i];
+            let (mv, _) = self.move_lists[ply].pick_move(i);
 
-            let capture = move_.capture();
+            let capture = self.game.piece_on(mv.to).is_some();
 
             // Late Move Pruning: skip quiet moves ordered late
             if !pv_node
@@ -538,14 +543,10 @@ impl Search {
             }
 
             // SEE pruning
-            if depth < self.options.see_pruning_depth
-                && ply != 0
-                && i > 0
-                && move_.promotion() == NoPiece
-            {
-                let see = self.game.see(move_);
+            if depth < self.options.see_pruning_depth && ply != 0 && i > 0 && mv.promotion == Pawn {
+                let see = self.game.see(mv);
                 let depth_margin = depth
-                    * if move_.capture() {
+                    * if capture {
                         self.options.see_capture_margin
                     } else {
                         self.options.see_quiet_margin
@@ -555,7 +556,9 @@ impl Search {
                 }
             }
 
-            self.game.make_move(move_);
+            let old = self.game;
+            self.position_history.push(self.game.hash());
+            self.game.make_move(mv);
             let mut score = MINUS_INF;
             // reduced-depth null-window search on most moves outside of PV nodes
             let full_depth = if depth > self.options.pvs_fulldepth && i > 0 && ply != 0 {
@@ -564,7 +567,7 @@ impl Search {
                     let mut r = 0;
 
                     // Late Move Reduction (LMR)
-                    if !move_.capture() && move_.promotion() != Queen && !in_check {
+                    if !capture && mv.promotion != Queen && !in_check {
                         r += LMR[(depth as usize).min(31)][i.min(31)]
                     }
 
@@ -577,7 +580,7 @@ impl Search {
                     -alpha,
                     reduced_depth,
                     ply + 1,
-                    move_,
+                    mv,
                     &mut line,
                     tt,
                 );
@@ -588,19 +591,21 @@ impl Search {
 
             // full-depth null-window search on reduced moves that improved alpha, later moves or non-pv nodes
             if full_depth {
-                score = -self.negamax(-alpha - 1, -alpha, depth - 1, ply + 1, move_, &mut line, tt);
+                score = -self.negamax(-alpha - 1, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
             }
 
             // full-depth, full-window search on first move in PV nodes and reduced moves that improve alpha
             if pv_node && (i == 0 || (score > alpha && score < beta)) {
-                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, move_, &mut line, tt);
+                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
             }
 
-            self.game.unmake_move();
+            self.game = old;
+            self.position_history.pop();
+
             if score >= beta {
                 tt.set(
                     self.game.hash(),
-                    move_,
+                    mv,
                     depth as i8,
                     if score > CHECKMATE_SCORE - 500 {
                         score + ply as i32
@@ -612,11 +617,10 @@ impl Search {
                     LowerBound,
                     pv_node,
                 );
-                if !move_.capture() {
+                if !capture {
                     // Update History Heuristic tables and scale to below 2000
-                    self.history_tables[current_player][move_.piece()][*move_.target() as usize] +=
-                        depth * depth;
-                    if self.history_tables[current_player][move_.piece()][move_.target()] > 2_000 {
+                    self.history_tables[current_player][mv.piece][mv.to] += depth * depth;
+                    if self.history_tables[current_player][mv.piece][mv.to] > 2_000 {
                         self.history_tables[current_player]
                             .iter_mut()
                             .flatten()
@@ -625,25 +629,24 @@ impl Search {
 
                     // Update Countermove Heuristic table with the previous move
                     if !last_move.is_null() {
-                        self.countermove_tables[current_player][last_move.piece()]
-                            [last_move.target()] = move_;
+                        self.countermove_tables[current_player][last_move.piece][last_move.to] = mv;
                     }
 
                     // Update Killer Heuristic tables for this ply
-                    if move_.promotion() == NoPiece {
-                        self.killer_moves.push(move_, ply.min(127));
+                    if mv.promotion == Pawn {
+                        self.killer_moves.push(mv, ply.min(127));
                     }
                 }
                 return score;
             }
             if score > alpha {
                 // update PV
-                pv.moves[0] = move_;
+                pv.moves[0] = mv;
                 pv.moves[1..((line.len + 1).min(PV_MAX_LEN))]
                     .copy_from_slice(&line.moves[..(line.len).min(PV_MAX_LEN - 1)]);
                 pv.len = (line.len + 1).min(PV_MAX_LEN);
                 alpha = score;
-                best_move = move_;
+                best_move = mv;
             }
         }
         tt.set(
@@ -737,36 +740,31 @@ impl Search {
                     // TT isn't used in tracing eval so we can return a blank trace
                     return (score, T::default());
                 }
-                tt_move = Move::new(
-                    tt_entry.move_start,
-                    tt_entry.move_target,
-                    self.game.piece_at(tt_entry.move_start),
-                    tt_entry.promotion,
-                    tt_entry.en_passent_capture
-                        || self.game.piece_at(tt_entry.move_target) != NoPiece,
-                    tt_entry.double_pawn_push,
-                    tt_entry.en_passent_capture,
-                    tt_entry.castling,
-                );
+                tt_move = Move {
+                    piece: self.game.piece_on(tt_entry.move_from).unwrap_or(Pawn),
+                    from: tt_entry.move_from,
+                    to: tt_entry.move_to,
+                    promotion: tt_entry.promotion,
+                };
             }
         }
         self.game
-            .generate_legal_moves::<Captures>(&mut self.move_lists[ply]);
+            .generate_legal_captures_into(&mut self.move_lists[ply]);
         self.move_lists[ply].inner_mut().iter_mut().for_each(|m| {
             // try the transposition table move early
-            if m.start() == tt_move.start() && m.target() == tt_move.target() {
+            if m.mv.from == tt_move.from && m.mv.to == tt_move.to {
                 m.score += 10_000;
             }
 
             // Delta pruning: if this capture immediately falls short by some margin, skip it
             if stand_pat_score
-                + SEE_PIECE_VALUES[self.game.piece_at(m.target())]
+                + SEE_PIECE_VALUES[self.game.piece_on(m.mv.to).unwrap_or(Pawn)]
                 + self.options.delta_pruning_margin
                 <= alpha
             {
                 m.score = -1000;
             } else {
-                let see = self.game.see(*m);
+                let see = self.game.see(m.mv);
                 if see < 0 {
                     // SEE pruning: skip all moves with negative SEE
                     m.score -= 2000 - see
@@ -780,24 +778,26 @@ impl Search {
         let old_alpha = alpha;
         let mut best_move = Move::null();
         for i in 0..self.move_lists[ply].len() {
-            pick_move(self.move_lists[ply].inner_mut(), i);
-            let move_ = self.move_lists[ply][i];
+            let (mv, score) = self.move_lists[ply].pick_move(i);
 
             // once we hit the first pruned move, skip all the rest
-            if move_.score < 0 {
+            if score < 0 {
                 break;
             }
 
-            self.game.make_move(move_);
+            let old = self.game;
+            self.position_history.push(self.game.hash());
+            self.game.make_move(mv);
             let (mut score, trace) =
-                self.quiesce_impl::<T>(-beta, -alpha, ply + 1, move_, eval_params, tt);
+                self.quiesce_impl::<T>(-beta, -alpha, ply + 1, mv, eval_params, tt);
             score = -score;
-            self.game.unmake_move();
+            self.game = old;
+            self.position_history.pop();
             if score >= beta {
                 if !T::TRACING {
                     tt.set(
                         self.game.hash(),
-                        move_,
+                        mv,
                         -1,
                         if score > CHECKMATE_SCORE - 500 {
                             score + ply as i32
@@ -815,7 +815,7 @@ impl Search {
             if score > alpha {
                 alpha = score;
                 best_trace = trace;
-                best_move = move_;
+                best_move = mv;
             }
         }
         if !T::TRACING {

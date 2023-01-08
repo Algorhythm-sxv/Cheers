@@ -143,6 +143,46 @@ macro_rules! bb_impl_shift {
 bb_impl_shift!(Shl, shl, u8);
 bb_impl_shift!(Shr, shr, u8);
 
+mod consts {
+    use super::BitBoard;
+
+    pub const NOT_A_FILE: BitBoard = BitBoard(!0x0101010101010101);
+    pub const NOT_A_B_FILES: BitBoard = BitBoard(!0x0303030303030303);
+    pub const NOT_H_FILE: BitBoard = BitBoard(!0x8080808080808080);
+    pub const NOT_G_H_FILES: BitBoard = BitBoard(!0xC0C0C0C0C0C0C0C0);
+
+    // masks for ranks/files
+    pub const A_FILE: BitBoard = BitBoard(0x0101010101010101);
+    pub const B_FILE: BitBoard = BitBoard(0x0202020202020202);
+    pub const C_FILE: BitBoard = BitBoard(0x0404040404040404);
+    pub const D_FILE: BitBoard = BitBoard(0x0808080808080808);
+    pub const E_FILE: BitBoard = BitBoard(0x1010101010101010);
+    pub const F_FILE: BitBoard = BitBoard(0x2020202020202020);
+    pub const G_FILE: BitBoard = BitBoard(0x4040404040404040);
+    pub const H_FILE: BitBoard = BitBoard(0x8080808080808080);
+
+    pub const FILES: [BitBoard; 8] = [
+        A_FILE, B_FILE, C_FILE, D_FILE, E_FILE, F_FILE, G_FILE, H_FILE,
+    ];
+
+    pub const FIRST_RANK: BitBoard = BitBoard(0x00000000000000FF);
+    pub const SECOND_RANK: BitBoard = BitBoard(0x000000000000FF00);
+    pub const THIRD_RANK: BitBoard = BitBoard(0x0000000000FF0000);
+    pub const FOURTH_RANK: BitBoard = BitBoard(0x00000000FF000000);
+    pub const FIFTH_RANK: BitBoard = BitBoard(0x000000FF00000000);
+    pub const SIXTH_RANK: BitBoard = BitBoard(0x0000FF0000000000);
+    pub const SEVENTH_RANK: BitBoard = BitBoard(0x00FF000000000000);
+    pub const EIGHTH_RANK: BitBoard = BitBoard(0xFF00000000000000);
+
+    pub const LIGHT_SQUARES: BitBoard = BitBoard(0x5555555555555555);
+    pub const DARK_SQUARES: BitBoard = BitBoard(0xAAAAAAAAAAAAAAAA);
+
+    pub const FULL_BOARD: BitBoard = BitBoard(0xFFFFFFFFFFFFFFFF);
+
+    pub const LONG_DIAGONALS: BitBoard = BitBoard(0x8142241818244281);
+}
+pub use self::consts::*;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Square(u8);
 
@@ -231,6 +271,41 @@ impl Square {
     #[inline(always)]
     pub fn offset(&self, file: i8, rank: i8) -> Self {
         Self((self.0 as i8 + rank * 8 + file) as u8)
+    }
+
+    pub fn coord(&self) -> String {
+        let mut res = String::new();
+        let file = match self.file() {
+            0 => "a",
+            1 => "b",
+            2 => "c",
+            3 => "d",
+            4 => "e",
+            5 => "f",
+            6 => "g",
+            7 => "h",
+            _ => unreachable!(),
+        };
+        res += file;
+        res.push_str(&(self.rank() + 1).to_string());
+        res
+    }
+
+    pub fn from_coord<T: AsRef<str>>(coord: T) -> Self {
+        let coord = coord.as_ref();
+        let file = match coord.chars().nth(0) {
+            Some('a') => 0,
+            Some('b') => 1,
+            Some('c') => 2,
+            Some('d') => 3,
+            Some('e') => 4,
+            Some('f') => 5,
+            Some('g') => 6,
+            Some('h') => 7,
+            _ => unreachable!(),
+        };
+        let rank = coord.chars().nth(1).unwrap().to_digit(10).unwrap() as u8 - 1;
+        Self(rank * 8 + file)
     }
 }
 

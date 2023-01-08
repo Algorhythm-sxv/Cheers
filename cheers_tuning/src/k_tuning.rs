@@ -1,4 +1,5 @@
-use cheers_lib::chessgame::EVAL_PARAMS;
+
+use cheers_lib::board::evaluate::EVAL_PARAMS;
 
 use crate::calculate_error::{calculate_error, TuningEntry};
 

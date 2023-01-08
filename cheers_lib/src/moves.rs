@@ -1,241 +1,67 @@
 use std::{fmt::Display, ops::Index};
 
-use crate::{
-    chessgame::ChessGame,
-    types::{CastlingRights, PieceIndex, PieceIndex::*},
-};
-use cheers_bitboards::{BitBoard, Square};
+use crate::{board::Board, types::*};
+use Piece::*;
 
-pub fn coord(square: Square) -> String {
-    let mut res = String::new();
-    res.push(match square.file() {
-        0 => 'a',
-        1 => 'b',
-        2 => 'c',
-        3 => 'd',
-        4 => 'e',
-        5 => 'f',
-        6 => 'g',
-        7 => 'h',
-        _ => unreachable!(),
-    });
-    res.push(match square.rank() {
-        0 => '1',
-        1 => '2',
-        2 => '3',
-        3 => '4',
-        4 => '5',
-        5 => '6',
-        6 => '7',
-        7 => '8',
-        _ => unreachable!(),
-    });
-    res
-}
+use cheers_bitboards::*;
 
-pub fn square(coord: &str) -> Square {
-    let mut result = match coord.chars().next().unwrap() {
-        'a' => 0,
-        'b' => 1,
-        'c' => 2,
-        'd' => 3,
-        'e' => 4,
-        'f' => 5,
-        'g' => 6,
-        'h' => 7,
-        _ => unreachable!(),
-    };
-    result += match coord.chars().nth(1).unwrap() {
-        '1' => 0,
-        '2' => 8,
-        '3' => 2 * 8,
-        '4' => 3 * 8,
-        '5' => 4 * 8,
-        '6' => 5 * 8,
-        '7' => 6 * 8,
-        '8' => 7 * 8,
-        _ => unreachable!(),
-    };
-    result.into()
-}
-
-// start: 0-7
-// target: 8-15
-// piece: 16-18
-// promotion: 19-21
-// capture: 22
-// double_pawn_push: 23
-// enpassent_capture: 24
-// castling: 25
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Move {
-    data: u32,
-    pub score: i32,
+    pub piece: Piece,
+    pub from: Square,
+    pub to: Square,
+    pub promotion: Piece,
 }
 
 impl Move {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        start: Square,
-        target: Square,
-        piece: PieceIndex,
-        promotion: PieceIndex,
-        capture: bool,
-        double_pawn_push: bool,
-        enpassent_capture: bool,
-        castling: bool,
-    ) -> Self {
-        let mut res = 0u32;
-        res |= *start as u32
-            | (*target as u32) << 8
-            | (piece as u32) << (8 + 8)
-            | (promotion as u32) << (8 + 8 + 3)
-            | (capture as u32) << (8 + 8 + 3 + 3)
-            | (double_pawn_push as u32) << (8 + 8 + 3 + 3 + 1)
-            | (enpassent_capture as u32) << (8 + 8 + 3 + 3 + 1 + 1)
-            | (castling as u32) << (8 + 8 + 3 + 3 + 1 + 1 + 1);
+    pub fn from_pair<T: AsRef<str>>(board: &Board, pair: T) -> Self {
+        let pair = pair.as_ref();
+        let from = Square::from_coord(&pair[0..2]);
+        let to = Square::from_coord(&pair[2..4]);
+        let promotion = match pair.chars().nth(4) {
+            Some('n') => Knight,
+            Some('b') => Bishop,
+            Some('r') => Rook,
+            Some('q') => Queen,
+            _ => Pawn,
+        };
 
         Self {
-            data: res,
-            score: 0,
+            piece: board.piece_on(from).unwrap_or(Pawn),
+            from,
+            to,
+            promotion,
         }
     }
 
-    pub fn null() -> Self {
-        Self::new(
-            Square::A1,
-            Square::A1,
-            NoPiece,
-            NoPiece,
-            false,
-            false,
-            false,
-            false,
-        )
-    }
-
-    pub fn from_pair(boards: &ChessGame, xy: impl AsRef<str>) -> Self {
-        let (x, yp) = xy.as_ref().trim().split_at(2);
-        let mut p = Pawn;
-
-        let y = if yp.len() == 3 {
-            p = match &yp[2..] {
-                "q" => Queen,
-                "r" => Rook,
-                "n" => Knight,
-                "b" => Bishop,
-                _ => unreachable!(),
-            };
-            &yp[0..2]
-        } else {
-            yp
-        };
-        let start = square(x).into();
-        let target = square(y).into();
-        let piece = boards.piece_at(start);
-        Self::new(
-            start,
-            target,
-            piece,
-            p,
-            boards.piece_at(target) != NoPiece,
-            piece == Pawn && (target).abs_diff(*start) == 16,
-            piece == Pawn && Some(target) == boards.en_passent_square(),
-            piece == King && (target).abs_diff(*start) == 2,
-        )
-    }
-    pub fn pawn_push(start: Square, target: Square) -> Self {
-        Self::new(start, target, Pawn, NoPiece, false, false, false, false)
-    }
-    pub fn pawn_double_push(start: Square, target: Square) -> Self {
-        Self::new(start, target, Pawn, NoPiece, false, true, false, false)
-    }
-    pub fn pawn_push_promotion(start: Square, target: Square, promotion: PieceIndex) -> Self {
-        Self::new(start, target, Pawn, promotion, false, false, false, false)
-    }
-    pub fn pawn_capture(start: Square, target: Square) -> Self {
-        Self::new(start, target, Pawn, NoPiece, true, false, false, false)
-    }
-    pub fn pawn_capture_promotion(start: Square, target: Square, promotion: PieceIndex) -> Self {
-        Self::new(start, target, Pawn, promotion, true, false, false, false)
-    }
-    pub fn pawn_enpassent_capture(start: Square, target: Square) -> Self {
-        Self::new(start, target, Pawn, NoPiece, true, false, true, false)
-    }
-
-    pub fn king_move(start: Square, target: Square, capture: bool) -> Self {
-        Self::new(start, target, King, NoPiece, capture, false, false, false)
-    }
-
-    pub fn king_castle(start: Square, target: Square) -> Self {
-        Self::new(start, target, King, NoPiece, false, false, false, true)
-    }
-
-    pub fn knight_move(start: Square, target: Square, capture: bool) -> Self {
-        Self::new(start, target, Knight, NoPiece, capture, false, false, false)
-    }
-
-    pub fn bishop_move(start: Square, target: Square, capture: bool) -> Self {
-        Self::new(start, target, Bishop, NoPiece, capture, false, false, false)
-    }
-
-    pub fn rook_move(start: Square, target: Square, capture: bool) -> Self {
-        Self::new(start, target, Rook, NoPiece, capture, false, false, false)
-    }
-
-    pub fn queen_move(start: Square, target: Square, capture: bool) -> Self {
-        Self::new(start, target, Queen, NoPiece, capture, false, false, false)
-    }
-
-    pub fn start(&self) -> Square {
-        (self.data & 0xff).into()
-    }
-
-    pub fn target(&self) -> Square {
-        ((self.data >> 8) & 0xff).into()
-    }
-
-    pub fn piece(&self) -> PieceIndex {
-        PieceIndex::from_u8(((self.data >> (8 + 8)) & 0b111) as u8)
-    }
-
-    pub fn promotion(&self) -> PieceIndex {
-        PieceIndex::from_u8(((self.data >> (8 + 8 + 3)) & 0b111) as u8)
-    }
-
-    pub fn capture(&self) -> bool {
-        ((self.data >> (8 + 8 + 3 + 3)) & 0x1) == 1
-    }
-
-    pub fn double_pawn_push(&self) -> bool {
-        ((self.data >> (8 + 8 + 3 + 3 + 1)) & 0x1) == 1
-    }
-
-    pub fn en_passent(&self) -> bool {
-        ((self.data >> (8 + 8 + 3 + 3 + 1 + 1)) & 0x1) == 1
-    }
-
-    pub fn castling(&self) -> bool {
-        ((self.data >> (8 + 8 + 3 + 3 + 1 + 1 + 1)) & 0x1) == 1
-    }
-
     pub fn coords(&self) -> String {
-        format!(
-            "{}{}{}",
-            coord(self.start()),
-            coord(self.target()),
-            match self.promotion() {
-                Knight => "n",
-                Bishop => "b",
-                Rook => "r",
-                Queen => "q",
-                _ => "",
-            }
-        )
+        format!("{self}")
+    }
+
+    pub fn null() -> Self {
+        Self {
+            piece: Pawn,
+            from: Square::A1,
+            to: Square::A1,
+            promotion: Pawn,
+        }
     }
 
     pub fn is_null(&self) -> bool {
-        self.start() == self.target()
+        self.from == self.to
+    }
+}
+
+impl Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let promo = match self.promotion {
+            Knight => "n",
+            Bishop => "b",
+            Rook => "r",
+            Queen => "q",
+            _ => "",
+        };
+        write!(f, "{}", self.from.coord() + &self.to.coord() + promo)
     }
 }
 
@@ -245,77 +71,154 @@ impl Default for Move {
     }
 }
 
-impl Display for Move {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "\ns/e\t\tpiece\t\tprom\t\tcapture\t\tdp\t\tep\t\tcastle")?;
-        Ok(write!(
-            f,
-            "{}{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}",
-            coord(self.start()),
-            coord(self.target()),
-            self.piece(),
-            self.promotion(),
-            self.capture(),
-            self.double_pawn_push(),
-            self.en_passent(),
-            self.castling()
-        )?)
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct UnMove {
+pub struct MoveMask {
+    pub piece: Piece,
     pub start: Square,
-    pub target: Square,
-    pub promotion: bool,
-    pub capture: PieceIndex,
-    pub en_passent: bool,
-    pub en_passent_mask: BitBoard,
-    pub castling: bool,
-    pub castling_rights: CastlingRights,
-    pub halfmove_clock: u8,
-    pub pawn_hash: u64,
+    pub moves: BitBoard,
 }
 
-impl UnMove {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        start: Square,
-        target: Square,
-        promotion: bool,
-        capture: PieceIndex,
-        en_passent: bool,
-        en_passent_mask: BitBoard,
-        castling: bool,
-        castling_rights: CastlingRights,
-        halfmove_clock: u8,
-        pawn_hash: u64,
-    ) -> Self {
+impl MoveMask {
+    pub fn len(&self) -> usize {
+        let len = if self.piece == Pawn {
+            self.moves.count_ones() + (self.moves & (EIGHTH_RANK | FIRST_RANK)).count_ones() * 3
+        } else {
+            self.moves.count_ones()
+        };
+        len as usize
+    }
+}
+impl IntoIterator for MoveMask {
+    type Item = Move;
+
+    type IntoIter = MoveMaskIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        MoveMaskIter {
+            moves: self,
+            promotion_counter: 0,
+        }
+    }
+}
+
+pub struct MoveMaskIter {
+    moves: MoveMask,
+    promotion_counter: u8,
+}
+
+impl Iterator for MoveMaskIter {
+    type Item = Move;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.moves.moves.is_empty() {
+            return None;
+        }
+        let target = self.moves.moves.first_square();
+        if self.moves.piece == Pawn && matches!(target.rank(), 0 | 7) {
+            let promotion = match self.promotion_counter {
+                0 => Queen,
+                1 => Rook,
+                2 => Knight,
+                3 => Bishop,
+                _ => unreachable!(),
+            };
+            if self.promotion_counter < 3 {
+                self.promotion_counter += 1;
+            } else {
+                self.promotion_counter = 0;
+                self.moves.moves ^= target.bitboard();
+            }
+            Some(Move {
+                piece: Pawn,
+                from: self.moves.start,
+                to: target,
+                promotion,
+            })
+        } else {
+            self.moves.moves ^= target.bitboard();
+            Some(Move {
+                piece: self.moves.piece,
+                from: self.moves.start,
+                to: target,
+                promotion: Pawn,
+            })
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct SortingMove {
+    pub mv: Move,
+    pub score: i32,
+}
+
+impl SortingMove {
+    pub fn new(mv: Move) -> Self {
+        Self { mv, score: 0 }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct MoveList {
+    len: usize,
+    inner: [SortingMove; 218],
+}
+
+impl MoveList {
+    pub fn new() -> Self {
         Self {
-            start,
-            target,
-            promotion,
-            capture,
-            en_passent,
-            en_passent_mask,
-            castling,
-            castling_rights,
-            halfmove_clock,
-            pawn_hash,
+            len: 0,
+            inner: [SortingMove::new(Move::null()); 218],
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn inner(&self) -> &[SortingMove] {
+        &self.inner[..self.len]
+    }
+
+    pub fn inner_mut(&mut self) -> &mut [SortingMove] {
+        &mut self.inner[..self.len]
+    }
+
+    pub fn push(&mut self, mv: SortingMove) {
+        self.inner[self.len] = mv;
+        self.len += 1;
+    }
+
+    pub fn reset(&mut self) {
+        self.len = 0;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+    pub fn pick_move(&mut self, current_index: usize) -> (Move, i32) {
+        let mut best_index = current_index;
+
+        for i in (current_index + 1)..self.len {
+            if self.inner[i].score > self.inner[best_index].score {
+                best_index = i;
+            }
+        }
+
+        self.inner.swap(current_index, best_index);
+
+        (
+            self.inner[current_index].mv,
+            self.inner[current_index].score,
+        )
     }
 }
 
-pub fn pick_move(move_list: &mut [Move], current_index: usize) {
-    let mut best_index = current_index;
+impl Index<usize> for MoveList {
+    type Output = Move;
 
-    for i in (current_index + 1)..move_list.len() {
-        if move_list[i].score > move_list[best_index].score {
-            best_index = i;
-        }
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.inner[index].mv
     }
-
-    move_list.swap(current_index, best_index);
 }
 
 #[derive(Copy, Clone)]

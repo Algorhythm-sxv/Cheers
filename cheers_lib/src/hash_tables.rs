@@ -3,9 +3,9 @@ use std::sync::atomic::*;
 use cheers_bitboards::{BitBoard, Square};
 
 use crate::{
-    chessgame::eval_types::EvalScore,
+    board::eval_types::EvalScore,
     moves::Move,
-    types::{ColorIndex, PieceIndex},
+    types::{Piece, TypeColor},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -29,13 +29,11 @@ impl NodeType {
 pub struct TTEntry {
     pub score: i32,
     pub depth: i8,
-    pub move_start: Square,
-    pub move_target: Square,
-    pub promotion: PieceIndex,
+    pub piece: Piece,
+    pub move_from: Square,
+    pub move_to: Square,
+    pub promotion: Piece,
     pub node_type: NodeType,
-    pub double_pawn_push: bool,
-    pub en_passent_capture: bool,
-    pub castling: bool,
 }
 
 impl TTEntry {
@@ -43,13 +41,11 @@ impl TTEntry {
         Self {
             score: (data & 0xFFFFFFFF) as i32,
             depth: ((data >> 32) & 0xFF) as i8,
-            move_start: ((data >> (32 + 8)) & 0xFF).into(),
-            move_target: ((data >> (32 + 8 + 8)) & 0xFF).into(),
-            promotion: PieceIndex::from_u8(((data >> (32 + 8 + 8 + 8)) & 0b111) as u8),
-            node_type: NodeType::from_u8(((data >> (32 + 8 + 8 + 8 + 3)) & 0b11) as u8),
-            double_pawn_push: ((data >> (32 + 8 + 8 + 8 + 3 + 2)) & 0b1) != 0,
-            en_passent_capture: ((data >> (32 + 8 + 8 + 8 + 3 + 2 + 1)) & 0b1) != 0,
-            castling: ((data >> (32 + 8 + 8 + 8 + 3 + 2 + 1 + 1)) & 0b1) != 0,
+            piece: Piece::from_u8(((data >> (32 + 8)) & 0b111) as u8),
+            move_from: ((data >> (32 + 8 + 3)) & 0xFF).into(),
+            move_to: ((data >> (32 + 8 + 3 + 8)) & 0xFF).into(),
+            promotion: Piece::from_u8(((data >> (32 + 8 + 3 + 8 + 8)) & 0b111) as u8),
+            node_type: NodeType::from_u8(((data >> (32 + 8 + 3 + 8 + 8 + 3)) & 0b11) as u8),
         }
     }
 }
@@ -103,18 +99,17 @@ impl TranspositionTable {
         const DEPTH_OFFSET: i8 = 8;
         if node_type == NodeType::Exact
             || stored.key.load(Relaxed) ^ stored.data.load(Relaxed) != hash
-            || depth - DEPTH_OFFSET + 2 * (pv as i8) > ((stored.data.load(Relaxed) >> 32) & 0xFF) as i8
+            || depth - DEPTH_OFFSET + 2 * (pv as i8)
+                > ((stored.data.load(Relaxed) >> 32) & 0xFF) as i8
         {
             let mut data = 0u64;
             data |= score as u32 as u64;
             data |= ((depth as u8) as u64) << 32;
-            data |= (*best_move.start() as u64) << (32 + 8);
-            data |= (*best_move.target() as u64) << (32 + 8 + 8);
-            data |= (best_move.promotion() as u64) << (32 + 8 + 8 + 8);
-            data |= (node_type as u64) << (32 + 8 + 8 + 8 + 3);
-            data |= (best_move.double_pawn_push() as u64) << (32 + 8 + 8 + 8 + 3 + 2);
-            data |= (best_move.en_passent() as u64) << (32 + 8 + 8 + 8 + 3 + 2 + 1);
-            data |= (best_move.castling() as u64) << (32 + 8 + 8 + 8 + 3 + 2 + 1 + 1);
+            data |= (best_move.piece as u64) << (32 + 3);
+            data |= (*best_move.from as u64) << (32 + 3 + 8);
+            data |= (*best_move.to as u64) << (32 + 3 + 8 + 8);
+            data |= (best_move.promotion as u64) << (32 + 3 + 8 + 8 + 8);
+            data |= (node_type as u64) << (32 + 3 + 8 + 8 + 8 + 3);
 
             stored.key.store(hash ^ data, Release);
             stored.data.store(data, Release);
@@ -182,10 +177,10 @@ impl PawnHashTable {
         }
     }
 
-    pub fn get(&self, hash: u64, player: ColorIndex) -> Option<(EvalScore, BitBoard)> {
+    pub fn get<T: TypeColor>(&self, hash: u64) -> Option<(EvalScore, BitBoard)> {
         let entry = self.table[(hash & self.mask) as usize];
         if entry.hash == hash {
-            let sign = if player == ColorIndex::Black { -1 } else { 1 };
+            let sign = if !T::WHITE { -1 } else { 1 };
             Some((
                 EvalScore {
                     mg: sign * entry.mg,
@@ -198,11 +193,8 @@ impl PawnHashTable {
         }
     }
 
-    pub fn set(&mut self, hash: u64, mg: i32, eg: i32, passed_pawns: BitBoard, player: ColorIndex) {
-        let (mg, eg) = match player {
-            ColorIndex::White => (mg, eg),
-            ColorIndex::Black => (-mg, -eg),
-        };
+    pub fn set<T: TypeColor>(&mut self, hash: u64, mg: i32, eg: i32, passed_pawns: BitBoard) {
+        let (mg, eg) = if T::WHITE { (mg, eg) } else { (-mg, -eg) };
         self.table[(hash & self.mask) as usize] = PawnHashEntry {
             hash,
             mg,
