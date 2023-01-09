@@ -145,6 +145,11 @@ impl Board {
     }
 
     #[inline(always)]
+    pub fn castling_rights(&self) -> &[[BitBoard; 2]; 2] {
+        &self.castling_rights
+    }
+
+    #[inline(always)]
     pub fn has_non_pawn_material(&self, color: usize) -> bool {
         let material = if color == 0 {
             self.white_knights | self.white_bishops | self.white_rooks | self.white_queens

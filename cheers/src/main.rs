@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut position = Board::new();
     let mut options = EngineOptions::default();
 
-    let tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
+    let mut tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
     let mut position_history = Vec::new();
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 continue;
             }
             Err(uci::UciParseError::Other(e)) => {
-                println!("{e}");
+                eprintln!("{e}");
                 continue;
             }
         };
@@ -83,7 +83,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
             uci::UciCommand::UciNewGame => {
                 position = Board::new();
-                // tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
+                position_history = Vec::new();
+                tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
             }
             uci::UciCommand::Position { fen, moves } => {
                 match fen {
@@ -125,7 +126,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 }
                             }
                             None => {
-                                if position.current_player() != 0 {
+                                if position.current_player() == 0 {
                                     move_time(wtime, winc)
                                 } else {
                                     move_time(btime, binc)

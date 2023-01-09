@@ -269,6 +269,21 @@ impl Square {
     }
 
     #[inline(always)]
+    pub fn file_letter(&self) -> &'static str {
+        match self.file() {
+            0 => "a",
+            1 => "b",
+            2 => "c",
+            3 => "d",
+            4 => "e",
+            5 => "f",
+            6 => "g",
+            7 => "h",
+            _ => unreachable!(),
+        }
+    }
+    
+    #[inline(always)]
     pub fn offset(&self, file: i8, rank: i8) -> Self {
         Self((self.0 as i8 + rank * 8 + file) as u8)
     }

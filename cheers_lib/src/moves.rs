@@ -17,7 +17,7 @@ impl Move {
     pub fn from_pair<T: AsRef<str>>(board: &Board, pair: T) -> Self {
         let pair = pair.as_ref();
         let from = Square::from_coord(&pair[0..2]);
-        let to = Square::from_coord(&pair[2..4]);
+        let mut to = Square::from_coord(&pair[2..4]);
         let promotion = match pair.chars().nth(4) {
             Some('n') => Knight,
             Some('b') => Bishop,
@@ -26,8 +26,20 @@ impl Move {
             _ => Pawn,
         };
 
+        let piece = board.piece_on(from).unwrap_or(Pawn);
+        if piece == King {
+            // correct for castling
+            if to.file() > from.file() && to.file().abs_diff(from.file()) > 1 {
+                // kingside castling
+                to = board.castling_rights()[board.current_player()][0].first_square()
+            } else if to.file() < from.file() && to.file().abs_diff(from.file()) > 1 {
+                // queenside castling
+                to = board.castling_rights()[board.current_player()][1].first_square()
+            }
+        }
+
         Self {
-            piece: board.piece_on(from).unwrap_or(Pawn),
+            piece,
             from,
             to,
             promotion,

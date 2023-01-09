@@ -278,11 +278,27 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                             Some(moves) => {
                                 let mut checked_moves = Vec::new();
                                 for move_string in moves {
+                                    // convert regular castling moves
+                                    let move_string = if matches!(*move_string, "e1g1" | "e8g8") {
+                                        let kingside_letter = test.castling_rights()
+                                            [test.current_player()][0]
+                                            .first_square()
+                                            .file_letter();
+                                        move_string.to_string().replace("g", kingside_letter)
+                                    } else if matches!(*move_string, "e1c1" | "e8c8") {
+                                        let queenside_letter = test.castling_rights()
+                                            [test.current_player()][1]
+                                            .first_square()
+                                            .file_letter();
+                                        move_string.to_string().replace("c", queenside_letter)
+                                    } else {
+                                        move_string.to_string()
+                                    };
                                     if test
                                         .legal_move_list()
                                         .iter()
                                         .map(|m| m.coords())
-                                        .find(|m| m == move_string)
+                                        .find(|m| m == &move_string)
                                         .is_some()
                                     {
                                         let checked_move = Move::from_pair(&test, move_string);
