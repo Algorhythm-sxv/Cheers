@@ -489,7 +489,7 @@ impl Search {
                 // try the transposition table move early
                 if m.mv.from == tt_move.from && m.mv.to == tt_move.to {
                     m.score += 100_000;
-                } else if self.game.piece_on(m.mv.to).is_some() {
+                } else if self.game.is_capture(m.mv) {
                     // winning captures first, then equal, then quiets, then losing
                     let see = self.game.see(m.mv);
                     if see < 0 {
@@ -526,7 +526,7 @@ impl Search {
         for i in 0..self.move_lists[ply].len() {
             let (mv, _) = self.move_lists[ply].pick_move(i);
 
-            let capture = self.game.piece_on(mv.to).is_some();
+            let capture = self.game.is_capture(mv);
 
             // Late Move Pruning: skip quiet moves ordered late
             if !pv_node
@@ -758,7 +758,11 @@ impl Search {
 
             // Delta pruning: if this capture immediately falls short by some margin, skip it
             if stand_pat_score
-                + SEE_PIECE_VALUES[self.game.piece_on(m.mv.to).unwrap_or(Pawn)]
+                + self
+                    .game
+                    .piece_on(m.mv.to)
+                    .map(|p| SEE_PIECE_VALUES[p])
+                    .unwrap_or(0)
                 + self.options.delta_pruning_margin
                 <= alpha
             {

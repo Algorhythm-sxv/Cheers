@@ -150,6 +150,17 @@ impl Board {
     }
 
     #[inline(always)]
+    pub fn is_capture(&self, mv: Move) -> bool {
+        if self.black_to_move {
+            (mv.to.bitboard() & self.white_pieces).is_not_empty()
+                || (mv.piece == Pawn && mv.to.bitboard() == self.ep_mask)
+        } else {
+            (mv.to.bitboard() & self.black_pieces).is_not_empty()
+                || (mv.piece == Pawn && mv.to.bitboard() == self.ep_mask)
+        }
+    }
+
+    #[inline(always)]
     pub fn has_non_pawn_material(&self, color: usize) -> bool {
         let material = if color == 0 {
             self.white_knights | self.white_bishops | self.white_rooks | self.white_queens
@@ -515,6 +526,9 @@ impl Board {
             self.hash ^= zobrist_castling(self.castling_rights);
         } else {
             if let Some(capture) = capture {
+                // reset halfmove clock
+                self.halfmove_clock = 0;
+
                 // remove a captured piece from the target square
                 self.xor_piece::<T::Other>(capture, mv.to);
 
@@ -548,6 +562,9 @@ impl Board {
                 }
             }
             Pawn => {
+                // reset the halfmove clock
+                self.halfmove_clock = 0;
+
                 // update the pawn hash
                 self.pawn_hash ^= zobrist_piece::<T>(Pawn, mv.from);
                 self.pawn_hash ^= zobrist_piece::<T>(Pawn, mv.to);
@@ -979,6 +996,10 @@ impl Board {
                     Some(Queen) => fen.push_str(if white { "Q" } else { "q" }),
                     Some(King) => fen.push_str(if white { "K" } else { "k" }),
                 }
+            }
+
+            if blank_counter != 0 {
+                fen += &blank_counter.to_string();
             }
 
             fen.push_str("/");

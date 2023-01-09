@@ -280,17 +280,25 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                 for move_string in moves {
                                     // convert regular castling moves
                                     let move_string = if matches!(*move_string, "e1g1" | "e8g8") {
-                                        let kingside_letter = test.castling_rights()
-                                            [test.current_player()][0]
-                                            .first_square()
-                                            .file_letter();
-                                        move_string.to_string().replace("g", kingside_letter)
+                                        let kingside =
+                                            test.castling_rights()[test.current_player()][0];
+                                        if kingside.is_not_empty() {
+                                            let kingside_letter =
+                                                kingside.first_square().file_letter();
+                                            move_string.to_string().replace("g", kingside_letter)
+                                        } else {
+                                            move_string.to_string()
+                                        }
                                     } else if matches!(*move_string, "e1c1" | "e8c8") {
-                                        let queenside_letter = test.castling_rights()
-                                            [test.current_player()][1]
-                                            .first_square()
-                                            .file_letter();
-                                        move_string.to_string().replace("c", queenside_letter)
+                                        let queenside =
+                                            test.castling_rights()[test.current_player()][1];
+                                        if queenside.is_not_empty() {
+                                            let queenside_letter =
+                                                queenside.first_square().file_letter();
+                                            move_string.to_string().replace("c", queenside_letter)
+                                        } else {
+                                            move_string.to_string()
+                                        }
                                     } else {
                                         move_string.to_string()
                                     };

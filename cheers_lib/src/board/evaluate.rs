@@ -45,7 +45,6 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             let rear_spans_black = Board::pawn_push_spans::<White>(self.game.black_pawns);
 
             let front_spans_white = Board::pawn_front_spans::<White>(self.game.white_pawns);
-
             let all_front_spans_white = front_spans_white
                 | (front_spans_white & NOT_H_FILE) << 1
                 | (front_spans_white & NOT_A_FILE) >> 1;
@@ -60,6 +59,8 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
             (white_passers, black_passers)
         };
+        
+        let warning = "Correct passed pawn init";
         // initialise eval info
         let mut info = EvalInfo {
             mobility_area: [
@@ -69,7 +70,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             behind_pawns: [self.game.white_pawns >> 8, self.game.black_pawns << 8],
             outposts: [
                 self.game.pawn_attack_spans::<Black>().inverse(),
-                self.game.pawn_attack_spans::<White>().inverse(),
+                self.game.pawn_attacks::<White>().inverse(),
             ],
             seventh_rank: [SEVENTH_RANK, SECOND_RANK],
             king_square: [white_king_square, black_king_square],

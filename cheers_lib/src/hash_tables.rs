@@ -105,11 +105,11 @@ impl TranspositionTable {
             let mut data = 0u64;
             data |= score as u32 as u64;
             data |= ((depth as u8) as u64) << 32;
-            data |= (best_move.piece as u64) << (32 + 3);
-            data |= (*best_move.from as u64) << (32 + 3 + 8);
-            data |= (*best_move.to as u64) << (32 + 3 + 8 + 8);
-            data |= (best_move.promotion as u64) << (32 + 3 + 8 + 8 + 8);
-            data |= (node_type as u64) << (32 + 3 + 8 + 8 + 8 + 3);
+            data |= (best_move.piece as u64) << (32 + 8);
+            data |= (*best_move.from as u64) << (32 + 8 + 3);
+            data |= (*best_move.to as u64) << (32 + 8 + 3 + 8);
+            data |= (best_move.promotion as u64) << (32 + 8 + 3 + 8 + 8);
+            data |= (node_type as u64) << (32 + 8 + 3 + 8 + 8 + 3);
 
             stored.key.store(hash ^ data, Release);
             stored.data.store(data, Release);

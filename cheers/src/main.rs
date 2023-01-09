@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
             uci::UciCommand::UciNewGame => {
                 position = Board::new();
-                position_history = Vec::new();
+                position_history.clear();
                 tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
             }
             uci::UciCommand::Position { fen, moves } => {
@@ -91,6 +91,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Some(fen) => position = Board::from_fen(fen).unwrap(),
                     None => position = Board::new(),
                 }
+                position_history.clear();
                 for m in moves {
                     position_history.push(position.hash());
                     position.make_move(m);

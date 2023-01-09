@@ -29,9 +29,7 @@ impl Board {
         list.reset();
         self.generate_legal_moves(|mvs| {
             for mv in mvs {
-                if self.piece_on(mv.to).is_some()
-                    || (mv.piece == Pawn && mv.to == self.ep_mask.first_square())
-                {
+                if self.is_capture(mv) {
                     list.push(SortingMove::new(mv))
                 }
             }
