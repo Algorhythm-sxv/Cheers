@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use cheers_lib::{board::Board, moves::Move};
+use cheers_lib::{board::Board, moves::Move, types::Piece, Square};
 
 #[macro_use]
 mod macros;
@@ -279,26 +279,38 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                 let mut checked_moves = Vec::new();
                                 for move_string in moves {
                                     // convert regular castling moves
-                                    let move_string = if matches!(*move_string, "e1g1" | "e8g8") {
-                                        let kingside =
-                                            test.castling_rights()[test.current_player()][0];
-                                        if kingside.is_not_empty() {
-                                            let kingside_letter =
-                                                kingside.first_square().file_letter();
-                                            move_string.to_string().replace("g", kingside_letter)
-                                        } else {
-                                            move_string.to_string()
-                                        }
-                                    } else if matches!(*move_string, "e1c1" | "e8c8") {
-                                        let queenside =
-                                            test.castling_rights()[test.current_player()][1];
-                                        if queenside.is_not_empty() {
-                                            let queenside_letter =
-                                                queenside.first_square().file_letter();
-                                            move_string.to_string().replace("c", queenside_letter)
-                                        } else {
-                                            move_string.to_string()
-                                        }
+                                    let move_string = if *move_string == "e1g1"
+                                        && test.current_player() == 0
+                                        && test.piece_on(Square::E1) == Some(Piece::King)
+                                    {
+                                        let kingside = test.castling_rights()[0][0]
+                                            .first_square()
+                                            .file_letter();
+                                        move_string.replace("g", kingside)
+                                    } else if *move_string == "e8g8"
+                                        && test.current_player() == 1
+                                        && test.piece_on(Square::E8) == Some(Piece::King)
+                                    {
+                                        let kingside = test.castling_rights()[1][0]
+                                            .first_square()
+                                            .file_letter();
+                                        move_string.replace("g", kingside)
+                                    } else if *move_string == "e1c1"
+                                        && test.current_player() == 0
+                                        && test.piece_on(Square::E1) == Some(Piece::King)
+                                    {
+                                        let queenside = test.castling_rights()[0][1]
+                                            .first_square()
+                                            .file_letter();
+                                        move_string.to_string().replace("c", queenside)
+                                    } else if *move_string == "e8c8"
+                                        && test.current_player() == 1
+                                        && test.piece_on(Square::E8) == Some(Piece::King)
+                                    {
+                                        let queenside = test.castling_rights()[1][1]
+                                            .first_square()
+                                            .file_letter();
+                                        move_string.replace("c", queenside)
                                     } else {
                                         move_string.to_string()
                                     };
