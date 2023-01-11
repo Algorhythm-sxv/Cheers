@@ -233,7 +233,7 @@ impl Search {
                 search.seldepth = 0;
 
                 let score =
-                    search.negamax(window.0, window.1, i as i32, 0, Move::null(), &mut pv, tt);
+                    search.negamax(self.game.clone(), window.0, window.1, i as i32, 0, Move::null(), &mut pv, tt);
 
                 if ABORT_SEARCH.load(Ordering::Relaxed) && i > 1 {
                     // can't trust results from a partial search
@@ -307,6 +307,7 @@ impl Search {
 
     fn negamax(
         &mut self,
+        board: Board,
         mut alpha: i32,
         mut beta: i32,
         mut depth: i32,
@@ -336,9 +337,9 @@ impl Search {
             return 0;
         }
 
-        let current_player = self.game.current_player();
+        let current_player = board.current_player();
         // check extension before quiescence
-        let in_check = self.game.in_check();
+        let in_check = board.in_check();
         if in_check {
             depth += 1;
         }
@@ -347,7 +348,7 @@ impl Search {
         if depth == 0 {
             // exact score so we must reset the pv
             pv.len = 0;
-            let score = self.quiesce(alpha, beta, ply, last_move, EVAL_PARAMS, tt);
+            let score = self.quiesce(board.clone(), alpha, beta, ply, last_move, EVAL_PARAMS, tt);
             // self.transposition_table
             //     .set(self.hash, Move::null(), depth as i8, score, Exact);
             return score;
@@ -358,11 +359,11 @@ impl Search {
         self.seldepth = self.seldepth.max(ply);
 
         // check 50 move and repetition draws
-        if self.game.halfmove_clock() == 100
+        if board.halfmove_clock() == 100
             || self
                 .position_history
                 .iter()
-                .filter(|&&p| p == self.game.hash())
+                .filter(|&&p| p == board.hash())
                 .count()
                 == 2
         {
@@ -386,7 +387,7 @@ impl Search {
 
         // transposition table lookup
         let mut tt_move = Move::null();
-        if let Some(tt_entry) = tt.get(self.game.hash()) {
+        if let Some(tt_entry) = tt.get(board.hash()) {
             // prune on exact score/beta cutoff with equal/higher depth, unless we are at the root
             if tt_entry.depth as i32 >= depth
                 && ply != 0
@@ -409,7 +410,7 @@ impl Search {
 
             tt_move = Move {
                 // TT moves are verified so fallinbg back to pawn is safe
-                piece: self.game.piece_on(tt_entry.move_from).unwrap_or(Pawn),
+                piece: board.piece_on(tt_entry.move_from).unwrap_or(Pawn),
                 from: tt_entry.move_from,
                 to: tt_entry.move_to,
                 promotion: tt_entry.promotion,
@@ -421,7 +422,7 @@ impl Search {
             depth -= 1;
         }
 
-        let eval = self.game.evaluate(&mut self.pawn_hash_table);
+        let eval = board.evaluate(&mut self.pawn_hash_table);
 
         // Enable futility pruning
         let fp_margins = [
@@ -445,12 +446,13 @@ impl Search {
         // don't search the null move in the PV, when in check or only down to pawn/kings
         if depth >= self.options.nmp_depth
             && !in_check
-            && self.game.has_non_pawn_material(current_player)
+            && board.has_non_pawn_material(current_player)
         {
-            self.position_history.push(self.game.hash());
-            let old = self.game;
-            self.game.make_null_move();
+            self.position_history.push(board.hash());
+            let mut new = board.clone();
+            new.make_null_move();
             let null_score = -self.negamax(
+                new,
                 -beta,
                 -beta + 1,
                 (depth - self.options.nmp_reduction).max(0),
@@ -459,7 +461,6 @@ impl Search {
                 &mut line,
                 tt,
             );
-            self.game = old;
             self.position_history.pop();
 
             if null_score >= beta {
@@ -467,8 +468,7 @@ impl Search {
             }
         }
 
-        self.game
-            .generate_legal_moves_into(&mut self.move_lists[ply]);
+        board.generate_legal_moves_into(&mut self.move_lists[ply]);
 
         if self.move_lists[ply].is_empty() {
             // exact score, so we must reset the pv
@@ -489,9 +489,9 @@ impl Search {
                 // try the transposition table move early
                 if m.mv.from == tt_move.from && m.mv.to == tt_move.to {
                     m.score += 100_000;
-                } else if self.game.is_capture(m.mv) {
+                } else if board.is_capture(m.mv) {
                     // winning captures first, then equal, then quiets, then losing
-                    let see = self.game.see(m.mv);
+                    let see = board.see(m.mv);
                     if see < 0 {
                         m.score -= 50_000 - see;
                     } else {
@@ -526,7 +526,7 @@ impl Search {
         for i in 0..self.move_lists[ply].len() {
             let (mv, _) = self.move_lists[ply].pick_move(i);
 
-            let capture = self.game.is_capture(mv);
+            let capture = board.is_capture(mv);
 
             // Late Move Pruning: skip quiet moves ordered late
             if !pv_node
@@ -544,7 +544,7 @@ impl Search {
 
             // SEE pruning
             if depth < self.options.see_pruning_depth && ply != 0 && i > 0 && mv.promotion == Pawn {
-                let see = self.game.see(mv);
+                let see = board.see(mv);
                 let depth_margin = depth
                     * if capture {
                         self.options.see_capture_margin
@@ -556,9 +556,9 @@ impl Search {
                 }
             }
 
-            let old = self.game;
-            self.position_history.push(self.game.hash());
-            self.game.make_move(mv);
+            self.position_history.push(board.hash());
+            let mut new = board.clone();
+            new.make_move(mv);
             let mut score = MINUS_INF;
             // reduced-depth null-window search on most moves outside of PV nodes
             let full_depth = if depth > self.options.pvs_fulldepth && i > 0 && ply != 0 {
@@ -576,6 +576,7 @@ impl Search {
                 };
                 let reduced_depth = (depth - reduction).max(1);
                 score = -self.negamax(
+                    new,
                     -alpha - 1,
                     -alpha,
                     reduced_depth,
@@ -591,20 +592,19 @@ impl Search {
 
             // full-depth null-window search on reduced moves that improved alpha, later moves or non-pv nodes
             if full_depth {
-                score = -self.negamax(-alpha - 1, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
+                score = -self.negamax(new, -alpha - 1, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
             }
 
             // full-depth, full-window search on first move in PV nodes and reduced moves that improve alpha
             if pv_node && (i == 0 || (score > alpha && score < beta)) {
-                score = -self.negamax(-beta, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
+                score = -self.negamax(new, -beta, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
             }
 
-            self.game = old;
             self.position_history.pop();
 
             if score >= beta {
                 tt.set(
-                    self.game.hash(),
+                    board.hash(),
                     mv,
                     depth as i8,
                     if score > CHECKMATE_SCORE - 500 {
@@ -650,7 +650,7 @@ impl Search {
             }
         }
         tt.set(
-            self.game.hash(),
+            board.hash(),
             best_move,
             depth as i8,
             if alpha > CHECKMATE_SCORE - 500 {
@@ -672,6 +672,7 @@ impl Search {
 
     pub fn quiesce(
         &mut self,
+        board: Board,
         alpha: i32,
         beta: i32,
         ply: usize,
@@ -679,12 +680,13 @@ impl Search {
         eval_params: EvalParams,
         tt: &TranspositionTable,
     ) -> i32 {
-        self.quiesce_impl::<()>(alpha, beta, ply, last_move, eval_params, tt)
+        self.quiesce_impl::<()>(board, alpha, beta, ply, last_move, eval_params, tt)
             .0
     }
 
     pub fn quiesce_impl<T: TraceTarget + Default>(
         &mut self,
+        board: Board,
         mut alpha: i32,
         beta: i32,
         ply: usize,
@@ -713,8 +715,7 @@ impl Search {
 
         self.seldepth = self.seldepth.max(ply);
 
-        let (stand_pat_score, mut best_trace) =
-            self.game.evaluate_impl::<T>(&mut self.pawn_hash_table);
+        let (stand_pat_score, mut best_trace) = board.evaluate_impl::<T>(&mut self.pawn_hash_table);
 
         if stand_pat_score >= beta {
             return (beta, best_trace);
@@ -724,7 +725,7 @@ impl Search {
         // transposition table lookup
         let mut tt_move = Move::null();
         if !T::TRACING {
-            if let Some(tt_entry) = tt.get(self.game.hash()) {
+            if let Some(tt_entry) = tt.get(board.hash()) {
                 if tt_entry.node_type == Exact
                     || (tt_entry.node_type == LowerBound && tt_entry.score >= beta)
                     || (tt_entry.node_type == UpperBound && tt_entry.score <= alpha)
@@ -741,15 +742,14 @@ impl Search {
                     return (score, T::default());
                 }
                 tt_move = Move {
-                    piece: self.game.piece_on(tt_entry.move_from).unwrap_or(Pawn),
+                    piece: board.piece_on(tt_entry.move_from).unwrap_or(Pawn),
                     from: tt_entry.move_from,
                     to: tt_entry.move_to,
                     promotion: tt_entry.promotion,
                 };
             }
         }
-        self.game
-            .generate_legal_captures_into(&mut self.move_lists[ply]);
+        board.generate_legal_captures_into(&mut self.move_lists[ply]);
         self.move_lists[ply].inner_mut().iter_mut().for_each(|m| {
             // try the transposition table move early
             if m.mv.from == tt_move.from && m.mv.to == tt_move.to {
@@ -758,8 +758,7 @@ impl Search {
 
             // Delta pruning: if this capture immediately falls short by some margin, skip it
             if stand_pat_score
-                + self
-                    .game
+                + board
                     .piece_on(m.mv.to)
                     .map(|p| SEE_PIECE_VALUES[p])
                     .unwrap_or(0)
@@ -768,7 +767,7 @@ impl Search {
             {
                 m.score = -1000;
             } else {
-                let see = self.game.see(m.mv);
+                let see = board.see(m.mv);
                 if see < 0 {
                     // SEE pruning: skip all moves with negative SEE
                     m.score -= 2000 - see
@@ -789,18 +788,17 @@ impl Search {
                 break;
             }
 
-            let old = self.game;
-            self.position_history.push(self.game.hash());
-            self.game.make_move(mv);
+            self.position_history.push(board.hash());
+            let mut new = board.clone();
+            new.make_move(mv);
             let (mut score, trace) =
-                self.quiesce_impl::<T>(-beta, -alpha, ply + 1, mv, eval_params, tt);
+                self.quiesce_impl::<T>(new, -beta, -alpha, ply + 1, mv, eval_params, tt);
             score = -score;
-            self.game = old;
             self.position_history.pop();
             if score >= beta {
                 if !T::TRACING {
                     tt.set(
-                        self.game.hash(),
+                        board.hash(),
                         mv,
                         -1,
                         if score > CHECKMATE_SCORE - 500 {
@@ -824,7 +822,7 @@ impl Search {
         }
         if !T::TRACING {
             tt.set(
-                self.game.hash(),
+                board.hash(),
                 best_move,
                 -1,
                 if alpha > CHECKMATE_SCORE - 500 {
