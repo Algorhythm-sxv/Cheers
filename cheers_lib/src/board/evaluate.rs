@@ -59,8 +59,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
             (white_passers, black_passers)
         };
-        
-        let warning = "Correct passed pawn init";
+
         // initialise eval info
         let mut info = EvalInfo {
             mobility_area: [
@@ -70,7 +69,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             behind_pawns: [self.game.white_pawns >> 8, self.game.black_pawns << 8],
             outposts: [
                 self.game.pawn_attack_spans::<Black>().inverse(),
-                self.game.pawn_attacks::<White>().inverse(),
+                self.game.pawn_attack_spans::<White>().inverse(),
             ],
             seventh_rank: [SEVENTH_RANK, SECOND_RANK],
             king_square: [white_king_square, black_king_square],
@@ -121,6 +120,15 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
         eval += self.evaluate_king::<W>(&info, self.params)
             - self.evaluate_king::<W::Other>(&info, self.params);
+
+        if (W::WHITE && self.game.current_player() == 0)
+            || (!W::WHITE && self.game.current_player() != 0)
+        {
+            eval.mg += self.params.tempo[Midgame];
+            eval.eg += self.params.tempo[Endgame];
+            // tempo doesn't texel tune at all since it compares to WDL
+            // self.trace.term(|t| t.tempo[W::INDEX] = 1);
+        }
 
         ((eval.mg * (256 - phase)) + (eval.eg * phase)) / 256
     }
