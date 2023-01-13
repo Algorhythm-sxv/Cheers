@@ -348,7 +348,7 @@ impl Search {
         if depth == 0 {
             // exact score so we must reset the pv
             pv.len = 0;
-            let score = self.quiesce(board.clone(), alpha, beta, ply, last_move, EVAL_PARAMS, tt);
+            let score = self.quiesce(board.clone(), alpha, beta, ply, last_move, &EVAL_PARAMS, tt);
             // self.transposition_table
             //     .set(self.hash, Move::null(), depth as i8, score, Exact);
             return score;
@@ -677,7 +677,7 @@ impl Search {
         beta: i32,
         ply: usize,
         last_move: Move,
-        eval_params: EvalParams,
+        eval_params: &EvalParams,
         tt: &TranspositionTable,
     ) -> i32 {
         self.quiesce_impl::<()>(board, alpha, beta, ply, last_move, eval_params, tt)
@@ -691,7 +691,7 @@ impl Search {
         beta: i32,
         ply: usize,
         _last_move: Move,
-        eval_params: EvalParams,
+        eval_params: &EvalParams,
         tt: &TranspositionTable,
     ) -> (i32, T) {
         // check time and max nodes every 2048 nodes

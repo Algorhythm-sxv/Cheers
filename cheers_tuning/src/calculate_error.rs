@@ -48,7 +48,7 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
         i32::MAX - 1,
         0,
         Move::null(),
-        EVAL_PARAMS,
+        &EVAL_PARAMS,
         &tt_placeholder,
     );
     // if game.current_player() == ColorIndex::Black {
