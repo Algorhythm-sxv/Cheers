@@ -313,7 +313,7 @@ pub static EVAL_PARAMS: EvalParams = EvalParams {
         [7, 13],
         [6, 4],
     ],
-    tempo: [10, 10],
+    tempo: [13, 13],
     piece_tables: PieceTables([
         [
             [0, 0],
