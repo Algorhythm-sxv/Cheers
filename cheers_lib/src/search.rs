@@ -18,10 +18,7 @@ use crate::{
 };
 
 pub static ABORT_SEARCH: AtomicBool = AtomicBool::new(false);
-pub static TIME_ELAPSED: AtomicBool = AtomicBool::new(false);
-pub static SEARCH_COMPLETE: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
-pub static NPS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 const INF: i32 = i32::MAX;
 const MINUS_INF: i32 = -INF;
@@ -328,7 +325,6 @@ impl Search {
                 break;
             }
         }
-        SEARCH_COMPLETE.store(true, Ordering::Relaxed);
         (last_score, last_pv)
     }
 
@@ -369,15 +365,14 @@ impl Search {
             return 0;
         }
 
+        // drop into quiescence search at depth 0
+        if depth == 0 {
+            pv.clear();
+            return self.quiesce(board, alpha, beta, ply, last_move, &EVAL_PARAMS, tt);
+        }
 
         // increment the node counters
         NODE_COUNT.fetch_add(1, Relaxed);
-        NPS_COUNT.fetch_add(1, Relaxed);
-
-        // drop into quiescence search at depth 0
-        if depth == 0 {
-            return board.evaluate(&mut self.pawn_hash_table);
-        }
 
         // increase the seldepth if this node is deeper
         self.seldepth = self.seldepth.max(ply);
@@ -397,7 +392,6 @@ impl Search {
                     .rev()
                     .any(|h| *h == board.hash()))
         {
-            // there are no moves beyond this one, so clear the parent PV
             pv.clear();
             return DRAW_SCORE;
         }
@@ -413,7 +407,7 @@ impl Search {
             if in_check {
                 // checkmate, preferring shorter mating sequences
                 pv.clear();
-                return -(CHECKMATE_SCORE - (ply as i32))
+                return -(CHECKMATE_SCORE - (ply as i32));
             } else {
                 // stalemate
                 pv.clear();
@@ -441,6 +435,7 @@ impl Search {
 
             if score >= beta {
                 // beta cutoff, this move is too good and so the opponent won't go into this position
+                pv.clear();
                 return score;
             } else if score > alpha {
                 // a score between alpha and beta represents a new best move
@@ -482,6 +477,111 @@ impl Search {
         eval_params: &EvalParams,
         tt: &TranspositionTable,
     ) -> (i32, T) {
-        (0, T::default())
+        // check time and max nodes every 2048 nodes
+        let nodes = NODE_COUNT.load(Relaxed);
+        if nodes & 2047 == 2047 {
+            if let Some((_, abort_time)) = self.max_time_ms {
+                // signal an abort if time has exceeded alloted time
+                if Instant::now().duration_since(self.start_time).as_millis() as usize > abort_time
+                {
+                    ABORT_SEARCH.store(true, Relaxed);
+                    return (0, T::default());
+                }
+            }
+            if let Some(nodes) = self.max_nodes {
+                if NODE_COUNT.load(Relaxed) >= nodes {
+                    ABORT_SEARCH.store(true, Relaxed);
+                    return (0, T::default());
+                }
+            }
+        }
+
+        // check for abort
+        if ABORT_SEARCH.load(Relaxed) || ply >= SEARCH_MAX_PLY {
+            return (0, T::default());
+        }
+
+        // increment node counter
+        NODE_COUNT.fetch_add(1, Relaxed);
+
+        // increase the seldepth if this node is deeper
+        self.seldepth = self.seldepth.max(ply);
+
+        // check 50 move and repetition draws when not at the root
+        if board.halfmove_clock() >= 100
+                // we count single repetitions as draws, not checking at the root
+                // avoids draw scores in given single repetitions
+                || self
+                    .position_history
+                    .iter()
+                    .rev()
+                    .any(|h| *h == board.hash())
+        {
+            return (DRAW_SCORE, T::default());
+        }
+
+        // the static evaluation allows us to prune moves that are worse than 'standing pat' at this node
+        let (static_eval, mut best_trace) = board.evaluate_impl::<T>(&mut self.pawn_hash_table);
+
+        // if the static eval is above beta, then the opponent won't play into this position
+        if static_eval >= beta {
+            return (beta, best_trace);
+        }
+
+        // if the static eval is better than alpha, use it to prune moves instead
+        alpha = alpha.max(static_eval);
+
+        // quiescence search only looks at captures to ensure fast completion
+        board.generate_legal_captures_into(&mut self.move_lists[ply]);
+
+        let old_alpha = alpha;
+
+        // make sure the best move is at least legal
+        let mut best_move = self.move_lists[ply][0];
+
+        for i in 0..self.move_lists[ply].len() {
+            // pick the move with the next highest sorting score
+            let mv = self.move_lists[ply][i];
+
+            // make the move on a copy of the board
+            self.position_history.push(board.hash());
+            let mut new = board.clone();
+            new.make_move(mv);
+
+            let (mut score, trace) =
+                self.quiesce_impl::<T>(&new, -beta, -alpha, ply + 1, mv, &EVAL_PARAMS, tt);
+            score = -score;
+
+            // 'unmake' the move by removing it from the position history
+            self.position_history.pop();
+
+            if score >= beta {
+                // beta cutoff, this move is too good and so the opponent won't go into this position
+                return (score, trace);
+            } else if score > alpha {
+                // a score between alpha and beta represents a new best move
+                best_move = mv;
+                best_trace = trace;
+
+                // raise alpha so worse moves after this one will be pruned early
+                alpha = score;
+            }
+        }
+
+        // if there are no legal captures, check for checkmate/stalemate
+        if self.move_lists[ply].len() == 0 {
+            let mut some_moves = false;
+            board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
+
+            if !some_moves {
+                if board.in_check() {
+                    return (-(CHECKMATE_SCORE - (ply as i32)), T::default());
+                } else {
+                    return (DRAW_SCORE, T::default());
+                }
+            }
+        }
+
+        (alpha, best_trace)
     }
 }

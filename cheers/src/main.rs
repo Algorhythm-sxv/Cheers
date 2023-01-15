@@ -1,9 +1,7 @@
 use cheers_lib::{
     board::Board,
     hash_tables::TranspositionTable,
-    search::{
-        EngineOptions, Search, ABORT_SEARCH, NODE_COUNT, NPS_COUNT, SEARCH_COMPLETE, TIME_ELAPSED,
-    },
+    search::{EngineOptions, Search, ABORT_SEARCH, NODE_COUNT},
 };
 
 use std::{
@@ -161,10 +159,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
     ABORT_SEARCH.store(false, Ordering::Relaxed);
-    TIME_ELAPSED.store(false, Ordering::Relaxed);
-    SEARCH_COMPLETE.store(false, Ordering::Relaxed);
     NODE_COUNT.store(0, Ordering::Relaxed);
-    NPS_COUNT.store(0, Ordering::Relaxed);
 
     let (_, pv) = search.search();
 
