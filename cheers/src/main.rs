@@ -168,7 +168,7 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
 
     let (_, pv) = search.search();
 
-    println!("bestmove {}", pv.moves[0].coords());
+    println!("bestmove {}", pv[0].coords());
 
     Ok(())
 }

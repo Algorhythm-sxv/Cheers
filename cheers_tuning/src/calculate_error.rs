@@ -43,7 +43,7 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
     let tt_placeholder = TranspositionTable::new(0);
 
     let (_, trace) = search.quiesce_impl::<EvalTrace>(
-        game.clone(),
+        &game.clone(),
         i32::MIN + 1,
         i32::MAX - 1,
         0,
