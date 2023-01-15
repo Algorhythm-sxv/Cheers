@@ -1,4 +1,5 @@
 /target
 /.vscode
+/.cargo
 engine-interface.txt
 /test_binaries
