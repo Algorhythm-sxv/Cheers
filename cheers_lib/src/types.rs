@@ -84,7 +84,7 @@ impl Piece {
             3 => Rook,
             4 => Queen,
             5 => King,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }

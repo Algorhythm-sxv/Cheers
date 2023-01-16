@@ -282,7 +282,7 @@ impl Square {
             _ => unreachable!(),
         }
     }
-    
+
     #[inline(always)]
     pub fn offset(&self, file: i8, rank: i8) -> Self {
         Self((self.0 as i8 + rank * 8 + file) as u8)

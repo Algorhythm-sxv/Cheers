@@ -1,7 +1,7 @@
-mod zobrist;
-mod lookup_tables;
 mod lmr;
+mod lookup_tables;
+mod zobrist;
 
-pub use zobrist::*;
-pub use lookup_tables::*;
 pub use lmr::*;
+pub use lookup_tables::*;
+pub use zobrist::*;
