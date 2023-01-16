@@ -125,7 +125,8 @@ impl Default for EngineOptions {
 #[derive(Clone)]
 pub struct Search {
     pub game: Board,
-    pub position_history: Vec<u64>,
+    pub search_history: Vec<u64>,
+    pub pre_history: Vec<u64>,
     pub move_lists: Vec<MoveList>,
     pub seldepth: usize,
     transposition_table: Arc<RwLock<TranspositionTable>>,
@@ -146,7 +147,8 @@ impl Search {
     pub fn new(game: Board) -> Self {
         Self {
             game,
-            position_history: Vec::new(),
+            search_history: Vec::new(),
+            pre_history: Vec::new(),
             move_lists: vec![MoveList::new(); 128],
             seldepth: 0,
             transposition_table: Arc::new(RwLock::new(TranspositionTable::new(0))),
@@ -167,7 +169,8 @@ impl Search {
     pub fn new_with_tt(game: Board, tt: Arc<RwLock<TranspositionTable>>) -> Self {
         Self {
             game,
-            position_history: Vec::new(),
+            search_history: Vec::new(),
+            pre_history: Vec::new(),
             move_lists: vec![MoveList::new(); 128],
             seldepth: 0,
             transposition_table: tt,
@@ -194,8 +197,8 @@ impl Search {
         self
     }
 
-    pub fn position_history(mut self, position_history: Vec<u64>) -> Self {
-        self.position_history = position_history;
+    pub fn pre_history(mut self, pre_history: Vec<u64>) -> Self {
+        self.pre_history = pre_history;
         self
     }
 
@@ -384,17 +387,51 @@ impl Search {
         // check 50 move and repetition draws when not at the root
         if !root
             && (board.halfmove_clock() >= 100
-                // we count single repetitions as draws, not checking at the root
-                // avoids draw scores in given single repetitions
                 || self
-                    .position_history
+                    .pre_history
                     .iter()
                     .rev()
+                    .take(board.halfmove_clock() as usize)
+                    .filter(|&&h| h == board.hash())
+                    .count()
+                    >= 2
+                || self
+                    .search_history
+                    .iter()
+                    .rev()
+                    .take(board.halfmove_clock() as usize)
                     .any(|h| *h == board.hash()))
         {
             pv.clear();
             return DRAW_SCORE;
         }
+
+        let mut tt_move = Move::null();
+        let mut tt_score = MINUS_INF;
+        // don't probe the TT in the PV so a full PV can be reported
+        // if !pv_node {
+        if let Some(entry) = tt.get(board.hash()) {
+            // TT pruning when the bounds are correct
+            if entry.depth >= depth as i8
+                && (entry.node_type == Exact
+                    || (entry.node_type == LowerBound && entry.score >= beta)
+                    || (entry.node_type == UpperBound && entry.score <= alpha))
+            {
+                pv.clear();
+                return entry.score;
+            }
+
+            // otherwise use the score as an improved static eval
+            // and the move for move ordering
+            tt_score = entry.score;
+            tt_move = Move {
+                piece: entry.piece,
+                from: entry.move_from,
+                to: entry.move_to,
+                promotion: entry.promotion,
+            };
+        }
+        // }
 
         // the PV from this node will be gathered into this array
         let mut line = PrincipalVariation::new();
@@ -415,15 +452,25 @@ impl Search {
             }
         }
 
+        // move ordering: try heuristically good moves first to reduce the AB search tree
+        for smv in self.move_lists[ply].inner_mut().iter_mut() {
+            // search the TT move first
+            if smv.mv == tt_move {
+                smv.score = 50_000
+            }
+        }
+
         // make sure the reported best move is at least legal
         let mut best_move = self.move_lists[ply][0];
 
+        // save the old alpha to see if any moves improve the PV
+        let old_alpha = alpha;
         for i in 0..self.move_lists[ply].len() {
             // pick the move with the next highest sorting score
-            let mv = self.move_lists[ply][i];
+            let (mv, score) = self.move_lists[ply].pick_move(i);
 
             // make the move on a copy of the board
-            self.position_history.push(board.hash());
+            self.search_history.push(board.hash());
             let mut new = board.clone();
             new.make_move(mv);
 
@@ -431,11 +478,20 @@ impl Search {
             let score = -self.negamax(&new, -beta, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
 
             // 'unmake' the move by removing it from the position history
-            self.position_history.pop();
+            self.search_history.pop();
+
+            // scores can't be trusted after an abort, don't let them get into the TT
+            if ABORT_SEARCH.load(Relaxed) {
+                return 0;
+            }
 
             if score >= beta {
                 // beta cutoff, this move is too good and so the opponent won't go into this position
                 pv.clear();
+
+                // add the score and move to TT
+                tt.set(board.hash(), mv, depth as i8, score, LowerBound, pv_node);
+
                 return score;
             } else if score > alpha {
                 // a score between alpha and beta represents a new best move
@@ -449,7 +505,18 @@ impl Search {
             }
         }
 
-        // after all moves have been searched, alpha is now the score resulting from the best move
+        // after all moves have been searched, alpha is either unchanged
+        // (this position is bad) or raised (new pv from this node)
+        // add the score and the new best move to the TT
+        tt.set(
+            board.hash(),
+            best_move,
+            depth as i8,
+            alpha,
+            if alpha > old_alpha { Exact } else { UpperBound },
+            pv_node,
+        );
+
         alpha
     }
 
@@ -507,21 +574,57 @@ impl Search {
         // increase the seldepth if this node is deeper
         self.seldepth = self.seldepth.max(ply);
 
-        // check 50 move and repetition draws when not at the root
+        // check 50 move and repetition draws
         if board.halfmove_clock() >= 100
-                // we count single repetitions as draws, not checking at the root
-                // avoids draw scores in given single repetitions
-                || self
-                    .position_history
-                    .iter()
-                    .rev()
-                    .any(|h| *h == board.hash())
+            || self
+                .pre_history
+                .iter()
+                .rev()
+                .take(board.halfmove_clock() as usize)
+                .filter(|&&h| h == board.hash())
+                .count()
+                >= 2
+            || self
+                .search_history
+                .iter()
+                .rev()
+                .take(board.halfmove_clock() as usize)
+                .any(|&h| h == board.hash())
         {
             return (DRAW_SCORE, T::default());
         }
 
+        // Transposition Table lookup when tracing is disabled
+        let mut tt_move = Move::null();
+        let mut tt_score = MINUS_INF;
+        if !T::TRACING {
+            if let Some(entry) = tt.get(board.hash()) {
+                // TT pruning when the bounds are correct
+                if (entry.node_type == Exact
+                    || (entry.node_type == LowerBound && entry.score >= beta)
+                    || (entry.node_type == UpperBound && entry.score <= alpha))
+                {
+                    return (entry.score, T::default());
+                }
+
+                // otherwise use the score as an improved static eval
+                // and the move for move ordering
+                tt_score = entry.score;
+                tt_move = Move {
+                    piece: entry.piece,
+                    from: entry.move_from,
+                    to: entry.move_to,
+                    promotion: entry.promotion,
+                };
+            }
+        }
+
         // the static evaluation allows us to prune moves that are worse than 'standing pat' at this node
-        let (static_eval, mut best_trace) = board.evaluate_impl::<T>(&mut self.pawn_hash_table);
+        let (static_eval, mut best_trace) = if !T::TRACING && tt_score != MINUS_INF {
+            (tt_score, T::default())
+        } else {
+            board.evaluate_impl::<T>(&mut self.pawn_hash_table)
+        };
 
         // if the static eval is above beta, then the opponent won't play into this position
         if static_eval >= beta {
@@ -534,6 +637,14 @@ impl Search {
         // quiescence search only looks at captures to ensure fast completion
         board.generate_legal_captures_into(&mut self.move_lists[ply]);
 
+        // move ordering: try heuristically good moves first to reduce the AB search tree
+        for smv in self.move_lists[ply].inner_mut().iter_mut() {
+            // search the TT move first
+            if smv.mv == tt_move {
+                smv.score = 50_000
+            }
+        }
+
         let old_alpha = alpha;
 
         // make sure the best move is at least legal
@@ -541,10 +652,10 @@ impl Search {
 
         for i in 0..self.move_lists[ply].len() {
             // pick the move with the next highest sorting score
-            let mv = self.move_lists[ply][i];
+            let (mv, score) = self.move_lists[ply].pick_move(i);
 
             // make the move on a copy of the board
-            self.position_history.push(board.hash());
+            self.search_history.push(board.hash());
             let mut new = board.clone();
             new.make_move(mv);
 
@@ -553,10 +664,13 @@ impl Search {
             score = -score;
 
             // 'unmake' the move by removing it from the position history
-            self.position_history.pop();
+            self.search_history.pop();
 
             if score >= beta {
                 // beta cutoff, this move is too good and so the opponent won't go into this position
+
+                // add the score to the TT
+                tt.set(board.hash(), mv, -1, score, LowerBound, false);
                 return (score, trace);
             } else if score > alpha {
                 // a score between alpha and beta represents a new best move
@@ -569,7 +683,8 @@ impl Search {
         }
 
         // if there are no legal captures, check for checkmate/stalemate
-        if self.move_lists[ply].len() == 0 {
+        // disable when tracing to avoid empty traces
+        if !T::TRACING && self.move_lists[ply].len() == 0 {
             let mut some_moves = false;
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 
@@ -581,6 +696,17 @@ impl Search {
                 }
             }
         }
+
+        // after all moves are searched alpha is either unchanged (this position is bad) or raised (new pv)
+        // add the score to the TT
+        tt.set(
+            board.hash(),
+            best_move,
+            -1,
+            alpha,
+            if alpha > old_alpha { Exact } else { UpperBound },
+            false,
+        );
 
         (alpha, best_trace)
     }

@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut options = EngineOptions::default();
 
     let mut tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
-    let mut position_history = Vec::new();
+    let mut pre_history = Vec::new();
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let bench_game = position.clone();
@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
             uci::UciCommand::UciNewGame => {
                 position = Board::new();
-                position_history.clear();
+                pre_history.clear();
                 tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
             }
             uci::UciCommand::Position { fen, moves } => {
@@ -89,9 +89,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Some(fen) => position = Board::from_fen(fen).unwrap(),
                     None => position = Board::new(),
                 }
-                position_history.clear();
+                pre_history.clear();
                 for m in moves {
-                    position_history.push(position.hash());
+                    pre_history.push(position.hash());
                     position.make_move(m);
                 }
             }
@@ -137,7 +137,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let mut search = Search::new_with_tt(position.clone(), tt.clone())
                     .tt_size_mb(options.tt_size_mb)
-                    .position_history(position_history.clone())
+                    .pre_history(pre_history.clone())
                     .max_nodes(nodes)
                     .max_depth(depth)
                     .options(options)
