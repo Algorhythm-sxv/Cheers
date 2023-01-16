@@ -408,11 +408,10 @@ impl Search {
 
         let mut tt_move = Move::null();
         let mut tt_score = MINUS_INF;
-        // don't probe the TT in the PV so a full PV can be reported
-        // if !pv_node {
         if let Some(entry) = tt.get(board.hash()) {
-            // TT pruning when the bounds are correct
-            if entry.depth >= depth as i8
+            // TT pruning when the bounds are correct, but not at the root or in the PV
+            if !root
+                && entry.depth >= depth as i8
                 && (entry.node_type == Exact
                     || (entry.node_type == LowerBound && entry.score >= beta)
                     || (entry.node_type == UpperBound && entry.score <= alpha))
@@ -423,7 +422,9 @@ impl Search {
 
             // otherwise use the score as an improved static eval
             // and the move for move ordering
-            tt_score = entry.score;
+            if matches!(entry.node_type, LowerBound | Exact) {
+                tt_score = entry.score;
+            }
             tt_move = Move {
                 piece: entry.piece,
                 from: entry.move_from,
@@ -431,7 +432,6 @@ impl Search {
                 promotion: entry.promotion,
             };
         }
-        // }
 
         // the PV from this node will be gathered into this array
         let mut line = PrincipalVariation::new();
@@ -600,16 +600,18 @@ impl Search {
         if !T::TRACING {
             if let Some(entry) = tt.get(board.hash()) {
                 // TT pruning when the bounds are correct
-                if (entry.node_type == Exact
+                if entry.node_type == Exact
                     || (entry.node_type == LowerBound && entry.score >= beta)
-                    || (entry.node_type == UpperBound && entry.score <= alpha))
+                    || (entry.node_type == UpperBound && entry.score <= alpha)
                 {
                     return (entry.score, T::default());
                 }
 
                 // otherwise use the score as an improved static eval
                 // and the move for move ordering
-                tt_score = entry.score;
+                if matches!(entry.node_type, LowerBound | Exact) {
+                    tt_score = entry.score;
+                }
                 tt_move = Move {
                     piece: entry.piece,
                     from: entry.move_from,
