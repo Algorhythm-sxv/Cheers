@@ -7,6 +7,21 @@ use Piece::*;
 use super::Board;
 
 pub const SEE_PIECE_VALUES: [i32; 6] = [100, 300, 300, 500, 900, 200000];
+pub const MVV_LVA: [[i16; 6]; 6] = [
+    // pawn captured
+    [10, 11, 12, 13, 14, 15],
+    // knight captured
+    [20, 21, 22, 23, 24, 25],
+    // bishop captured
+    [30, 31, 32, 33, 34, 35],
+    // rook captured
+    [40, 41, 42, 43, 44, 45],
+    // queen captures
+    [50, 51, 52, 53, 54, 55],
+    // king captured (never happens)
+    [0, 0, 0, 0, 0, 0],
+];
+
 impl Board {
     pub fn see(&self, mv: Move) -> i32 {
         let target = mv.to;

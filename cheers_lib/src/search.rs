@@ -6,6 +6,8 @@ use std::{fmt::Display, sync::atomic::*};
 use cheers_pregen::LMR;
 use eval_params::{EvalParams, CHECKMATE_SCORE, DRAW_SCORE, EVAL_PARAMS};
 
+use crate::board::see::MVV_LVA;
+use crate::moves::MoveScore;
 use crate::{
     board::{
         eval_types::{GamePhase::*, TraceTarget},
@@ -132,7 +134,7 @@ pub struct Search {
     transposition_table: Arc<RwLock<TranspositionTable>>,
     pawn_hash_table: PawnHashTable,
     killer_moves: KillerMoves<2>,
-    history_tables: [[[i32; 64]; 6]; 2],
+    history_tables: [[[i16; 64]; 6]; 2],
     countermove_tables: [[[Move; 64]; 6]; 2],
     pub max_depth: Option<usize>,
     pub max_nodes: Option<usize>,
@@ -456,7 +458,45 @@ impl Search {
         for smv in self.move_lists[ply].inner_mut().iter_mut() {
             // search the TT move first
             if smv.mv == tt_move {
-                smv.score = 50_000
+                smv.score = MoveScore::TTMove
+            // sort the winning/losing captures and capture promotions
+            } else if board.is_capture(smv.mv) {
+                if smv.mv.promotion == Queen {
+                    smv.score = MoveScore::WinningCapture(SEE_PIECE_VALUES[Queen] as i16)
+                } else if smv.mv.promotion != Pawn {
+                    smv.score = MoveScore::UnderPromotion(SEE_PIECE_VALUES[smv.mv.promotion] as i16)
+                } else {
+                    let mvv_lva = MVV_LVA[board.piece_on(smv.mv.to).unwrap_or(Pawn)][smv.mv.piece];
+                    if mvv_lva > 0 {
+                        smv.score = MoveScore::WinningCapture(mvv_lva)
+                    } else {
+                        smv.score = MoveScore::LosingCapture(mvv_lva)
+                    }
+                }
+            // sort quiet promotions
+            } else if smv.mv.promotion != Pawn {
+                if smv.mv.promotion == Queen {
+                    smv.score = MoveScore::WinningCapture(SEE_PIECE_VALUES[Queen] as i16)
+                } else {
+                    smv.score = MoveScore::UnderPromotion(SEE_PIECE_VALUES[smv.mv.promotion] as i16)
+                }
+            // sort quiet moves
+            } else {
+                // killer moves
+                if self.killer_moves[ply].contains(&smv.mv) {
+                    smv.score = MoveScore::KillerMove
+                //  countermove
+                } else if smv.mv
+                    == self.countermove_tables[board.current_player()][last_move.piece]
+                        [last_move.to]
+                {
+                    smv.score = MoveScore::CounterMove
+                // Other quiets get sorted by history heuristic
+                } else {
+                    smv.score = MoveScore::Quiet(
+                        self.history_tables[board.current_player()][smv.mv.piece][smv.mv.to],
+                    )
+                }
             }
         }
 
@@ -465,23 +505,27 @@ impl Search {
 
         // save the old alpha to see if any moves improve the PV
         let old_alpha = alpha;
+
+        // push this position to the history
+        self.search_history.push(board.hash());
+
         for i in 0..self.move_lists[ply].len() {
             // pick the move with the next highest sorting score
             let (mv, score) = self.move_lists[ply].pick_move(i);
 
+            let capture = board.is_capture(mv);
+
             // make the move on a copy of the board
-            self.search_history.push(board.hash());
             let mut new = board.clone();
             new.make_move(mv);
 
             // perform a search on the new position, returning the score and the PV
             let score = -self.negamax(&new, -beta, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
 
-            // 'unmake' the move by removing it from the position history
-            self.search_history.pop();
-
             // scores can't be trusted after an abort, don't let them get into the TT
             if ABORT_SEARCH.load(Relaxed) {
+                // remove this position from the history
+                self.search_history.pop();
                 return 0;
             }
 
@@ -491,6 +535,41 @@ impl Search {
 
                 // add the score and move to TT
                 tt.set(board.hash(), mv, depth as i8, score, LowerBound, pv_node);
+
+                // update killer, countermove and history tables for good quiets
+                if !capture {
+                    self.killer_moves.push(mv, ply);
+                    self.countermove_tables[board.current_player()][last_move.piece]
+                        [last_move.to] = mv;
+                    self.history_tables[board.current_player()][mv.piece][mv.to] +=
+                        (depth * depth) as i16;
+                    // scale history scores down if they get too high
+                    if self.history_tables[board.current_player()][mv.piece][mv.to] > 4096 {
+                        self.history_tables[board.current_player()]
+                            .iter_mut()
+                            .flatten()
+                            .for_each(|x| *x /= 64);
+                    }
+
+                    // punish quiets that were played but didn't cause a beta cutoff
+                    for smv in self.move_lists[ply].inner()[..(i.max(1) - 1)]
+                        .iter()
+                        .filter(|smv| !board.is_capture(smv.mv))
+                    {
+                        let mv = smv.mv;
+                        self.history_tables[board.current_player()][mv.piece][mv.to] -=
+                            (depth * depth) as i16;
+                        if self.history_tables[board.current_player()][mv.piece][mv.to] < -4096 {
+                            self.history_tables[board.current_player()]
+                                .iter_mut()
+                                .flatten()
+                                .for_each(|x| *x /= 64)
+                        }
+                    }
+                }
+
+                // remove this position from the history
+                self.search_history.pop();
 
                 return score;
             } else if score > alpha {
@@ -504,6 +583,9 @@ impl Search {
                 alpha = score;
             }
         }
+
+        // remove this position from the history
+        self.search_history.pop();
 
         // after all moves have been searched, alpha is either unchanged
         // (this position is bad) or raised (new pv from this node)
@@ -643,7 +725,22 @@ impl Search {
         for smv in self.move_lists[ply].inner_mut().iter_mut() {
             // search the TT move first
             if smv.mv == tt_move {
-                smv.score = 50_000
+                smv.score = MoveScore::TTMove
+            // sort winning/losing captures
+            } else {
+                // underpromotions
+                if matches!(smv.mv.promotion, Knight | Bishop | Rook) {
+                    smv.score =
+                        MoveScore::UnderPromotion(SEE_PIECE_VALUES[smv.mv.promotion] as i16);
+                } else {
+                    let mvv_lva = MVV_LVA[board.piece_on(smv.mv.to).unwrap_or(Pawn)][smv.mv.piece];
+                    let promotion = SEE_PIECE_VALUES[smv.mv.promotion] as i16 - 100;
+                    if mvv_lva + promotion > 0 {
+                        smv.score = MoveScore::WinningCapture(mvv_lva + promotion);
+                    } else {
+                        smv.score = MoveScore::LosingCapture(mvv_lva + promotion);
+                    }
+                }
             }
         }
 

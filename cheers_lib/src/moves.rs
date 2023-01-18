@@ -157,15 +157,30 @@ impl Iterator for MoveMaskIter {
     }
 }
 
+// deriving PartialOrd means that these are sorted with the last variant being the largest
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MoveScore {
+    UnderPromotion(i16),
+    LosingCapture(i16),
+    Quiet(i16),
+    CounterMove,
+    KillerMove,
+    WinningCapture(i16),
+    TTMove,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct SortingMove {
     pub mv: Move,
-    pub score: i32,
+    pub score: MoveScore,
 }
 
 impl SortingMove {
     pub fn new(mv: Move) -> Self {
-        Self { mv, score: 0 }
+        Self {
+            mv,
+            score: MoveScore::Quiet(0),
+        }
     }
 }
 
@@ -207,7 +222,7 @@ impl MoveList {
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
-    pub fn pick_move(&mut self, current_index: usize) -> (Move, i32) {
+    pub fn pick_move(&mut self, current_index: usize) -> (Move, MoveScore) {
         let mut best_index = current_index;
 
         for i in (current_index + 1)..self.len {
