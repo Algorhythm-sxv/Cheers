@@ -411,8 +411,8 @@ impl Search {
         let mut tt_move = Move::null();
         let mut tt_score = MINUS_INF;
         if let Some(entry) = tt.get(board.hash()) {
-            // TT pruning when the bounds are correct, but not at the root or in the PV
-            if !root
+            // TT pruning when the bounds are correct, but not at in the PV
+            if !pv_node
                 && entry.depth >= depth as i8
                 && (entry.node_type == Exact
                     || (entry.node_type == LowerBound && entry.score >= beta)
@@ -519,8 +519,28 @@ impl Search {
             let mut new = board.clone();
             new.make_move(mv);
 
+            let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
-            let score = -self.negamax(&new, -beta, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
+            let full_width = i == 0 || {
+                // null window search on later moves
+                score = -self.negamax(
+                    &new,
+                    -alpha - 1,
+                    -alpha,
+                    depth - 1,
+                    ply + 1,
+                    mv,
+                    &mut line,
+                    tt,
+                );
+
+                score > alpha && score < beta
+            };
+
+            // full window search on the first move and later moves that improved alpha
+            if full_width {
+                score = -self.negamax(&new, -beta, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
+            }
 
             // scores can't be trusted after an abort, don't let them get into the TT
             if ABORT_SEARCH.load(Relaxed) {
