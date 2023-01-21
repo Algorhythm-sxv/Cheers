@@ -3,8 +3,9 @@ use std::sync::atomic::*;
 use cheers_bitboards::{BitBoard, Square};
 
 use crate::{
-    board::eval_types::EvalScore,
+    board::{eval_types::EvalScore, evaluate::CHECKMATE_SCORE},
     moves::Move,
+    search::SEARCH_MAX_PLY,
     types::{Piece, TypeColor},
 };
 
@@ -138,6 +139,32 @@ impl TranspositionTable {
             .iter()
             .filter(|e| e.data.load(Ordering::Relaxed) != 0)
             .count()
+    }
+}
+
+pub fn score_from_tt(score: i32, ply: usize) -> i32 {
+    // mate scores out of the TT in plies from the current position
+    if CHECKMATE_SCORE.abs_diff(score) <= SEARCH_MAX_PLY as u32 {
+        // move the mate further away to the plies from the root
+        score - ply as i32
+    } else if (-CHECKMATE_SCORE).abs_diff(score) <= SEARCH_MAX_PLY as u32 {
+        // move the mate further away to the plies from the root
+        score + ply as i32
+    } else {
+        score
+    }
+}
+
+pub fn score_into_tt(score: i32, ply: usize) -> i32 {
+    // mate scores into the TT are in plies from the root
+    if CHECKMATE_SCORE.abs_diff(score) <= SEARCH_MAX_PLY as u32 {
+        // move the mate closer to the plies from the current position
+        score + ply as i32
+    } else if (-CHECKMATE_SCORE).abs_diff(score) <= SEARCH_MAX_PLY as u32 {
+        // move the mate closer to the plies from the current position
+        score - ply as i32
+    } else {
+        score
     }
 }
 

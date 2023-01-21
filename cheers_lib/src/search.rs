@@ -7,6 +7,7 @@ use cheers_pregen::LMR;
 use eval_params::{EvalParams, CHECKMATE_SCORE, DRAW_SCORE, EVAL_PARAMS};
 
 use crate::board::see::MVV_LVA;
+use crate::hash_tables::{score_from_tt, score_into_tt};
 use crate::moves::MoveScore;
 use crate::{
     board::{
@@ -25,7 +26,7 @@ pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 const INF: i32 = i32::MAX;
 const MINUS_INF: i32 = -INF;
 
-const SEARCH_MAX_PLY: usize = 128;
+pub const SEARCH_MAX_PLY: usize = 128;
 
 pub const PV_MAX_LEN: usize = 16;
 #[derive(Copy, Clone, Default, Debug)]
@@ -419,13 +420,13 @@ impl Search {
                     || (entry.node_type == UpperBound && entry.score <= alpha))
             {
                 pv.clear();
-                return entry.score;
+                return score_from_tt(entry.score, ply);
             }
 
             // otherwise use the score as an improved static eval
             // and the move for move ordering
             if matches!(entry.node_type, LowerBound | Exact) {
-                tt_score = entry.score;
+                tt_score = score_from_tt(entry.score, ply);
             }
             tt_move = Move {
                 piece: entry.piece,
@@ -554,7 +555,7 @@ impl Search {
                 pv.clear();
 
                 // add the score and move to TT
-                tt.set(board.hash(), mv, depth as i8, score, LowerBound, pv_node);
+                tt.set(board.hash(), mv, depth as i8, score_into_tt(score, ply), LowerBound, pv_node);
 
                 // update killer, countermove and history tables for good quiets
                 if !capture {
@@ -614,7 +615,7 @@ impl Search {
             board.hash(),
             best_move,
             depth as i8,
-            alpha,
+            score_into_tt(alpha, ply),
             if alpha > old_alpha { Exact } else { UpperBound },
             pv_node,
         );
@@ -706,13 +707,13 @@ impl Search {
                     || (entry.node_type == LowerBound && entry.score >= beta)
                     || (entry.node_type == UpperBound && entry.score <= alpha)
                 {
-                    return (entry.score, T::default());
+                    return (score_from_tt(entry.score, ply), T::default());
                 }
 
                 // otherwise use the score as an improved static eval
                 // and the move for move ordering
                 if matches!(entry.node_type, LowerBound | Exact) {
-                    tt_score = entry.score;
+                    tt_score = score_from_tt(entry.score, ply);
                 }
                 tt_move = Move {
                     piece: entry.piece,
@@ -789,7 +790,7 @@ impl Search {
                 // beta cutoff, this move is too good and so the opponent won't go into this position
 
                 // add the score to the TT
-                tt.set(board.hash(), mv, -1, score, LowerBound, false);
+                tt.set(board.hash(), mv, -1, score_into_tt(score, ply), LowerBound, false);
                 return (score, trace);
             } else if score > alpha {
                 // a score between alpha and beta represents a new best move
@@ -822,7 +823,7 @@ impl Search {
             board.hash(),
             best_move,
             -1,
-            alpha,
+            score_into_tt(alpha, ply),
             if alpha > old_alpha { Exact } else { UpperBound },
             false,
         );
