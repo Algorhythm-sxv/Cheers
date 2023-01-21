@@ -619,9 +619,24 @@ impl Board {
             _ => {}
         }
 
+        // clear the old ep zobrist number
         self.hash ^= zobrist_ep(self.ep_mask);
-        self.ep_mask = new_ep_mask;
-        self.hash ^= zobrist_ep(self.ep_mask);
+
+        // if ep is possible then update the mask and add it to the hash
+        let enemy_pawns = if T::WHITE {
+            self.black_pawns
+        } else {
+            self.white_pawns
+        };
+        if new_ep_mask != BitBoard::empty()
+            && (self.pawn_attack::<T>(new_ep_mask.first_square()) & enemy_pawns).is_not_empty()
+        {
+            self.ep_mask = new_ep_mask;
+            self.hash ^= zobrist_ep(self.ep_mask);
+        } else {
+            self.ep_mask = BitBoard::empty();
+            self.hash ^= zobrist_ep(self.ep_mask)
+        }
 
         let (bishops, rooks, friendly_pieces, enemy_pieces) = if T::WHITE {
             (
