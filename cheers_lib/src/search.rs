@@ -386,6 +386,7 @@ impl Search {
         let in_check = board.in_check();
         let root = ply == 0;
         let pv_node = alpha != beta - 1;
+        let current_player = board.current_player();
 
         // check 50 move and repetition draws when not at the root
         if !root
@@ -440,6 +441,20 @@ impl Search {
         // the PV from this node will be gathered into this array
         let mut line = PrincipalVariation::new();
 
+        // Null Move Pruning
+        // if the opponent gets two moves in a row and the position is still good then prune
+        if !pv_node && !in_check && depth >= self.options.nmp_depth && board.has_non_pawn_material(current_player){
+            self.search_history.push(board.hash());
+            let mut new = board.clone();
+            new.make_null_move();
+            let score = -self.negamax(&new, -beta, -beta+1, (depth-self.options.nmp_reduction).max(0), ply+1, Move::null(), &mut line, tt);
+            self.search_history.pop();
+
+            if score >= beta {
+                return score;
+            }
+        }
+
         // generate legal moves into the list for this depth
         board.generate_legal_moves_into(&mut self.move_lists[ply]);
 
@@ -489,14 +504,14 @@ impl Search {
                     smv.score = MoveScore::KillerMove
                 //  countermove
                 } else if smv.mv
-                    == self.countermove_tables[board.current_player()][last_move.piece]
+                    == self.countermove_tables[current_player][last_move.piece]
                         [last_move.to]
                 {
                     smv.score = MoveScore::CounterMove
                 // Other quiets get sorted by history heuristic
                 } else {
                     smv.score = MoveScore::Quiet(
-                        self.history_tables[board.current_player()][smv.mv.piece][smv.mv.to],
+                        self.history_tables[current_player][smv.mv.piece][smv.mv.to],
                     )
                 }
             }
@@ -568,13 +583,13 @@ impl Search {
                 // update killer, countermove and history tables for good quiets
                 if !capture {
                     self.killer_moves.push(mv, ply);
-                    self.countermove_tables[board.current_player()][last_move.piece]
+                    self.countermove_tables[current_player][last_move.piece]
                         [last_move.to] = mv;
-                    self.history_tables[board.current_player()][mv.piece][mv.to] +=
+                    self.history_tables[current_player][mv.piece][mv.to] +=
                         (depth * depth) as i16;
                     // scale history scores down if they get too high
-                    if self.history_tables[board.current_player()][mv.piece][mv.to] > 4096 {
-                        self.history_tables[board.current_player()]
+                    if self.history_tables[current_player][mv.piece][mv.to] > 4096 {
+                        self.history_tables[current_player]
                             .iter_mut()
                             .flatten()
                             .for_each(|x| *x /= 64);
@@ -586,10 +601,10 @@ impl Search {
                         .filter(|smv| !board.is_capture(smv.mv))
                     {
                         let mv = smv.mv;
-                        self.history_tables[board.current_player()][mv.piece][mv.to] -=
+                        self.history_tables[current_player][mv.piece][mv.to] -=
                             (depth * depth) as i16;
-                        if self.history_tables[board.current_player()][mv.piece][mv.to] < -4096 {
-                            self.history_tables[board.current_player()]
+                        if self.history_tables[current_player][mv.piece][mv.to] < -4096 {
+                            self.history_tables[current_player]
                                 .iter_mut()
                                 .flatten()
                                 .for_each(|x| *x /= 64)
