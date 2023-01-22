@@ -406,7 +406,8 @@ impl Search {
                     .any(|h| *h == board.hash()))
         {
             pv.clear();
-            return DRAW_SCORE;
+            // randomise around the draw score slightly to improve searching of draws
+            return DRAW_SCORE + 4 - (nodes & 7) as i32;
         }
 
         let mut tt_move = Move::null();
@@ -555,7 +556,14 @@ impl Search {
                 pv.clear();
 
                 // add the score and move to TT
-                tt.set(board.hash(), mv, depth as i8, score_into_tt(score, ply), LowerBound, pv_node);
+                tt.set(
+                    board.hash(),
+                    mv,
+                    depth as i8,
+                    score_into_tt(score, ply),
+                    LowerBound,
+                    pv_node,
+                );
 
                 // update killer, countermove and history tables for good quiets
                 if !capture {
@@ -790,7 +798,14 @@ impl Search {
                 // beta cutoff, this move is too good and so the opponent won't go into this position
 
                 // add the score to the TT
-                tt.set(board.hash(), mv, -1, score_into_tt(score, ply), LowerBound, false);
+                tt.set(
+                    board.hash(),
+                    mv,
+                    -1,
+                    score_into_tt(score, ply),
+                    LowerBound,
+                    false,
+                );
                 return (score, trace);
             } else if score > alpha {
                 // a score between alpha and beta represents a new best move
