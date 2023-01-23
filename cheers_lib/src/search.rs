@@ -1,14 +1,16 @@
-use std::ops::Index;
+use std::sync::atomic::*;
 use std::sync::{atomic::Ordering::*, Arc, RwLock};
 use std::time::Instant;
-use std::{fmt::Display, sync::atomic::*};
 
 use cheers_pregen::LMR;
 use eval_params::{EvalParams, CHECKMATE_SCORE, DRAW_SCORE, EVAL_PARAMS};
 
 use crate::board::see::MVV_LVA;
 use crate::hash_tables::{score_from_tt, score_into_tt};
-use crate::moves::MoveScore;
+use crate::move_sorting::MoveSorter;
+use crate::moves::{MoveScore, PrincipalVariation, NUM_KILLER_MOVES};
+use crate::options::SearchOptions;
+use crate::types::{All, Captures, NotRoot, Root, TypeRoot};
 use crate::{
     board::{
         eval_types::{GamePhase::*, TraceTarget},
@@ -28,103 +30,6 @@ const MINUS_INF: i32 = -INF;
 
 pub const SEARCH_MAX_PLY: usize = 128;
 
-pub const PV_MAX_LEN: usize = 16;
-#[derive(Copy, Clone, Default, Debug)]
-pub struct PrincipalVariation {
-    len: usize,
-    moves: [Move; PV_MAX_LEN],
-}
-
-impl PrincipalVariation {
-    pub fn new() -> Self {
-        Self::default()
-    }
-    pub fn update_from(&mut self, next: Move, other: &Self) {
-        self.moves[0] = next;
-        self.moves[1..(other.len + 1).min(PV_MAX_LEN)]
-            .copy_from_slice(&other.moves[..(other.len.min(PV_MAX_LEN - 1))]);
-        self.len = (other.len + 1).min(PV_MAX_LEN);
-    }
-    pub fn clear(&mut self) {
-        self.len = 0;
-    }
-}
-impl Display for PrincipalVariation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, m) in self.moves.iter().take(self.len).enumerate() {
-            if i == 0 {
-                write!(f, "{}", m.coords())?;
-            } else {
-                write!(f, " {}", m.coords())?;
-            }
-        }
-        Ok(())
-    }
-}
-impl Index<usize> for PrincipalVariation {
-    type Output = Move;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.moves[index]
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct EngineOptions {
-    pub tt_size_mb: usize,
-    pub nmp_depth: i32,
-    pub nmp_reduction: i32,
-    pub see_pruning_depth: i32,
-    pub see_capture_margin: i32,
-    pub see_quiet_margin: i32,
-    pub pvs_fulldepth: i32,
-    pub delta_pruning_margin: i32,
-    pub fp_margin_1: i32,
-    pub fp_margin_2: i32,
-    pub fp_margin_3: i32,
-    pub rfp_margin: i32,
-    pub lmp_depth: i32,
-    pub lmp_margin: i32,
-    pub iir_depth: i32,
-}
-
-pub const NMP_DEPTH: i32 = 2;
-pub const NMP_REDUCTION: i32 = 5;
-pub const SEE_PRUNING_DEPTH: i32 = 6;
-pub const SEE_CAPTURE_MARGIN: i32 = 59;
-pub const SEE_QUIET_MARGIN: i32 = 39;
-pub const PVS_FULLDEPTH: i32 = 1;
-pub const DELTA_PRUNING_MARGIN: i32 = 91;
-pub const FP_MARGIN_1: i32 = 115;
-pub const FP_MARGIN_2: i32 = 344;
-pub const FP_MARGIN_3: i32 = 723;
-pub const RFP_MARGIN: i32 = 106;
-pub const LMP_DEPTH: i32 = 1;
-pub const LMP_MARGIN: i32 = 2;
-pub const IIR_DEPTH: i32 = 4;
-
-impl Default for EngineOptions {
-    fn default() -> Self {
-        Self {
-            tt_size_mb: 8,
-            nmp_depth: NMP_DEPTH,
-            nmp_reduction: NMP_REDUCTION,
-            see_pruning_depth: SEE_PRUNING_DEPTH,
-            see_capture_margin: SEE_CAPTURE_MARGIN,
-            see_quiet_margin: SEE_QUIET_MARGIN,
-            pvs_fulldepth: PVS_FULLDEPTH,
-            delta_pruning_margin: DELTA_PRUNING_MARGIN,
-            fp_margin_1: FP_MARGIN_1,
-            fp_margin_2: FP_MARGIN_2,
-            fp_margin_3: FP_MARGIN_3,
-            rfp_margin: RFP_MARGIN,
-            lmp_depth: LMP_DEPTH,
-            lmp_margin: LMP_MARGIN,
-            iir_depth: IIR_DEPTH,
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct Search {
     pub game: Board,
@@ -134,16 +39,16 @@ pub struct Search {
     pub seldepth: usize,
     transposition_table: Arc<RwLock<TranspositionTable>>,
     pawn_hash_table: PawnHashTable,
-    killer_moves: KillerMoves<2>,
-    history_tables: [[[i16; 64]; 6]; 2],
-    countermove_tables: [[[Move; 64]; 6]; 2],
+    pub killer_moves: KillerMoves<NUM_KILLER_MOVES>,
+    pub history_tables: [[[i16; 64]; 6]; 2],
+    pub countermove_tables: [[[Move; 64]; 6]; 2],
     pub max_depth: Option<usize>,
     pub max_nodes: Option<usize>,
     pub max_time_ms: Option<(usize, usize)>,
     pub abort_time_ms: Option<usize>,
     start_time: Instant,
     output: bool,
-    options: EngineOptions,
+    options: SearchOptions,
 }
 
 impl Search {
@@ -165,7 +70,7 @@ impl Search {
             abort_time_ms: None,
             start_time: Instant::now(),
             output: false,
-            options: EngineOptions::default(),
+            options: SearchOptions::default(),
         }
     }
 
@@ -187,7 +92,7 @@ impl Search {
             abort_time_ms: None,
             start_time: Instant::now(),
             output: false,
-            options: EngineOptions::default(),
+            options: SearchOptions::default(),
         }
     }
 
@@ -220,7 +125,7 @@ impl Search {
         self
     }
 
-    pub fn options(mut self, options: EngineOptions) -> Self {
+    pub fn options(mut self, options: SearchOptions) -> Self {
         self.options = options;
         self
     }
@@ -253,7 +158,7 @@ impl Search {
             let score = loop {
                 search.seldepth = 0;
 
-                let score = search.negamax(
+                let score = search.negamax::<Root>(
                     &self.game.clone(),
                     window.0,
                     window.1,
@@ -334,7 +239,7 @@ impl Search {
         (last_score, last_pv)
     }
 
-    fn negamax(
+    fn negamax<R: TypeRoot>(
         &mut self,
         board: &Board,
         mut alpha: i32,
@@ -384,12 +289,11 @@ impl Search {
         self.seldepth = self.seldepth.max(ply);
 
         let in_check = board.in_check();
-        let root = ply == 0;
         let pv_node = alpha != beta - 1;
         let current_player = board.current_player();
 
         // check 50 move and repetition draws when not at the root
-        if !root
+        if !R::ROOT
             && (board.halfmove_clock() >= 100
                 || self
                     .pre_history
@@ -443,11 +347,24 @@ impl Search {
 
         // Null Move Pruning
         // if the opponent gets two moves in a row and the position is still good then prune
-        if !pv_node && !in_check && depth >= self.options.nmp_depth && board.has_non_pawn_material(current_player){
+        if !pv_node
+            && !in_check
+            && depth >= self.options.nmp_depth
+            && board.has_non_pawn_material(current_player)
+        {
             self.search_history.push(board.hash());
             let mut new = board.clone();
             new.make_null_move();
-            let score = -self.negamax(&new, -beta, -beta+1, (depth-self.options.nmp_reduction).max(0), ply+1, Move::null(), &mut line, tt);
+            let score = -self.negamax::<NotRoot>(
+                &new,
+                -beta,
+                -beta + 1,
+                (depth - self.options.nmp_reduction).max(0),
+                ply + 1,
+                Move::null(),
+                &mut line,
+                tt,
+            );
             self.search_history.pop();
 
             if score >= beta {
@@ -455,70 +372,10 @@ impl Search {
             }
         }
 
-        // generate legal moves into the list for this depth
-        board.generate_legal_moves_into(&mut self.move_lists[ply]);
-
-        // check for checkmate and stalemate
-        if self.move_lists[ply].len() == 0 {
-            if in_check {
-                // checkmate, preferring shorter mating sequences
-                pv.clear();
-                return -(CHECKMATE_SCORE - (ply as i32));
-            } else {
-                // stalemate
-                pv.clear();
-                return DRAW_SCORE;
-            }
-        }
-
         // move ordering: try heuristically good moves first to reduce the AB search tree
-        for smv in self.move_lists[ply].inner_mut().iter_mut() {
-            // search the TT move first
-            if smv.mv == tt_move {
-                smv.score = MoveScore::TTMove
-            // sort the winning/losing captures and capture promotions
-            } else if board.is_capture(smv.mv) {
-                if smv.mv.promotion == Queen {
-                    smv.score = MoveScore::WinningCapture(SEE_PIECE_VALUES[Queen] as i16)
-                } else if smv.mv.promotion != Pawn {
-                    smv.score = MoveScore::UnderPromotion(SEE_PIECE_VALUES[smv.mv.promotion] as i16)
-                } else {
-                    let mvv_lva = MVV_LVA[board.piece_on(smv.mv.to).unwrap_or(Pawn)][smv.mv.piece];
-                    if mvv_lva > 0 {
-                        smv.score = MoveScore::WinningCapture(mvv_lva)
-                    } else {
-                        smv.score = MoveScore::LosingCapture(mvv_lva)
-                    }
-                }
-            // sort quiet promotions
-            } else if smv.mv.promotion != Pawn {
-                if smv.mv.promotion == Queen {
-                    smv.score = MoveScore::WinningCapture(SEE_PIECE_VALUES[Queen] as i16)
-                } else {
-                    smv.score = MoveScore::UnderPromotion(SEE_PIECE_VALUES[smv.mv.promotion] as i16)
-                }
-            // sort quiet moves
-            } else {
-                // killer moves
-                if self.killer_moves[ply].contains(&smv.mv) {
-                    smv.score = MoveScore::KillerMove
-                //  countermove
-                } else if smv.mv
-                    == self.countermove_tables[current_player][last_move.piece]
-                        [last_move.to]
-                {
-                    smv.score = MoveScore::CounterMove
-                // Other quiets get sorted by history heuristic
-                } else {
-                    smv.score = MoveScore::Quiet(
-                        self.history_tables[current_player][smv.mv.piece][smv.mv.to],
-                    )
-                }
-            }
-        }
+        let mut move_sorter = MoveSorter::<All>::new(tt_move);
 
-        // make sure the reported best move is at least legal
-        let mut best_move = self.move_lists[ply][0];
+        let mut best_move = Move::null();
 
         // save the old alpha to see if any moves improve the PV
         let old_alpha = alpha;
@@ -526,9 +383,18 @@ impl Search {
         // push this position to the history
         self.search_history.push(board.hash());
 
-        for i in 0..self.move_lists[ply].len() {
+        let mut move_index = 0;
+        while let Some((mv, _)) = move_sorter.next(
+            board,
+            &self.killer_moves[ply],
+            &self.countermove_tables,
+            &self.history_tables,
+            last_move,
+            &mut self.move_lists[ply],
+        ) {
+            // for i in 0..self.move_lists[ply].len() {
             // pick the move with the next highest sorting score
-            let (mv, score) = self.move_lists[ply].pick_move(i);
+            // let (mv, score) = self.move_lists[ply].pick_move(i);
 
             let capture = board.is_capture(mv);
 
@@ -538,9 +404,9 @@ impl Search {
 
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
-            let full_width = i == 0 || {
+            let full_width = move_index == 0 || {
                 // null window search on later moves
-                score = -self.negamax(
+                score = -self.negamax::<NotRoot>(
                     &new,
                     -alpha - 1,
                     -alpha,
@@ -556,7 +422,16 @@ impl Search {
 
             // full window search on the first move and later moves that improved alpha
             if full_width {
-                score = -self.negamax(&new, -beta, -alpha, depth - 1, ply + 1, mv, &mut line, tt);
+                score = -self.negamax::<NotRoot>(
+                    &new,
+                    -beta,
+                    -alpha,
+                    depth - 1,
+                    ply + 1,
+                    mv,
+                    &mut line,
+                    tt,
+                );
             }
 
             // scores can't be trusted after an abort, don't let them get into the TT
@@ -583,10 +458,8 @@ impl Search {
                 // update killer, countermove and history tables for good quiets
                 if !capture {
                     self.killer_moves.push(mv, ply);
-                    self.countermove_tables[current_player][last_move.piece]
-                        [last_move.to] = mv;
-                    self.history_tables[current_player][mv.piece][mv.to] +=
-                        (depth * depth) as i16;
+                    self.countermove_tables[current_player][last_move.piece][last_move.to] = mv;
+                    self.history_tables[current_player][mv.piece][mv.to] += (depth * depth) as i16;
                     // scale history scores down if they get too high
                     if self.history_tables[current_player][mv.piece][mv.to] > 4096 {
                         self.history_tables[current_player]
@@ -596,7 +469,7 @@ impl Search {
                     }
 
                     // punish quiets that were played but didn't cause a beta cutoff
-                    for smv in self.move_lists[ply].inner()[..(i.max(1) - 1)]
+                    for smv in self.move_lists[ply].inner()[..(move_index.max(1) - 1)]
                         .iter()
                         .filter(|smv| !board.is_capture(smv.mv))
                     {
@@ -626,7 +499,23 @@ impl Search {
                 // raise alpha so worse moves after this one will be pruned early
                 alpha = score;
             }
+
+            move_index += 1;
         }
+
+        // check for checkmate and stalemate
+        if self.move_lists[ply].len() == 0 {
+            if in_check {
+                // checkmate, preferring shorter mating sequences
+                pv.clear();
+                return -(CHECKMATE_SCORE - (ply as i32));
+            } else {
+                // stalemate
+                pv.clear();
+                return DRAW_SCORE;
+            }
+        }
+
 
         // remove this position from the history
         self.search_history.pop();
@@ -751,7 +640,7 @@ impl Search {
         let (static_eval, mut best_trace) = if !T::TRACING && tt_score != MINUS_INF {
             (tt_score, T::default())
         } else {
-            board.evaluate_impl::<T>(&mut self.pawn_hash_table)
+            board.evaluate_impl::<T>(&mut self.pawn_hash_table, eval_params)
         };
 
         // if the static eval is above beta, then the opponent won't play into this position
@@ -762,41 +651,21 @@ impl Search {
         // if the static eval is better than alpha, use it to prune moves instead
         alpha = alpha.max(static_eval);
 
-        // quiescence search only looks at captures to ensure fast completion
-        board.generate_legal_captures_into(&mut self.move_lists[ply]);
-
         // move ordering: try heuristically good moves first to reduce the AB search tree
-        for smv in self.move_lists[ply].inner_mut().iter_mut() {
-            // search the TT move first
-            if smv.mv == tt_move {
-                smv.score = MoveScore::TTMove
-            // sort winning/losing captures
-            } else {
-                // underpromotions
-                if matches!(smv.mv.promotion, Knight | Bishop | Rook) {
-                    smv.score =
-                        MoveScore::UnderPromotion(SEE_PIECE_VALUES[smv.mv.promotion] as i16);
-                } else {
-                    let mvv_lva = MVV_LVA[board.piece_on(smv.mv.to).unwrap_or(Pawn)][smv.mv.piece];
-                    let promotion = SEE_PIECE_VALUES[smv.mv.promotion] as i16 - 100;
-                    if mvv_lva + promotion > 0 {
-                        smv.score = MoveScore::WinningCapture(mvv_lva + promotion);
-                    } else {
-                        smv.score = MoveScore::LosingCapture(mvv_lva + promotion);
-                    }
-                }
-            }
-        }
+        // quiescence search only looks at captures and promotions to ensure termination
+        let mut move_sorter = MoveSorter::<Captures>::new(tt_move);
 
         let old_alpha = alpha;
 
-        // make sure the best move is at least legal
-        let mut best_move = self.move_lists[ply][0];
-
-        for i in 0..self.move_lists[ply].len() {
-            // pick the move with the next highest sorting score
-            let (mv, score) = self.move_lists[ply].pick_move(i);
-
+        let mut best_move = Move::null();
+        while let Some((mv, _)) = move_sorter.next(
+            board,
+            &self.killer_moves[ply],
+            &self.countermove_tables,
+            &self.history_tables,
+            Move::null(),
+            &mut self.move_lists[ply],
+        ) {
             // make the move on a copy of the board
             self.search_history.push(board.hash());
             let mut new = board.clone();

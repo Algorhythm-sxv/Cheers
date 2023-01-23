@@ -1,6 +1,6 @@
 use std::{fmt::Display, ops::Index};
 
-use crate::{board::Board, types::*};
+use crate::{board::Board, search::SEARCH_MAX_PLY, types::*};
 use Piece::*;
 
 use cheers_bitboards::*;
@@ -248,12 +248,13 @@ impl Index<usize> for MoveList {
     }
 }
 
+pub const NUM_KILLER_MOVES: usize = 2;
 #[derive(Copy, Clone)]
-pub struct KillerMoves<const N: usize>([[Move; N]; 128]);
+pub struct KillerMoves<const N: usize>([[Move; N]; SEARCH_MAX_PLY]);
 
 impl<const N: usize> KillerMoves<N> {
     pub fn new() -> Self {
-        Self([[Move::null(); N]; 128])
+        Self([[Move::null(); N]; SEARCH_MAX_PLY])
     }
     pub fn push(&mut self, m: Move, ply: usize) {
         let mut moves = self.0[ply];
@@ -277,5 +278,46 @@ impl<const N: usize> Index<usize> for KillerMoves<N> {
 impl<const N: usize> Default for KillerMoves<N> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+pub const PV_MAX_LEN: usize = 16;
+#[derive(Copy, Clone, Default, Debug)]
+pub struct PrincipalVariation {
+    len: usize,
+    moves: [Move; PV_MAX_LEN],
+}
+
+impl PrincipalVariation {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn update_from(&mut self, next: Move, other: &Self) {
+        self.moves[0] = next;
+        self.moves[1..(other.len + 1).min(PV_MAX_LEN)]
+            .copy_from_slice(&other.moves[..(other.len.min(PV_MAX_LEN - 1))]);
+        self.len = (other.len + 1).min(PV_MAX_LEN);
+    }
+    pub fn clear(&mut self) {
+        self.len = 0;
+    }
+}
+impl Display for PrincipalVariation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, m) in self.moves.iter().take(self.len).enumerate() {
+            if i == 0 {
+                write!(f, "{}", m.coords())?;
+            } else {
+                write!(f, " {}", m.coords())?;
+            }
+        }
+        Ok(())
+    }
+}
+impl Index<usize> for PrincipalVariation {
+    type Output = Move;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.moves[index]
     }
 }

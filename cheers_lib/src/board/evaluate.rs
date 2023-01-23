@@ -635,20 +635,21 @@ impl Board {
 
     #[inline]
     pub fn evaluate(&self, pawn_hash_table: &mut PawnHashTable) -> i32 {
-        self.evaluate_impl::<()>(pawn_hash_table).0
+        self.evaluate_impl::<()>(pawn_hash_table, &EVAL_PARAMS).0
     }
 
     #[inline]
     pub fn evaluate_impl<T: TraceTarget + Default>(
         &self,
         pawn_hash_table: &mut PawnHashTable,
+        eval_params: &EvalParams,
     ) -> (i32, T) {
         let mut trace = T::default();
         let mut eval = EvalContext {
             game: self,
             pawn_hash_table,
             trace: &mut trace,
-            params: &EVAL_PARAMS,
+            params: eval_params,
         };
         let score = if self.black_to_move {
             eval.evaluate::<Black>()

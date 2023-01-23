@@ -65,6 +65,31 @@ impl CastlingPossible for NoCastling {
     const CASTLING_POSSIBLE: bool = false;
 }
 
+pub struct Root;
+pub struct NotRoot;
+pub trait TypeRoot {
+    const ROOT: bool;
+}
+impl TypeRoot for Root {
+    const ROOT: bool = true;
+}
+impl TypeRoot for NotRoot {
+    const ROOT: bool = false;
+}
+
+pub struct Captures;
+pub struct All;
+pub trait TypeMoveGen {
+    const CAPTURES: bool;
+}
+
+impl TypeMoveGen for Captures {
+    const CAPTURES: bool = true;
+}
+impl TypeMoveGen for All {
+    const CAPTURES: bool = false;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Piece {
     Pawn = 0,

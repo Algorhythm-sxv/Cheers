@@ -11,9 +11,5 @@ members = [
 debug = true
 lto = true
 
-[profile.dev]
-opt-level = 3
-lto = true
-
 [profile.release]
 lto = true

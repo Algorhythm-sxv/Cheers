@@ -29,12 +29,13 @@ impl Board {
         list.reset();
         self.generate_legal_moves(|mvs| {
             for mv in mvs {
-                if self.is_capture(mv) {
+                if mv.promotion != Pawn || self.is_capture(mv) {
                     list.push(SortingMove::new(mv))
                 }
             }
         });
     }
+
     pub fn generate_legal_moves(&self, mut listener: impl FnMut(MoveMask)) {
         if self.black_to_move {
             self.legal_moves::<Black, _>(&mut listener)

@@ -1,7 +1,8 @@
 use cheers_lib::{
     board::Board,
     hash_tables::TranspositionTable,
-    search::{EngineOptions, Search, ABORT_SEARCH, NODE_COUNT},
+    options::SearchOptions,
+    search::{Search, ABORT_SEARCH, NODE_COUNT},
 };
 
 use std::{
@@ -16,7 +17,7 @@ mod uci;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut position = Board::new();
-    let mut options = EngineOptions::default();
+    let mut options = SearchOptions::default();
 
     let mut tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
     let mut pre_history = Vec::new();

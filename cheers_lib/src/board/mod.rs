@@ -471,6 +471,83 @@ impl Board {
         }
     }
 
+    pub fn is_pseudolegal(&self, mv: Move) -> bool {
+        if self.black_to_move {
+            self._is_pseudolegal::<Black>(mv)
+        } else {
+            self._is_pseudolegal::<White>(mv)
+        }
+    }
+
+    fn _is_pseudolegal<T: TypeColor>(&self, mv: Move) -> bool {
+        // null moves are never legal
+        if mv.is_null() {
+            return false;
+        }
+
+        let (pieces, enemy_pieces) = if T::WHITE {
+            (self.white_pieces, self.black_pieces)
+        } else {
+            (self.black_pieces, self.white_pieces)
+        };
+
+        let from = mv.from.bitboard();
+        let to = mv.to.bitboard();
+
+        // moving from an empty square
+        if (from & pieces).is_empty() {
+            return false;
+        }
+
+        // capturing a friendly piece (while not castling)
+        if mv.piece != King && (to & pieces).is_not_empty() {
+            return false;
+        }
+
+        // piece special cases
+        match mv.piece {
+            King => {
+                // castling
+                let rights = if T::WHITE {
+                    self.castling_rights[0]
+                } else {
+                    self.castling_rights[1]
+                };
+                if (to & (rights[0] | rights[1])).is_not_empty() {
+                    // get for full castling legality
+                    let queenside = (to | rights[1]).is_not_empty();
+                    return self.castling_legal::<T>(queenside);
+                }
+            }
+            Pawn => {
+                // erroneous promotions
+                if mv.promotion != Pawn && (to & (FIRST_RANK | EIGHTH_RANK)).is_empty() {
+                    return false;
+                }
+                // pushes
+                if matches!((mv.to).abs_diff(*mv.from), 8 | 16) {
+                    return (self.pawn_pushes::<T>(mv.from) & to).is_not_empty();
+                } else {
+                    // captures
+                    return (self.pawn_attack::<T>(mv.from) & to & (enemy_pieces | self.ep_mask))
+                        .is_not_empty();
+                }
+            }
+            _ => {}
+        }
+
+        let piece_attacks = match mv.piece {
+            Pawn => unreachable!(),
+            Knight => lookup_knight(mv.from),
+            Bishop => lookup_bishop(mv.from, self.occupied),
+            Rook => lookup_rook(mv.from, self.occupied),
+            Queen => lookup_queen(mv.from, self.occupied),
+            King => lookup_king(mv.from),
+        };
+
+        (to & piece_attacks & pieces.inverse()).is_not_empty()
+    }
+
     pub fn make_move(&mut self, mv: Move) {
         if self.black_to_move {
             self.make_move_for::<Black>(mv);
