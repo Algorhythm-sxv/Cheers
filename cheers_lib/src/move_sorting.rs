@@ -68,7 +68,7 @@ impl<M: TypeMoveGen> MoveSorter<M> {
             } else {
                 board.generate_legal_moves_into(list);
                 for m in list.inner_mut() {
-                    if board.is_capture(m.mv) {
+                    if m.mv.promotion != Pawn || board.is_capture(m.mv) {
                         m.score = score_capture(board, m.mv);
                     } else {
                         m.score = score_quiet(board, killers, counters, history, last_move, m.mv);
