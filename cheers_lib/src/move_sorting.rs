@@ -109,11 +109,8 @@ fn score_capture(board: &Board, mv: Move) -> MoveScore {
 
     let mvv_lva = MVV_LVA[board.piece_on(mv.to).unwrap_or(Pawn)][mv.piece];
 
-    if mvv_lva >= 0 {
-        MoveScore::WinningCapture(mvv_lva)
-    } else {
-        MoveScore::LosingCapture(mvv_lva)
-    }
+    // sort all captures before quiets
+    MoveScore::WinningCapture(mvv_lva)
 }
 
 fn score_quiet(
