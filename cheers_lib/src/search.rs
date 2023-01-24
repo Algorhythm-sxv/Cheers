@@ -392,9 +392,8 @@ impl Search {
             last_move,
             &mut self.move_lists[ply],
         ) {
-            // for i in 0..self.move_lists[ply].len() {
-            // pick the move with the next highest sorting score
-            // let (mv, score) = self.move_lists[ply].pick_move(i);
+            let i = move_index;
+            move_index += 1;
 
             let capture = board.is_capture(mv);
 
@@ -404,7 +403,7 @@ impl Search {
 
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
-            let full_width = move_index == 0 || {
+            let full_width = i == 0 || {
                 // null window search on later moves
                 score = -self.negamax::<NotRoot>(
                     &new,
@@ -469,7 +468,7 @@ impl Search {
                     }
 
                     // punish quiets that were played but didn't cause a beta cutoff
-                    for smv in self.move_lists[ply].inner()[..(move_index.max(1) - 1)]
+                    for smv in self.move_lists[ply].inner()[..(i.max(1) - 1)]
                         .iter()
                         .filter(|smv| !board.is_capture(smv.mv))
                     {
@@ -499,9 +498,9 @@ impl Search {
                 // raise alpha so worse moves after this one will be pruned early
                 alpha = score;
             }
-
-            move_index += 1;
         }
+        // remove this position from the history
+        self.search_history.pop();
 
         // check for checkmate and stalemate
         if self.move_lists[ply].len() == 0 {
@@ -515,10 +514,6 @@ impl Search {
                 return DRAW_SCORE;
             }
         }
-
-
-        // remove this position from the history
-        self.search_history.pop();
 
         // after all moves have been searched, alpha is either unchanged
         // (this position is bad) or raised (new pv from this node)
