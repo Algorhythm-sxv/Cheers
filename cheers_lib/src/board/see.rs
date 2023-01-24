@@ -9,15 +9,15 @@ use super::Board;
 pub const SEE_PIECE_VALUES: [i32; 6] = [100, 300, 300, 500, 900, 200000];
 pub const MVV_LVA: [[i16; 6]; 6] = [
     // pawn captured
-    [10, 11, 12, 13, 14, 15],
+    [15, 14, 13, 12, 11, 10],
     // knight captured
-    [20, 21, 22, 23, 24, 25],
+    [25, 24, 23, 22, 21, 20],
     // bishop captured
-    [30, 31, 32, 33, 34, 35],
+    [35, 34, 33, 32, 31, 30],
     // rook captured
-    [40, 41, 42, 43, 44, 45],
+    [45, 44, 43, 42, 41, 40],
     // queen captures
-    [50, 51, 52, 53, 54, 55],
+    [55, 54, 53, 52, 51, 50],
     // king captured (never happens)
     [0, 0, 0, 0, 0, 0],
 ];
