@@ -30,8 +30,8 @@ pub struct EvalInfo {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct EvalScore {
-    pub mg: i32,
-    pub eg: i32,
+    pub mg: i16,
+    pub eg: i16,
 }
 
 impl EvalScore {
@@ -105,9 +105,9 @@ impl<T, const N: usize> IndexMut<GamePhase> for [T; N] {
 #[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
-pub struct PieceTables(pub [[[i32; 2]; 64]; 6]);
+pub struct PieceTables(pub [[[i16; 2]; 64]; 6]);
 impl std::ops::Index<(GamePhase, Piece, Square)> for PieceTables {
-    type Output = i32;
+    type Output = i16;
     fn index(&self, index: (GamePhase, Piece, Square)) -> &Self::Output {
         &self.0[index.1 as usize][index.2][index.0 as usize]
     }
@@ -122,10 +122,10 @@ impl Default for PieceTables {
 #[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[repr(C)]
-pub struct PieceValues(pub [[i32; 2]; 6]);
+pub struct PieceValues(pub [[i16; 2]; 6]);
 
 impl std::ops::Index<(GamePhase, Piece)> for PieceValues {
-    type Output = i32;
+    type Output = i16;
     fn index(&self, index: (GamePhase, Piece)) -> &Self::Output {
         &self.0[index.1 as usize][index.0 as usize]
     }

@@ -9,59 +9,59 @@ use super::eval_types::{PieceTables, PieceValues};
 pub struct EvalParams {
     pub piece_values: PieceValues,
 
-    pub knight_mobility: [[i32; 2]; 9],
-    pub knight_behind_pawn: [i32; 2],
-    pub knight_king_distance: [[i32; 2]; 4],
-    pub knight_outpost: [[i32; 2]; 2],
+    pub knight_mobility: [[i16; 2]; 9],
+    pub knight_behind_pawn: [i16; 2],
+    pub knight_king_distance: [[i16; 2]; 4],
+    pub knight_outpost: [[i16; 2]; 2],
 
-    pub bishop_mobility: [[i32; 2]; 14],
-    pub bishop_behind_pawn: [i32; 2],
-    pub bishop_king_distance: [[i32; 2]; 4],
-    pub bishop_outpost: [[i32; 2]; 2],
-    pub bishop_pair: [i32; 2],
-    pub bishop_long_diagonal: [i32; 2],
+    pub bishop_mobility: [[i16; 2]; 14],
+    pub bishop_behind_pawn: [i16; 2],
+    pub bishop_king_distance: [[i16; 2]; 4],
+    pub bishop_outpost: [[i16; 2]; 2],
+    pub bishop_pair: [i16; 2],
+    pub bishop_long_diagonal: [i16; 2],
 
-    pub rook_mobility: [[i32; 2]; 15],
-    pub rook_open_file: [[i32; 2]; 2],
-    pub rook_on_seventh: [i32; 2],
-    pub rook_trapped: [[i32; 2]; 2],
+    pub rook_mobility: [[i16; 2]; 15],
+    pub rook_open_file: [[i16; 2]; 2],
+    pub rook_on_seventh: [i16; 2],
+    pub rook_trapped: [[i16; 2]; 2],
 
-    pub queen_mobility: [[i32; 2]; 28],
-    pub queen_discovery_risk: [i32; 2],
+    pub queen_mobility: [[i16; 2]; 28],
+    pub queen_discovery_risk: [i16; 2],
 
-    pub king_mobility: [[i32; 2]; 9],
-    pub king_defenders: [[i32; 2]; 12],
-    pub king_open_file: [[i32; 2]; 2],
-    pub no_enemy_queen: [i32; 2],
+    pub king_mobility: [[i16; 2]; 9],
+    pub king_defenders: [[i16; 2]; 12],
+    pub king_open_file: [[i16; 2]; 2],
+    pub no_enemy_queen: [i16; 2],
 
     // passed pawn terms
-    pub passed_pawn: [[i32; 2]; 8],
-    pub passed_pawn_advanced: [[i32; 2]; 6],
-    pub passed_pawn_unblocked: [i32; 2],
-    pub passed_pawn_connected: [i32; 2],
-    pub passed_pawn_friendly_rook: [i32; 2],
-    pub passed_pawn_enemy_king_too_far: [i32; 2],
+    pub passed_pawn: [[i16; 2]; 8],
+    pub passed_pawn_advanced: [[i16; 2]; 6],
+    pub passed_pawn_unblocked: [i16; 2],
+    pub passed_pawn_connected: [i16; 2],
+    pub passed_pawn_friendly_rook: [i16; 2],
+    pub passed_pawn_enemy_king_too_far: [i16; 2],
 
-    pub double_pawn: [[i32; 2]; 8],
-    pub isolated_pawn: [[i32; 2]; 8],
-    pub connected_pawn: [[i32; 2]; 8],
+    pub double_pawn: [[i16; 2]; 8],
+    pub isolated_pawn: [[i16; 2]; 8],
+    pub connected_pawn: [[i16; 2]; 8],
 
-    pub tempo: [i32; 2],
+    pub tempo: [i16; 2],
 
     pub piece_tables: PieceTables,
 }
 
 #[cfg(feature = "eval-tracing")]
 impl EvalParams {
-    pub const LEN: usize = std::mem::size_of::<Self>() / std::mem::size_of::<i32>();
-    pub fn to_array(&self) -> [i32; Self::LEN] {
-        bytemuck::cast::<EvalParams, [i32; Self::LEN]>(*self)
+    pub const LEN: usize = std::mem::size_of::<Self>() / std::mem::size_of::<i16>();
+    pub fn to_array(&self) -> [i16; Self::LEN] {
+        bytemuck::cast::<EvalParams, [i16; Self::LEN]>(*self)
     }
-    pub fn as_array(&self) -> &[i32; Self::LEN] {
-        bytemuck::cast_ref::<EvalParams, [i32; Self::LEN]>(self)
+    pub fn as_array(&self) -> &[i16; Self::LEN] {
+        bytemuck::cast_ref::<EvalParams, [i16; Self::LEN]>(self)
     }
-    pub fn from_array(params: [i32; Self::LEN]) -> Self {
-        bytemuck::cast::<[i32; Self::LEN], EvalParams>(params)
+    pub fn from_array(params: [i16; Self::LEN]) -> Self {
+        bytemuck::cast::<[i16; Self::LEN], EvalParams>(params)
     }
 }
 
@@ -69,70 +69,70 @@ impl EvalParams {
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct EvalTrace {
-    pub pawn_count: [i32; 2],
-    pub knight_count: [i32; 2],
-    pub bishop_count: [i32; 2],
-    pub rook_count: [i32; 2],
-    pub queen_count: [i32; 2],
+    pub pawn_count: [i16; 2],
+    pub knight_count: [i16; 2],
+    pub bishop_count: [i16; 2],
+    pub rook_count: [i16; 2],
+    pub queen_count: [i16; 2],
     // pads to the length of PieceValues
-    pub king_count: [i32; 2],
+    pub king_count: [i16; 2],
 
-    pub knight_mobility: [[i32; 2]; 9],
-    pub knights_behind_pawns: [i32; 2],
-    pub knight_king_distance: [[i32; 2]; 4],
-    pub knight_outposts: [[i32; 2]; 2],
+    pub knight_mobility: [[i16; 2]; 9],
+    pub knights_behind_pawns: [i16; 2],
+    pub knight_king_distance: [[i16; 2]; 4],
+    pub knight_outposts: [[i16; 2]; 2],
 
-    pub bishop_mobility: [[i32; 2]; 14],
-    pub bishops_behind_pawns: [i32; 2],
-    pub bishop_king_distance: [[i32; 2]; 4],
-    pub bishop_outposts: [[i32; 2]; 2],
-    pub bishop_pair: [i32; 2],
-    pub bishop_long_diagonals: [i32; 2],
+    pub bishop_mobility: [[i16; 2]; 14],
+    pub bishops_behind_pawns: [i16; 2],
+    pub bishop_king_distance: [[i16; 2]; 4],
+    pub bishop_outposts: [[i16; 2]; 2],
+    pub bishop_pair: [i16; 2],
+    pub bishop_long_diagonals: [i16; 2],
 
-    pub rook_mobility: [[i32; 2]; 15],
-    pub rook_open_files: [[i32; 2]; 2],
-    pub rooks_on_seventh: [i32; 2],
-    pub rook_trapped: [[i32; 2]; 2],
+    pub rook_mobility: [[i16; 2]; 15],
+    pub rook_open_files: [[i16; 2]; 2],
+    pub rooks_on_seventh: [i16; 2],
+    pub rook_trapped: [[i16; 2]; 2],
 
-    pub queen_mobility: [[i32; 2]; 28],
-    pub queen_discovery_risks: [i32; 2],
+    pub queen_mobility: [[i16; 2]; 28],
+    pub queen_discovery_risks: [i16; 2],
 
-    pub king_mobility: [[i32; 2]; 9],
-    pub king_defenders: [[i32; 2]; 12],
-    pub king_open_file: [[i32; 2]; 2],
-    pub no_enemy_queen: [i32; 2],
+    pub king_mobility: [[i16; 2]; 9],
+    pub king_defenders: [[i16; 2]; 12],
+    pub king_open_file: [[i16; 2]; 2],
+    pub no_enemy_queen: [i16; 2],
 
-    pub passed_pawn: [[i32; 2]; 8],
-    pub passed_pawn_advanced: [[i32; 2]; 6],
-    pub passed_pawn_unblocked: [i32; 2],
-    pub passed_pawn_connected: [i32; 2],
-    pub passed_pawn_friendly_rook: [i32; 2],
-    pub passed_pawn_enemy_king_too_far: [i32; 2],
+    pub passed_pawn: [[i16; 2]; 8],
+    pub passed_pawn_advanced: [[i16; 2]; 6],
+    pub passed_pawn_unblocked: [i16; 2],
+    pub passed_pawn_connected: [i16; 2],
+    pub passed_pawn_friendly_rook: [i16; 2],
+    pub passed_pawn_enemy_king_too_far: [i16; 2],
 
-    pub double_pawn: [[i32; 2]; 8],
-    pub isolated_pawn: [[i32; 2]; 8],
-    pub connected_pawn: [[i32; 2]; 8],
+    pub double_pawn: [[i16; 2]; 8],
+    pub isolated_pawn: [[i16; 2]; 8],
+    pub connected_pawn: [[i16; 2]; 8],
 
-    pub tempo: [i32; 2],
+    pub tempo: [i16; 2],
 
-    pub pawn_placement: [[i32; 2]; 64],
-    pub knight_placement: [[i32; 2]; 64],
-    pub bishop_placement: [[i32; 2]; 64],
-    pub rook_placement: [[i32; 2]; 64],
-    pub queen_placement: [[i32; 2]; 64],
-    pub king_placement: [[i32; 2]; 64],
+    pub pawn_placement: [[i16; 2]; 64],
+    pub knight_placement: [[i16; 2]; 64],
+    pub bishop_placement: [[i16; 2]; 64],
+    pub rook_placement: [[i16; 2]; 64],
+    pub queen_placement: [[i16; 2]; 64],
+    pub king_placement: [[i16; 2]; 64],
 
-    pub turn: i32,
+    pub turn: i16,
 }
 
 #[cfg(feature = "eval-tracing")]
 impl EvalTrace {
-    pub const LEN: usize = std::mem::size_of::<Self>() / std::mem::size_of::<i32>();
+    pub const LEN: usize = std::mem::size_of::<Self>() / std::mem::size_of::<i16>();
     pub fn new() -> Self {
-        bytemuck::cast::<[i32; Self::LEN], Self>([0i32; Self::LEN])
+        bytemuck::cast::<[i16; Self::LEN], Self>([0i16; Self::LEN])
     }
-    pub fn to_array(&self) -> [i32; Self::LEN] {
-        bytemuck::cast::<Self, [i32; Self::LEN]>(*self)
+    pub fn to_array(&self) -> [i16; Self::LEN] {
+        bytemuck::cast::<Self, [i16; Self::LEN]>(*self)
     }
 }
 
@@ -143,8 +143,8 @@ impl Default for EvalTrace {
     }
 }
 
-pub const CHECKMATE_SCORE: i32 = 200000;
-pub const DRAW_SCORE: i32 = 0;
+pub const CHECKMATE_SCORE: i16 = 30000;
+pub const DRAW_SCORE: i16 = 0;
 
 pub static EVAL_PARAMS: EvalParams = EvalParams {
     piece_values: PieceValues([

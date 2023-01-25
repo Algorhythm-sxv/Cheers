@@ -14,9 +14,9 @@ pub struct EvalContext<'search, T> {
 
 impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     #[inline]
-    pub fn evaluate<W: TypeColor>(&mut self) -> i32 {
+    pub fn evaluate<W: TypeColor>(&mut self) -> i16 {
         let color = W::INDEX;
-        self.trace.term(|t| t.turn = color as i32);
+        self.trace.term(|t| t.turn = color as i16);
 
         let pawn_cache = if !T::TRACING {
             self.pawn_hash_table.get::<W>(self.game.pawn_hash)
@@ -130,7 +130,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             // self.trace.term(|t| t.tempo[W::INDEX] = 1);
         }
 
-        ((eval.mg * (256 - phase)) + (eval.eg * phase)) / 256
+        (((eval.mg as i32 * (256 - phase)) + (eval.eg as i32 * phase)) / 256) as i16
     }
 
     #[inline]
@@ -150,14 +150,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let color = W::INDEX;
 
         // material value
-        let count = knights.count_ones() as i32;
+        let count = knights.count_ones() as i16;
         eval.mg += params.piece_values[(Midgame, Knight)] * count;
         eval.eg += params.piece_values[(Endgame, Knight)] * count;
         self.trace.term(|t| t.knight_count[color as usize] = count);
 
         // knights behind pawns
         let knights_behind_pawns =
-            (knights & info.behind_pawns[color as usize]).count_ones() as i32;
+            (knights & info.behind_pawns[color as usize]).count_ones() as i16;
         eval.mg += params.knight_behind_pawn[Midgame] * knights_behind_pawns;
         eval.eg += params.knight_behind_pawn[Endgame] * knights_behind_pawns;
         self.trace
@@ -225,13 +225,13 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let color = W::INDEX;
 
         // material value
-        let count = bishops.count_ones() as i32;
+        let count = bishops.count_ones() as i16;
         eval.mg += params.piece_values[(Midgame, Bishop)] * count;
         eval.eg += params.piece_values[(Endgame, Bishop)] * count;
         self.trace.term(|t| t.bishop_count[color] = count);
 
         // bishops behind pawns
-        let bishops_behind_pawns = (bishops & info.behind_pawns[color]).count_ones() as i32;
+        let bishops_behind_pawns = (bishops & info.behind_pawns[color]).count_ones() as i16;
         eval.mg += params.bishop_behind_pawn[Midgame] * bishops_behind_pawns;
         eval.eg += params.bishop_behind_pawn[Endgame] * bishops_behind_pawns;
         self.trace
@@ -246,7 +246,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         }
 
         // long diagonals
-        let bishop_long_diagonals = (bishops & LONG_DIAGONALS).count_ones() as i32;
+        let bishop_long_diagonals = (bishops & LONG_DIAGONALS).count_ones() as i16;
         eval.mg += params.bishop_long_diagonal[Midgame] * bishop_long_diagonals;
         eval.eg += params.bishop_long_diagonal[Endgame] * bishop_long_diagonals;
         self.trace
@@ -314,14 +314,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let color = W::INDEX;
 
         // material value
-        let count = rooks.count_ones() as i32;
+        let count = rooks.count_ones() as i16;
         eval.mg += params.piece_values[(Midgame, Rook)] * count;
         eval.eg += params.piece_values[(Endgame, Rook)] * count;
         self.trace.term(|t| t.rook_count[color as usize] = count);
 
         // rooks on seventh
         let seventh = if W::WHITE { SEVENTH_RANK } else { SECOND_RANK };
-        let rooks_on_seventh = (rooks & seventh).count_ones() as i32;
+        let rooks_on_seventh = (rooks & seventh).count_ones() as i16;
         eval.mg += params.rook_on_seventh[Midgame as usize] * rooks_on_seventh;
         eval.mg += params.rook_on_seventh[Endgame as usize] * rooks_on_seventh;
         self.trace
@@ -387,7 +387,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         };
         let color = W::INDEX;
         // material value
-        let count = queens.count_ones() as i32;
+        let count = queens.count_ones() as i16;
         eval.mg += params.piece_values[(Midgame, Queen)] * count;
         eval.eg += params.piece_values[(Endgame, Queen)] * count;
         self.trace.term(|t| t.queen_count[color] = count);
@@ -497,7 +497,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let color = W::INDEX;
 
         // material value
-        let count = pawns.count_ones() as i32;
+        let count = pawns.count_ones() as i16;
         eval.mg += params.piece_values[(Midgame, Pawn)] * count;
         eval.eg += params.piece_values[(Endgame, Pawn)] * count;
         self.trace.term(|t| t.pawn_count[color] = count);
@@ -634,7 +634,7 @@ impl Board {
     }
 
     #[inline]
-    pub fn evaluate(&self, pawn_hash_table: &mut PawnHashTable) -> i32 {
+    pub fn evaluate(&self, pawn_hash_table: &mut PawnHashTable) -> i16 {
         self.evaluate_impl::<()>(pawn_hash_table, &EVAL_PARAMS).0
     }
 
@@ -643,7 +643,7 @@ impl Board {
         &self,
         pawn_hash_table: &mut PawnHashTable,
         eval_params: &EvalParams,
-    ) -> (i32, T) {
+    ) -> (i16, T) {
         let mut trace = T::default();
         let mut eval = EvalContext {
             game: self,

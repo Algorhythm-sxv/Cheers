@@ -28,7 +28,7 @@ impl NodeType {
 }
 
 pub struct TTEntry {
-    pub score: i32,
+    pub score: i16,
     pub depth: i8,
     pub piece: Piece,
     pub move_from: Square,
@@ -40,7 +40,7 @@ pub struct TTEntry {
 impl TTEntry {
     pub fn from_data(data: u64) -> Self {
         Self {
-            score: (data & 0xFFFFFFFF) as i32,
+            score: (data & 0xFFFFFFFF) as i16,
             depth: ((data >> 32) & 0xFF) as i8,
             piece: Piece::from_u8(((data >> (32 + 8)) & 0b111) as u8),
             move_from: ((data >> (32 + 8 + 3)) & 0xFF).into(),
@@ -85,7 +85,7 @@ impl TranspositionTable {
         hash: u64,
         best_move: Move,
         depth: i8,
-        score: i32,
+        score: i16,
         node_type: NodeType,
         pv: bool,
     ) {
@@ -104,7 +104,7 @@ impl TranspositionTable {
                 > ((stored.data.load(Relaxed) >> 32) & 0xFF) as i8
         {
             let mut data = 0u64;
-            data |= score as u32 as u64;
+            data |= score as u16 as u64;
             data |= ((depth as u8) as u64) << 32;
             data |= (best_move.piece as u64) << (32 + 8);
             data |= (*best_move.from as u64) << (32 + 8 + 3);
@@ -142,27 +142,27 @@ impl TranspositionTable {
     }
 }
 
-pub fn score_from_tt(score: i32, ply: usize) -> i32 {
+pub fn score_from_tt(score: i16, ply: usize) -> i16 {
     // mate scores out of the TT in plies from the current position
-    if CHECKMATE_SCORE.abs_diff(score) <= SEARCH_MAX_PLY as u32 {
+    if CHECKMATE_SCORE.abs_diff(score) <= SEARCH_MAX_PLY as u16 {
         // move the mate further away to the plies from the root
-        score - ply as i32
-    } else if (-CHECKMATE_SCORE).abs_diff(score) <= SEARCH_MAX_PLY as u32 {
+        score - ply as i16
+    } else if (-CHECKMATE_SCORE).abs_diff(score) <= SEARCH_MAX_PLY as u16 {
         // move the mate further away to the plies from the root
-        score + ply as i32
+        score + ply as i16
     } else {
         score
     }
 }
 
-pub fn score_into_tt(score: i32, ply: usize) -> i32 {
+pub fn score_into_tt(score: i16, ply: usize) -> i16 {
     // mate scores into the TT are in plies from the root
-    if CHECKMATE_SCORE.abs_diff(score) <= SEARCH_MAX_PLY as u32 {
+    if CHECKMATE_SCORE.abs_diff(score) <= SEARCH_MAX_PLY as u16 {
         // move the mate closer to the plies from the current position
-        score + ply as i32
-    } else if (-CHECKMATE_SCORE).abs_diff(score) <= SEARCH_MAX_PLY as u32 {
+        score + ply as i16
+    } else if (-CHECKMATE_SCORE).abs_diff(score) <= SEARCH_MAX_PLY as u16 {
         // move the mate closer to the plies from the current position
-        score - ply as i32
+        score - ply as i16
     } else {
         score
     }
@@ -171,8 +171,8 @@ pub fn score_into_tt(score: i32, ply: usize) -> i32 {
 #[derive(Copy, Clone, Debug)]
 pub struct PawnHashEntry {
     pub hash: u64,
-    pub mg: i32,
-    pub eg: i32,
+    pub mg: i16,
+    pub eg: i16,
     passed_pawns: BitBoard,
 }
 impl Default for PawnHashEntry {
@@ -220,7 +220,7 @@ impl PawnHashTable {
         }
     }
 
-    pub fn set<T: TypeColor>(&mut self, hash: u64, mg: i32, eg: i32, passed_pawns: BitBoard) {
+    pub fn set<T: TypeColor>(&mut self, hash: u64, mg: i16, eg: i16, passed_pawns: BitBoard) {
         let (mg, eg) = if T::WHITE { (mg, eg) } else { (-mg, -eg) };
         self.table[(hash & self.mask) as usize] = PawnHashEntry {
             hash,

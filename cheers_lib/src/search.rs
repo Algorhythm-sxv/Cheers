@@ -5,7 +5,6 @@ use std::time::Instant;
 use cheers_pregen::LMR;
 use eval_params::{EvalParams, CHECKMATE_SCORE, DRAW_SCORE, EVAL_PARAMS};
 
-use crate::board::see::MVV_LVA;
 use crate::hash_tables::{score_from_tt, score_into_tt};
 use crate::move_sorting::MoveSorter;
 use crate::moves::{MoveScore, PrincipalVariation, NUM_KILLER_MOVES};
@@ -25,8 +24,8 @@ use crate::{
 pub static ABORT_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-const INF: i32 = i32::MAX;
-const MINUS_INF: i32 = -INF;
+const INF: i16 = i16::MAX;
+const MINUS_INF: i16 = -INF;
 
 pub const SEARCH_MAX_PLY: usize = 128;
 
@@ -130,8 +129,8 @@ impl Search {
         self
     }
 
-    pub fn search(&self) -> (i32, PrincipalVariation) {
-        let mut last_score = i32::MIN;
+    pub fn search(&self) -> (i16, PrincipalVariation) {
+        let mut last_score = i16::MIN;
         let mut last_pv = PrincipalVariation::new();
 
         let mut search = self.clone();
@@ -162,7 +161,7 @@ impl Search {
                     &self.game.clone(),
                     window.0,
                     window.1,
-                    i as i32,
+                    i as i8,
                     0,
                     Move::null(),
                     &mut pv,
@@ -195,7 +194,7 @@ impl Search {
 
             let end = Instant::now();
             let mate_distance = CHECKMATE_SCORE - score.abs();
-            let score_string = if mate_distance < 100 {
+            let score_string = if mate_distance < SEARCH_MAX_PLY as i16 {
                 format!("mate {}", score.signum() * ((mate_distance + 1) / 2))
             } else {
                 format!("cp {score}")
@@ -242,14 +241,14 @@ impl Search {
     fn negamax<R: TypeRoot>(
         &mut self,
         board: &Board,
-        mut alpha: i32,
-        mut beta: i32,
-        mut depth: i32,
+        mut alpha: i16,
+        mut beta: i16,
+        mut depth: i8,
         ply: usize,
         last_move: Move,
         pv: &mut PrincipalVariation,
         tt: &TranspositionTable,
-    ) -> i32 {
+    ) -> i16 {
         // check time and max nodes every 2048 nodes
         let nodes = NODE_COUNT.load(Relaxed);
         if nodes & 2047 == 2047 {
@@ -312,7 +311,7 @@ impl Search {
         {
             pv.clear();
             // randomise around the draw score slightly to improve searching of draws
-            return DRAW_SCORE + 4 - (nodes & 7) as i32;
+            return DRAW_SCORE + 4 - (nodes & 7) as i16;
         }
 
         let mut tt_move = Move::null();
@@ -507,7 +506,7 @@ impl Search {
             if in_check {
                 // checkmate, preferring shorter mating sequences
                 pv.clear();
-                return -(CHECKMATE_SCORE - (ply as i32));
+                return -(CHECKMATE_SCORE - (ply as i16));
             } else {
                 // stalemate
                 pv.clear();
@@ -533,13 +532,13 @@ impl Search {
     pub fn quiesce(
         &mut self,
         board: &Board,
-        alpha: i32,
-        beta: i32,
+        alpha: i16,
+        beta: i16,
         ply: usize,
         last_move: Move,
         eval_params: &EvalParams,
         tt: &TranspositionTable,
-    ) -> i32 {
+    ) -> i16 {
         self.quiesce_impl::<()>(board, alpha, beta, ply, last_move, eval_params, tt)
             .0
     }
@@ -547,13 +546,13 @@ impl Search {
     pub fn quiesce_impl<T: TraceTarget + Default>(
         &mut self,
         board: &Board,
-        mut alpha: i32,
-        beta: i32,
+        mut alpha: i16,
+        beta: i16,
         ply: usize,
         _last_move: Move,
         eval_params: &EvalParams,
         tt: &TranspositionTable,
-    ) -> (i32, T) {
+    ) -> (i16, T) {
         // check time and max nodes every 2048 nodes
         let nodes = NODE_COUNT.load(Relaxed);
         if nodes & 2047 == 2047 {
@@ -704,7 +703,7 @@ impl Search {
 
             if !some_moves {
                 if board.in_check() {
-                    return (-(CHECKMATE_SCORE - (ply as i32)), T::default());
+                    return (-(CHECKMATE_SCORE - (ply as i16)), T::default());
                 } else {
                     return (DRAW_SCORE, T::default());
                 }
