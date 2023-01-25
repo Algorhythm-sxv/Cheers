@@ -40,20 +40,27 @@ pub struct TTEntry {
 impl TTEntry {
     pub fn from_data(data: u64) -> Self {
         Self {
-            score: (data & 0xFFFFFFFF) as i16,
-            depth: ((data >> 32) & 0xFF) as i8,
-            piece: Piece::from_u8(((data >> (32 + 8)) & 0b111) as u8),
-            move_from: ((data >> (32 + 8 + 3)) & 0xFF).into(),
-            move_to: ((data >> (32 + 8 + 3 + 8)) & 0xFF).into(),
-            promotion: Piece::from_u8(((data >> (32 + 8 + 3 + 8 + 8)) & 0b111) as u8),
-            node_type: NodeType::from_u8(((data >> (32 + 8 + 3 + 8 + 8 + 3)) & 0b11) as u8),
+            score: ((data >> 16) & 0xFFFF) as i16,
+            depth: ((data >> 16 + 16) & 0xFF) as i8,
+            move_from: ((data >> (16 + 16 + 8)) & 0xFF).into(),
+            move_to: ((data >> (16 + 16 + 8 + 8)) & 0xFF).into(),
+            piece: Piece::from_u8(((data >> (16 + 16 + 8 + 8 + 8)) & 0b111) as u8),
+            promotion: Piece::from_u8(((data >> (16 + 16 + 8 + 8 + 8 + 3)) & 0b111) as u8),
+            node_type: NodeType::from_u8(((data >> (16 + 16 + 8 + 8 + 8 + 3 + 3)) & 0b11) as u8),
         }
     }
 }
 
+// key: 16 bits
+// score: 16 bits
+// depth: 8 bits
+// from: 8 bits
+// to: 8 bits
+// piece: 3 bits
+// promotion: 3 bits
+// node type: 2 bits
 #[derive(Default)]
 struct Entry {
-    key: AtomicU64,
     data: AtomicU64,
 }
 
@@ -97,22 +104,25 @@ impl TranspositionTable {
             None => return,
         };
 
+        let incoming_tt_key = hash_to_tt_key(hash);
+        let data = stored.data.load(Relaxed);
+
         const DEPTH_OFFSET: i8 = 8;
         if node_type == NodeType::Exact
-            || stored.key.load(Relaxed) ^ stored.data.load(Relaxed) != hash
+            || data as u16 != incoming_tt_key
             || depth - DEPTH_OFFSET + 2 * (pv as i8)
-                > ((stored.data.load(Relaxed) >> 32) & 0xFF) as i8
+                > ((data >> 32) & 0xFF) as i8
         {
             let mut data = 0u64;
-            data |= score as u16 as u64;
-            data |= ((depth as u8) as u64) << 32;
-            data |= (best_move.piece as u64) << (32 + 8);
-            data |= (*best_move.from as u64) << (32 + 8 + 3);
-            data |= (*best_move.to as u64) << (32 + 8 + 3 + 8);
-            data |= (best_move.promotion as u64) << (32 + 8 + 3 + 8 + 8);
-            data |= (node_type as u64) << (32 + 8 + 3 + 8 + 8 + 3);
+            data |= (incoming_tt_key & 0xFFFF) as u64;
+            data |= (score as u16 as u64) << 16;
+            data |= (depth as u8 as u64) << (16 + 16);
+            data |= (*best_move.from as u64) << (16 + 16 + 8);
+            data |= (*best_move.to as u64) << (16 + 16 + 8 + 8);
+            data |= (best_move.piece as u64) << (16 + 16 + 8 + 8 + 8);
+            data |= (best_move.promotion as u64) << (16 + 16 + 8 + 8 + 8 + 3);
+            data |= (node_type as u64) << (16 + 16 + 8 + 8 + 8 + 3 + 3);
 
-            stored.key.store(hash ^ data, Release);
             stored.data.store(data, Release);
         }
     }
@@ -125,8 +135,12 @@ impl TranspositionTable {
 
         let data = stored.data.load(Acquire);
 
-        if stored.key.load(Acquire) ^ data == hash {
+        if data as u16 == hash_to_tt_key(hash) {
             // entry is valid, return data
+            if (data >> (16 + 16 + 8 + 8 + 8)) & 0b111 > 5 {
+                println!("broken TT entry");
+                println!("{data:064b}");
+            }
             Some(TTEntry::from_data(data))
         } else {
             // key and data didn't match, invalid entry
@@ -166,6 +180,10 @@ pub fn score_into_tt(score: i16, ply: usize) -> i16 {
     } else {
         score
     }
+}
+
+fn hash_to_tt_key(hash: u64) -> u16 {
+    (hash as u16) ^ ((hash >> 16) as u16) ^ ((hash >> 32) as u16) ^ ((hash >> 48) as u16)
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -228,5 +246,48 @@ impl PawnHashTable {
             eg,
             passed_pawns,
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use cheers_bitboards::Square;
+
+    use crate::{board::Board, moves::Move, types::Piece};
+
+    use super::{NodeType, TranspositionTable};
+
+    #[test]
+    fn test_tt() -> Result<(), &'static str> {
+        let board =
+            Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
+                .unwrap();
+        let score = 30000;
+        let best_move = Move {
+            piece: Piece::King,
+            from: Square::E1,
+            to: Square::A1,
+            promotion: Piece::Pawn,
+        };
+        let node_type = NodeType::Exact;
+        let depth = 7;
+
+        let tt = TranspositionTable::new(1);
+
+        tt.set(board.hash(), best_move, depth, score, node_type, true);
+
+        let entry = tt.get(board.hash()).ok_or("TT entry not found!")?;
+        assert!(entry.score == score, "Scores not equal!");
+        assert!(entry.move_from == best_move.from, "Move from not equal!");
+        assert!(entry.move_to == best_move.to, "Move to not equal!");
+        assert!(entry.depth == depth, "depth not equal!");
+        assert!(entry.node_type == node_type, "Node type not equal!");
+        assert!(entry.piece == best_move.piece, "Piece not equal!");
+        assert!(
+            entry.promotion == best_move.promotion,
+            "Promotion not equal!"
+        );
+
+        Ok(())
     }
 }
