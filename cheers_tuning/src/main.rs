@@ -144,7 +144,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             output_file.set_len(0)?;
             output_file.rewind()?;
 
-            let params = EvalParams::from_array(eval_params.map(|x| x as i32));
+            let params = EvalParams::from_array(eval_params.map(|x| x as i16));
             output_file.write_all(format!("{params:?}").as_bytes())?;
         }
     }

@@ -15,8 +15,8 @@ use crate::data_extraction::GameResult;
 #[derive(Clone, Copy)]
 pub struct TuningTuple {
     index: usize,
-    white_coeff: i32,
-    black_coeff: i32,
+    white_coeff: i16,
+    black_coeff: i16,
 }
 
 #[derive(Clone)]
@@ -44,8 +44,8 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
 
     let (_, trace) = search.quiesce_impl::<EvalTrace>(
         &game.clone(),
-        i32::MIN + 1,
-        i32::MAX - 1,
+        i16::MIN + 1,
+        i16::MAX - 1,
         0,
         Move::null(),
         &EVAL_PARAMS,
@@ -65,10 +65,10 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
             black_coeff: c[1],
         })
         .collect::<Vec<TuningTuple>>();
-    let material: i32 = trace.knight_count.into_iter().sum::<i32>()
-        + trace.bishop_count.into_iter().sum::<i32>()
-        + 2 * trace.rook_count.into_iter().sum::<i32>()
-        + 4 * trace.queen_count.into_iter().sum::<i32>();
+    let material: i16 = trace.knight_count.into_iter().sum::<i16>()
+        + trace.bishop_count.into_iter().sum::<i16>()
+        + 2 * trace.rook_count.into_iter().sum::<i16>()
+        + 4 * trace.queen_count.into_iter().sum::<i16>();
     let phase = (256 * (24 - material)) / 24;
 
     // let mut static_score = game.evaluate::<()>().0;
