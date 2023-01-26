@@ -11,9 +11,9 @@ use crate::{
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NodeType {
-    Exact,
-    UpperBound,
-    LowerBound,
+    Exact = 0,
+    UpperBound = 1,
+    LowerBound = 2,
 }
 
 impl NodeType {
@@ -41,7 +41,7 @@ impl TTEntry {
     pub fn from_data(data: u64) -> Self {
         Self {
             score: ((data >> 16) & 0xFFFF) as i16,
-            depth: ((data >> 16 + 16) & 0xFF) as i8,
+            depth: ((data >> (16 + 16)) & 0xFF) as i8,
             move_from: ((data >> (16 + 16 + 8)) & 0xFF).into(),
             move_to: ((data >> (16 + 16 + 8 + 8)) & 0xFF).into(),
             piece: Piece::from_u8(((data >> (16 + 16 + 8 + 8 + 8)) & 0b111) as u8),
@@ -49,6 +49,33 @@ impl TTEntry {
             node_type: NodeType::from_u8(((data >> (16 + 16 + 8 + 8 + 8 + 3 + 3)) & 0b11) as u8),
         }
     }
+}
+
+impl From<u64> for TTEntry {
+    fn from(data: u64) -> Self {
+        Self {
+            score: ((data >> 16) & 0xFFFF) as i16,
+            depth: ((data >> (16 + 16)) & 0xFF) as i8,
+            move_from: ((data >> (16 + 16 + 8)) & 0xFF).into(),
+            move_to: ((data >> (16 + 16 + 8 + 8)) & 0xFF).into(),
+            piece: Piece::from_u8(((data >> (16 + 16 + 8 + 8 + 8)) & 0b111) as u8),
+            promotion: Piece::from_u8(((data >> (16 + 16 + 8 + 8 + 8 + 3)) & 0b111) as u8),
+            node_type: NodeType::from_u8(((data >> (16 + 16 + 8 + 8 + 8 + 3 + 3)) & 0b11) as u8),
+        }
+    }
+}
+
+fn data_into_u64(key: u16, score: i16, depth: i8, best_move: Move, node_type: NodeType) -> u64 {
+    let mut data = 0u64;
+    data |= key as u64; // bits 0:15
+    data |= ((score as u16) as u64) << 16; // bits 16:31
+    data |= ((depth as u8) as u64) << (16 + 16); // bits 32:39
+    data |= (*best_move.from as u64) << (16 + 16 + 8); // bits 40:47
+    data |= (*best_move.to as u64) << (16 + 16 + 8 + 8); // bits 48:55
+    data |= (best_move.piece as u64) << (16 + 16 + 8 + 8 + 8); // bits 56:58
+    data |= (best_move.promotion as u64) << (16 + 16 + 8 + 8 + 8 + 3); // bits 59:62
+    data |= (node_type as u64) << (16 + 16 + 8 + 8 + 8 + 3 + 3); // bits 62:63
+    data
 }
 
 // key: 16 bits
@@ -59,9 +86,22 @@ impl TTEntry {
 // piece: 3 bits
 // promotion: 3 bits
 // node type: 2 bits
-#[derive(Default)]
 struct Entry {
     data: AtomicU64,
+}
+
+impl Default for Entry {
+    fn default() -> Self {
+        Self {
+            data: AtomicU64::new(data_into_u64(
+                0xFFFF,
+                i16::MIN,
+                -100,
+                Move::null(),
+                NodeType::LowerBound,
+            )),
+        }
+    }
 }
 
 pub struct TranspositionTable {
@@ -70,10 +110,7 @@ pub struct TranspositionTable {
 
 impl TranspositionTable {
     pub fn new(table_size_mb: usize) -> Self {
-        let mut length = table_size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
-        if length != 0 {
-            length = length.next_power_of_two();
-        }
+        let length = table_size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
         let mut table = Vec::with_capacity(length);
         for _ in 0..length {
             table.push(Entry::default());
@@ -83,7 +120,6 @@ impl TranspositionTable {
 
     pub fn set_size(&mut self, size_mb: usize) {
         let mut length = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
-        length = length.next_power_of_two();
         self.table.resize_with(length, Entry::default);
     }
 
@@ -97,7 +133,7 @@ impl TranspositionTable {
         pv: bool,
     ) {
         use self::Ordering::*;
-        let index = hash as usize & (self.table.len() - 1);
+        let index = self.wrap_hash(hash);
 
         let stored = match self.table.get(index) {
             Some(entry) => entry,
@@ -110,18 +146,9 @@ impl TranspositionTable {
         const DEPTH_OFFSET: i8 = 8;
         if node_type == NodeType::Exact
             || data as u16 != incoming_tt_key
-            || depth - DEPTH_OFFSET + 2 * (pv as i8)
-                > ((data >> 32) & 0xFF) as i8
+            || depth - DEPTH_OFFSET + 2 * (pv as i8) > ((data >> 32) & 0xFF) as i8
         {
-            let mut data = 0u64;
-            data |= (incoming_tt_key & 0xFFFF) as u64;
-            data |= (score as u16 as u64) << 16;
-            data |= (depth as u8 as u64) << (16 + 16);
-            data |= (*best_move.from as u64) << (16 + 16 + 8);
-            data |= (*best_move.to as u64) << (16 + 16 + 8 + 8);
-            data |= (best_move.piece as u64) << (16 + 16 + 8 + 8 + 8);
-            data |= (best_move.promotion as u64) << (16 + 16 + 8 + 8 + 8 + 3);
-            data |= (node_type as u64) << (16 + 16 + 8 + 8 + 8 + 3 + 3);
+            let data = data_into_u64(incoming_tt_key, score, depth, best_move, node_type);
 
             stored.data.store(data, Release);
         }
@@ -129,29 +156,34 @@ impl TranspositionTable {
 
     pub fn get(&self, hash: u64) -> Option<TTEntry> {
         use self::Ordering::*;
-        let index = hash as usize & (self.table.len() - 1);
+        let index = self.wrap_hash(hash);
 
         let stored = self.table.get(index)?;
 
         let data = stored.data.load(Acquire);
 
-        if data as u16 == hash_to_tt_key(hash) {
+        let key = hash_to_tt_key(hash);
+
+        if (data & 0xFFFF) as u16 == key {
             // entry is valid, return data
-            if (data >> (16 + 16 + 8 + 8 + 8)) & 0b111 > 5 {
-                println!("broken TT entry");
-                println!("{data:064b}");
-            }
-            Some(TTEntry::from_data(data))
+            Some(TTEntry::from(data))
         } else {
             // key and data didn't match, invalid entry
             None
         }
     }
 
+    fn wrap_hash(&self, hash: u64) -> usize {
+        let key = u128::from(hash);
+        let len = self.table.len() as u128;
+        ((key * len) >> 64) as usize
+    }
+
     pub fn sample_fill(&self) -> usize {
+        let default = Entry::default().data.load(Ordering::Relaxed);
         self.table[..1000]
             .iter()
-            .filter(|e| e.data.load(Ordering::Relaxed) != 0)
+            .filter(|e| e.data.load(Ordering::Relaxed) != default)
             .count()
     }
 }
@@ -183,7 +215,7 @@ pub fn score_into_tt(score: i16, ply: usize) -> i16 {
 }
 
 fn hash_to_tt_key(hash: u64) -> u16 {
-    (hash as u16) ^ ((hash >> 16) as u16) ^ ((hash >> 32) as u16) ^ ((hash >> 48) as u16)
+    hash as u16
 }
 
 #[derive(Copy, Clone, Debug)]

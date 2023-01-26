@@ -400,6 +400,12 @@ impl Search {
             let mut new = board.clone();
             new.make_move(mv);
 
+            // legality check for the TT move, which is only verified as pseudolegal
+            if mv == tt_move && new.illegal_position() {
+                // skip the TT move if it's illegal
+                continue;
+            }
+
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
             let full_width = i == 0 || {
@@ -664,6 +670,12 @@ impl Search {
             self.search_history.push(board.hash());
             let mut new = board.clone();
             new.make_move(mv);
+
+            // legality check for the TT move, which is only verified as pseudolegal
+            if mv == tt_move && new.illegal_position() {
+                // skip the TT move if it's illegal
+                continue;
+            }
 
             let (mut score, trace) =
                 self.quiesce_impl::<T>(&new, -beta, -alpha, ply + 1, mv, &EVAL_PARAMS, tt);

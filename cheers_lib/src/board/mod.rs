@@ -485,6 +485,11 @@ impl Board {
             return false;
         }
 
+        // moving wrong piece
+        if Some(mv.piece) != self.piece_on(mv.from) {
+            return false;
+        }
+
         let (pieces, enemy_pieces) = if T::WHITE {
             (self.white_pieces, self.black_pieces)
         } else {
@@ -494,7 +499,7 @@ impl Board {
         let from = mv.from.bitboard();
         let to = mv.to.bitboard();
 
-        // moving from an empty square
+        // moving from a square without a friendly piece
         if (from & pieces).is_empty() {
             return false;
         }
@@ -546,6 +551,26 @@ impl Board {
         };
 
         (to & piece_attacks & pieces.inverse()).is_not_empty()
+    }
+
+    #[inline(always)]
+    pub fn illegal_position(&self) -> bool {
+        if self.black_to_move {
+            self.king_attacked::<White>()
+        } else {
+            self.king_attacked::<Black>()
+        }
+    }
+
+    #[inline(always)]
+    pub fn king_attacked<T: TypeColor>(&self) -> bool {
+        let king = if T::WHITE {
+            self.white_king
+        } else {
+            self.black_king
+        };
+
+        (king & self.all_enemy_attacks::<T>(self.occupied)).is_not_empty()
     }
 
     pub fn make_move(&mut self, mv: Move) {
@@ -754,9 +779,6 @@ impl Board {
         self.black_to_move = !self.black_to_move;
         self.hash ^= zobrist_player();
 
-        if self.hash != self.calculate_hash() {
-            println!("{mv:?}")
-        }
         debug_assert!(self.hash == self.calculate_hash());
         debug_assert!(self.pawn_hash == self.calculate_pawn_hash());
     }
@@ -1094,7 +1116,9 @@ impl Board {
                 fen += &blank_counter.to_string();
             }
 
-            fen.push_str("/");
+            if rank != 0 {
+                fen.push_str("/");
+            }
         }
 
         fen.push_str(if self.black_to_move { " b" } else { " w" });
@@ -1147,6 +1171,7 @@ impl Board {
                     .collect::<String>();
             }
 
+            fen.push(' ');
             fen.push_str(&rights_string);
         } else {
             fen.push_str(" -");
