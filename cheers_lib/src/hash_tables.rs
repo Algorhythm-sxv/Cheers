@@ -119,7 +119,7 @@ impl TranspositionTable {
     }
 
     pub fn set_size(&mut self, size_mb: usize) {
-        let mut length = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
+        let length = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
         self.table.resize_with(length, Entry::default);
     }
 
