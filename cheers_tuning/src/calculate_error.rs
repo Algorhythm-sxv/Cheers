@@ -2,7 +2,7 @@ use rayon::prelude::*;
 
 use cheers_lib::{
     board::{
-        evaluate::{EvalParams, EvalTrace, EVAL_PARAMS},
+        evaluate::{EvalParams, EvalTrace},
         Board,
     },
     hash_tables::TranspositionTable,
@@ -48,7 +48,6 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
         i16::MAX - 1,
         0,
         Move::null(),
-        &EVAL_PARAMS,
         &tt_placeholder,
     );
     // if game.current_player() == ColorIndex::Black {

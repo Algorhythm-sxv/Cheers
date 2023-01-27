@@ -3,7 +3,7 @@ use std::sync::{atomic::Ordering::*, Arc, RwLock};
 use std::time::Instant;
 
 use cheers_pregen::LMR;
-use eval_params::{EvalParams, CHECKMATE_SCORE, DRAW_SCORE, EVAL_PARAMS};
+use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
 use crate::hash_tables::{score_from_tt, score_into_tt};
 use crate::move_sorting::MoveSorter;
@@ -13,12 +13,10 @@ use crate::types::{All, Captures, NotRoot, Root, TypeRoot};
 use crate::{
     board::{
         eval_types::{GamePhase::*, TraceTarget},
-        see::SEE_PIECE_VALUES,
         *,
     },
     hash_tables::{NodeType::*, PawnHashTable, TranspositionTable},
     moves::{KillerMoves, Move, MoveList},
-    types::Piece::*,
 };
 
 pub static ABORT_SEARCH: AtomicBool = AtomicBool::new(false);
@@ -278,7 +276,7 @@ impl Search {
         // drop into quiescence search at depth 0
         if depth == 0 {
             pv.clear();
-            return self.quiesce(board, alpha, beta, ply, last_move, &EVAL_PARAMS, tt);
+            return self.quiesce(board, alpha, beta, ply, last_move, tt);
         }
 
         // increment the node counters
@@ -542,10 +540,9 @@ impl Search {
         beta: i16,
         ply: usize,
         last_move: Move,
-        eval_params: &EvalParams,
         tt: &TranspositionTable,
     ) -> i16 {
-        self.quiesce_impl::<()>(board, alpha, beta, ply, last_move, eval_params, tt)
+        self.quiesce_impl::<()>(board, alpha, beta, ply, last_move, tt)
             .0
     }
 
@@ -556,7 +553,6 @@ impl Search {
         beta: i16,
         ply: usize,
         _last_move: Move,
-        eval_params: &EvalParams,
         tt: &TranspositionTable,
     ) -> (i16, T) {
         // check time and max nodes every 2048 nodes
@@ -640,7 +636,7 @@ impl Search {
         let (static_eval, mut best_trace) = if !T::TRACING && tt_score != MINUS_INF {
             (tt_score, T::default())
         } else {
-            board.evaluate_impl::<T>(&mut self.pawn_hash_table, eval_params)
+            board.evaluate_impl::<T>(&mut self.pawn_hash_table)
         };
 
         // if the static eval is above beta, then the opponent won't play into this position
@@ -677,8 +673,7 @@ impl Search {
                 continue;
             }
 
-            let (mut score, trace) =
-                self.quiesce_impl::<T>(&new, -beta, -alpha, ply + 1, mv, &EVAL_PARAMS, tt);
+            let (mut score, trace) = self.quiesce_impl::<T>(&new, -beta, -alpha, ply + 1, mv, tt);
             score = -score;
 
             // 'unmake' the move by removing it from the position history

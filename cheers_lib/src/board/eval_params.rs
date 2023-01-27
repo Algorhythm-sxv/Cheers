@@ -146,7 +146,7 @@ impl Default for EvalTrace {
 pub const CHECKMATE_SCORE: i16 = 30000;
 pub const DRAW_SCORE: i16 = 0;
 
-pub static EVAL_PARAMS: EvalParams = EvalParams {
+pub const EVAL_PARAMS: EvalParams = EvalParams {
     piece_values: PieceValues([
         [39, 112],
         [232, 359],
