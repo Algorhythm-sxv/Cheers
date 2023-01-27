@@ -16,7 +16,6 @@ use crate::k_tuning::tune_k;
 mod calculate_error;
 mod data_extraction;
 mod k_tuning;
-mod parameter_tuning;
 
 #[derive(Parser, Debug)]
 struct Args {
