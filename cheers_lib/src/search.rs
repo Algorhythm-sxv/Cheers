@@ -312,6 +312,17 @@ impl Search {
             return DRAW_SCORE + 4 - (nodes & 7) as i16;
         }
 
+        // Mate distance pruning: we can never find a score better than mate at the current ply
+        // or worse than being mated at the current ply
+        if !R::ROOT {
+            alpha = alpha.max(-CHECKMATE_SCORE + ply as i16);
+            beta = beta.min(CHECKMATE_SCORE - ply as i16);
+
+            if alpha >= beta {
+                return beta;
+            }
+        }
+
         let mut tt_move = Move::null();
         let mut tt_score = MINUS_INF;
         if let Some(entry) = tt.get(board.hash()) {
