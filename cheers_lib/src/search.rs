@@ -178,17 +178,22 @@ impl Search {
                 match (score > window.0, score < window.1) {
                     // fail high, expand upper window
                     (true, false) => {
-                        window = (window.0, window.1 + window_size);
-                        window_size *= 2;
+                        window = (window.0, window.1.saturating_add(window_size).min(INF));
+                        window_size = window_size.saturating_mul(2);
                     }
                     // fail low, expand lower window
                     (false, true) => {
-                        window = (window.0 - window_size, window.1);
-                        window_size *= 2;
+                        window = (window.0.saturating_sub(window_size).max(-INF), window.1);
+                        window_size = window_size.saturating_mul(2);
                     }
                     // exact score within the window, search success
                     (true, true) => break score,
-                    _ => unreachable!(),
+                    _ => {
+                        panic!(
+                            "Window error: [{}, {}], {}, {}",
+                            window.0, window.1, window_size, score
+                        );
+                    }
                 }
             };
 
