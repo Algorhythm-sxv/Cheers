@@ -145,7 +145,11 @@ impl Search {
             let mut window = if i == 1 {
                 (MINUS_INF, INF)
             } else {
-                (last_score - window_size, last_score + window_size)
+                // saturate to prevent overflows
+                (
+                    last_score.saturating_sub(window_size).max(-INF),
+                    last_score.saturating_add(window_size).min(INF),
+                )
             };
 
             let mut pv = PrincipalVariation::new();
