@@ -273,6 +273,12 @@ impl Search {
             return 0;
         }
 
+        // Check extensions: increase depth by 1 when in check to avoid tactical blindness
+        let in_check = board.in_check();
+        if in_check {
+            depth += 1;
+        }
+
         // drop into quiescence search at depth 0
         if depth == 0 {
             pv.clear();
@@ -285,7 +291,6 @@ impl Search {
         // increase the seldepth if this node is deeper
         self.seldepth = self.seldepth.max(ply);
 
-        let in_check = board.in_check();
         let pv_node = alpha != beta - 1;
         let current_player = board.current_player();
 
