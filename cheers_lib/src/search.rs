@@ -142,12 +142,11 @@ impl Search {
             // Aspiration Window: search a narrow window around the score in hope of saving
             // some search time
             let mut window_size = 50;
-            // let mut window = if i == 1 {
-            //     (MINUS_INF, INF)
-            // } else {
-            //     (last_score - window_size, last_score + window_size)
-            // };
-            let window = (MINUS_INF, INF);
+            let mut window = if i == 1 {
+                (MINUS_INF, INF)
+            } else {
+                (last_score - window_size, last_score + window_size)
+            };
 
             let mut pv = PrincipalVariation::new();
 
@@ -172,22 +171,21 @@ impl Search {
                 }
 
                 // Expand the search window based on which bound the search failed on
-                // match (score > window.0, score < window.1) {
-                //     // fail high, expand upper window
-                //     (true, false) => {
-                //         window = (window.0, window.1 + window_size);
-                //         window_size *= 2;
-                //     }
-                //     // fail low, expand lower window
-                //     (false, true) => {
-                //         window = (window.0 - window_size, window.1);
-                //         window_size *= 2;
-                //     }
-                //     // exact score within the window, search success
-                //     (true, true) => break score,
-                //     _ => unreachable!(),
-                // }
-                break score;
+                match (score > window.0, score < window.1) {
+                    // fail high, expand upper window
+                    (true, false) => {
+                        window = (window.0, window.1 + window_size);
+                        window_size *= 2;
+                    }
+                    // fail low, expand lower window
+                    (false, true) => {
+                        window = (window.0 - window_size, window.1);
+                        window_size *= 2;
+                    }
+                    // exact score within the window, search success
+                    (true, true) => break score,
+                    _ => unreachable!(),
+                }
             };
 
             let end = Instant::now();
