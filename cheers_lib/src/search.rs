@@ -402,7 +402,7 @@ impl Search {
         self.search_history.push(board.hash());
 
         let mut move_index = 0;
-        while let Some((mv, _)) = move_sorter.next(
+        while let Some((mv, move_score)) = move_sorter.next(
             board,
             &self.killer_moves[ply],
             &self.countermove_tables,
@@ -434,7 +434,11 @@ impl Search {
                     let mut r = 0;
 
                     // Late Move Reduction: moves that are sorted later are likely to fail low
-                    if !capture && mv.promotion != Queen && !in_check {
+                    if !capture
+                        && !matches!(move_score, MoveScore::KillerMove)
+                        && mv.promotion != Queen
+                        && !in_check
+                    {
                         r += LMR[(depth as usize).min(31)][i.min(31)];
                     }
 
