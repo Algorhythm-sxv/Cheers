@@ -10,7 +10,7 @@ fn main() {
     fs::write(
         lmr_out,
         format!(
-            "pub static LMR: [[i32; 32]; 32] = {:?};",
+            "pub static LMR: [[i8; 32]; 32] = {:?};",
             generate_lmr_reductions()
         ),
     )
@@ -40,13 +40,13 @@ fn main() {
     .unwrap();
 }
 
-fn generate_lmr_reductions() -> [[i32; 32]; 32] {
+fn generate_lmr_reductions() -> [[i8; 32]; 32] {
     let mut reductions = [[0; 32]; 32];
 
     for depth in 1..32 {
         for played in 1..32 {
             reductions[depth][played] =
-                (1.5 + (depth as f32).ln() * (played as f32).ln() / 1.75) as i32;
+                (1.5 + (depth as f32).ln() * (played as f32).ln() / 1.75) as i8;
         }
     }
     reductions
