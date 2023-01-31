@@ -164,7 +164,7 @@ pub enum MoveScore {
     LosingCapture(i16),
     Quiet(i16),
     CounterMove,
-    KillerMove,
+    KillerMove(i16),
     WinningCapture(i16),
     TTMove,
 }

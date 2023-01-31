@@ -123,7 +123,8 @@ fn score_quiet(
 ) -> MoveScore {
     let current_player = board.current_player();
     if killers.contains(&mv) {
-        MoveScore::KillerMove
+        // there can be more than 1 killer move, so sort them by their respective histories
+        MoveScore::KillerMove(history[current_player][mv.piece][mv.to])
     } else if counters[current_player][last_move.piece][last_move.to] == mv {
         MoveScore::CounterMove
     } else {
