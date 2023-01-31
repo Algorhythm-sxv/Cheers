@@ -257,7 +257,7 @@ impl<const N: usize> KillerMoves<N> {
         Self([[Move::null(); N]; SEARCH_MAX_PLY])
     }
     pub fn push(&mut self, m: Move, ply: usize) {
-        let mut moves = self.0[ply];
+        let moves = &mut self.0[ply];
         if !moves.contains(&m) {
             for i in (1..N).rev() {
                 moves[i] = moves[i - 1];
