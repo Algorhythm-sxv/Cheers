@@ -429,13 +429,13 @@ impl Search {
             // perform a search on the new position, returning the score and the PV
             let full_depth_null_window = if depth > self.options.pvs_fulldepth && i > 0 && !R::ROOT
             {
-                // reducing certain moves to same time, avoided for tactical and counter moves
+                // reducing certain moves to same time, avoided for tactical and killer/counter moves
                 let reduction = {
                     let mut r = 0;
 
                     // Late Move Reduction: moves that are sorted later are likely to fail low
                     if !capture
-                        && !matches!(move_score, MoveScore::CounterMove)
+                        && !matches!(move_score, MoveScore::KillerMove(_) | MoveScore::CounterMove)
                         && mv.promotion != Queen
                         && !in_check
                     {
