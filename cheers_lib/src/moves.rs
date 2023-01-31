@@ -163,8 +163,8 @@ pub enum MoveScore {
     UnderPromotion(i16),
     LosingCapture(i16),
     Quiet(i16),
-    KillerMove(i16),
     CounterMove,
+    KillerMove(i16),
     WinningCapture(i16),
     TTMove,
 }
