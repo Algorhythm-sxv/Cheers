@@ -410,9 +410,6 @@ impl Search {
             last_move,
             &mut self.move_lists[ply],
         ) {
-            let i = move_index;
-            move_index += 1;
-
             let capture = board.is_capture(mv);
 
             // make the move on a copy of the board
@@ -424,6 +421,10 @@ impl Search {
                 // skip the TT move if it's illegal
                 continue;
             }
+
+            // increment the move counter if the move was legal
+            let i = move_index;
+            move_index += 1;
 
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
