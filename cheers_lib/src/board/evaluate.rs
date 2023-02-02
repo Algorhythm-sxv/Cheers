@@ -126,6 +126,12 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             // self.trace.term(|t| t.tempo[W::INDEX] = 1);
         }
 
+        // scale down evals for material draws
+        if self.game.material_draw() {
+            eval.mg /= 32;
+            eval.eg /= 32;
+        }
+
         (((eval.mg as i32 * (256 - phase)) + (eval.eg as i32 * phase)) / 256) as i16
     }
 

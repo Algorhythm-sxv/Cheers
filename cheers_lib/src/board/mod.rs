@@ -573,6 +573,40 @@ impl Board {
         (king & self.all_enemy_attacks::<T>(self.occupied)).is_not_empty()
     }
 
+    pub fn material_draw(&self) -> bool {
+        // do not report any positions with pawns as material draws
+        if (self.white_pawns | self.black_pawns).is_not_empty() {
+            return false;
+        }
+
+        // KNvK
+        if (self.white_knights.count_ones() == 1 && self.black_pieces.count_ones() == 1)
+            || (self.black_knights.count_ones() == 1 && self.white_pieces.count_ones() == 1)
+        {
+            return true;
+        }
+
+        // KBvK
+        if (self.white_bishops.count_ones() == 1 && self.black_pieces.count_ones() == 1)
+            || (self.black_bishops.count_ones() == 1 && self.white_pieces.count_ones() == 1)
+        {
+            return true;
+        }
+
+        // KBvKB with bishops on the same color
+        if self.white_bishops.count_ones() == 1
+            && self.black_bishops.count_ones() == 1
+            && self.white_pieces.count_ones() == 2
+            && self.black_pieces.count_ones() == 2
+            && (self.white_bishops & LIGHT_SQUARES).count_ones()
+                == (self.black_bishops & LIGHT_SQUARES).count_ones()
+        {
+            return true;
+        }
+
+        false
+    }
+
     pub fn make_move(&mut self, mv: Move) {
         if self.black_to_move {
             self.make_move_for::<Black>(mv);
