@@ -593,15 +593,24 @@ impl Board {
             return true;
         }
 
-        // KBvKB with bishops on the same color
-        if self.white_bishops.count_ones() == 1
-            && self.black_bishops.count_ones() == 1
-            && self.white_pieces.count_ones() == 2
-            && self.black_pieces.count_ones() == 2
-            && (self.white_bishops & LIGHT_SQUARES).count_ones()
-                == (self.black_bishops & LIGHT_SQUARES).count_ones()
-        {
-            return true;
+        // Extended material draws: these positions can win/lose with imperfect
+        // play or timeout, but we can just call them draws
+
+        if self.white_pieces.count_ones() == 2 && self.black_pieces.count_ones() == 2 {
+            // KNvKN or KBvKN or KBvKB
+            if (self.white_knights | self.white_bishops).count_ones() == 1
+                && (self.black_knights | self.black_bishops).count_ones() == 1
+            {
+                return true;
+            }
+            // KRvKR
+            if self.white_rooks.count_ones() == 1 && self.black_rooks.count_ones() == 1 {
+                return true;
+            }
+            // KQvKQ
+            if self.white_queens.count_ones() == 1 && self.black_queens.count_ones() == 1 {
+                return true;
+            }
         }
 
         false
