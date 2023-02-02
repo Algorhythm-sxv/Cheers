@@ -603,13 +603,22 @@ impl Board {
             {
                 return true;
             }
-            // KRvKR
-            if self.white_rooks.count_ones() == 1 && self.black_rooks.count_ones() == 1 {
-                return true;
-            }
-            // KQvKQ
-            if self.white_queens.count_ones() == 1 && self.black_queens.count_ones() == 1 {
-                return true;
+
+            // these ones may involve tactics going into them, so we check that the kings aren't aligned with anything
+            if (lookup_queen(self.white_king.first_square(), BitBoard::empty()) & self.black_pieces)
+                .is_empty()
+                && (lookup_queen(self.black_king.first_square(), BitBoard::empty())
+                    & self.white_pieces)
+                    .is_empty()
+            {
+                // KRvKR
+                if self.white_rooks.count_ones() == 1 && self.black_rooks.count_ones() == 1 {
+                    return true;
+                }
+                // KQvKQ
+                if self.white_queens.count_ones() == 1 && self.black_queens.count_ones() == 1 {
+                    return true;
+                }
             }
         }
 
