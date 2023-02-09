@@ -6,10 +6,7 @@ use cheers_pregen::LMR;
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
 use crate::{
-    board::{
-        eval_types::{GamePhase::*, TraceTarget},
-        *,
-    },
+    board::{eval_types::TraceTarget, *},
     hash_tables::{score_from_tt, score_into_tt, NodeType::*, PawnHashTable, TranspositionTable},
     move_sorting::MoveSorter,
     moves::{KillerMoves, Move, MoveList, MoveScore, PrincipalVariation, NUM_KILLER_MOVES},
@@ -360,6 +357,17 @@ impl Search {
             };
         }
 
+        let eval = if tt_score != MINUS_INF {
+            tt_score
+        } else {
+            board.evaluate(&mut self.pawn_hash_table)
+        };
+
+        // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
+        if !pv_node && !R::ROOT && eval - (depth as i16 * self.options.rfp_margin) >= beta {
+            return eval - (depth as i16 * self.options.rfp_margin);
+        }
+
         // the PV from this node will be gathered into this array
         let mut line = PrincipalVariation::new();
 
@@ -436,7 +444,10 @@ impl Search {
 
                     // Late Move Reduction: moves that are sorted later are likely to fail low
                     if !capture
-                        && !matches!(move_score, MoveScore::KillerMove(_) | MoveScore::CounterMove)
+                        && !matches!(
+                            move_score,
+                            MoveScore::KillerMove(_) | MoveScore::CounterMove
+                        )
                         && mv.promotion != Queen
                         && !in_check
                     {
