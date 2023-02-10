@@ -398,6 +398,20 @@ impl Search {
             }
         }
 
+        // Futility Pruning: if the static eval is bad enough skip quiet moves
+        let fp_margins = [
+            0,
+            self.options.fp_margin_1,
+            self.options.fp_margin_2,
+            self.options.fp_margin_3,
+        ];
+        // decide if FP should be enabled
+        let futility_pruning = !R::ROOT
+            && !pv_node
+            && !in_check
+            && depth <= 3
+            && eval + fp_margins[depth as usize] <= alpha;
+
         // move ordering: try heuristically good moves first to reduce the AB search tree
         let mut move_sorter = MoveSorter::<All>::new(tt_move);
 
@@ -420,6 +434,17 @@ impl Search {
         ) {
             let capture = board.is_capture(mv);
 
+            // Futility Pruning: skip quiets on nodes with bad static eval
+            if futility_pruning
+                && !capture
+                && !matches!(
+                    move_score,
+                    MoveScore::KillerMove(_) | MoveScore::CounterMove,
+                )
+            {
+                move_index += 1;
+                continue;
+            }
             // make the move on a copy of the board
             let mut new = board.clone();
             new.make_move(mv);
