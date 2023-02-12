@@ -9,6 +9,8 @@ use crate::{
     types::{Piece::*, TypeMoveGen},
 };
 
+const WINNING_SEE_SCORE: i16 = 10_000;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Stage {
     TTMove,
@@ -102,15 +104,21 @@ fn score_capture(board: &Board, mv: Move) -> MoveScore {
     // filter out underpromotions
     if matches!(mv.promotion, Knight | Bishop | Rook) {
         return MoveScore::UnderPromotion(SEE_PIECE_VALUES[mv.promotion] as i16);
-    } else if mv.promotion == Queen {
+    }
+    let see_score = if board.see_beats_threshold(mv, 0) {
+        WINNING_SEE_SCORE
+    } else {
+        0
+    };
+    if mv.promotion == Queen {
         // promotions here may not be actually be captures
-        return MoveScore::WinningCapture(MVV_LVA[Queen][Pawn]);
+        return MoveScore::WinningCapture(MVV_LVA[Queen][Pawn] + see_score);
     }
 
     let mvv_lva = MVV_LVA[board.piece_on(mv.to).unwrap_or(Pawn)][mv.piece];
 
     // sort all captures before quiets
-    MoveScore::WinningCapture(mvv_lva)
+    MoveScore::WinningCapture(mvv_lva + see_score)
 }
 
 fn score_quiet(

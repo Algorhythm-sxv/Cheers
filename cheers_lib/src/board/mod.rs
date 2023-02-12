@@ -573,6 +573,28 @@ impl Board {
         (king & self.all_enemy_attacks::<T>(self.occupied)).is_not_empty()
     }
 
+    #[inline(always)]
+    pub fn piece_mask(&self, color: bool, piece: Piece) -> BitBoard {
+        if color {
+            match piece {
+                Pawn => self.black_pawns,
+                Knight => self.black_knights,
+                Bishop => self.black_bishops,
+                Rook => self.black_rooks,
+                Queen => self.black_queens,
+                King => self.black_king,
+            }
+        } else {
+            match piece {
+                Pawn => self.white_pawns,
+                Knight => self.white_knights,
+                Bishop => self.white_bishops,
+                Rook => self.white_rooks,
+                Queen => self.white_queens,
+                King => self.white_king,
+            }
+        }
+    }
     pub fn material_draw(&self) -> bool {
         // do not report any positions with pawns as material draws
         if (self.white_pawns | self.black_pawns).is_not_empty() {

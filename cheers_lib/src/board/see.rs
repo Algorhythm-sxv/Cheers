@@ -6,7 +6,7 @@ use Piece::*;
 
 use super::Board;
 
-pub const SEE_PIECE_VALUES: [i32; 6] = [100, 300, 300, 500, 900, 200000];
+pub const SEE_PIECE_VALUES: [i16; 6] = [100, 300, 300, 500, 900, 20000];
 pub const MVV_LVA: [[i16; 6]; 6] = [
     // pawn captured
     [15, 14, 13, 12, 11, 10],
@@ -23,9 +23,9 @@ pub const MVV_LVA: [[i16; 6]; 6] = [
 ];
 
 impl Board {
-    pub fn see(&self, mv: Move) -> i32 {
+    pub fn see(&self, mv: Move) -> i16 {
         let target = mv.to;
-        let mut swap_list = [0i32; 32];
+        let mut swap_list = [0i16; 32];
 
         let mut current_attacker = mv.piece;
         let mut attacker_mask = mv.from.bitboard();
@@ -116,6 +116,103 @@ impl Board {
         }
         swap_list[0]
     }
+
+    pub fn see_beats_threshold(&self, mv: Move, threshold: i16) -> bool {
+        // correct for ep capture
+        let mut value = if mv.piece == Pawn && mv.to.bitboard() == self.ep_mask {
+            SEE_PIECE_VALUES[Pawn] - threshold
+        } else {
+            self.piece_on(mv.to)
+                .map(|p| SEE_PIECE_VALUES[p])
+                .unwrap_or(0)
+                - threshold
+        };
+
+        // if the initial capture doesn't beat the threshold then we fail early,
+        // the opponent can simply not recapture
+        if value < 0 {
+            return false;
+        }
+
+        value -= SEE_PIECE_VALUES[mv.piece];
+
+        // if we still beat the threshold after the first recapture we succeed early
+        if value >= 0 {
+            return true;
+        }
+
+        let mut occupied = self.occupied ^ mv.from.bitboard();
+        // remove ep pawn
+        if mv.piece == Pawn && mv.to.bitboard() == self.ep_mask {
+            occupied &= ((self.ep_mask << 8) | (self.ep_mask >> 8)).inverse();
+        }
+        let mut attackers = self.all_attacks_on(mv.to, occupied);
+
+        let bishops =
+            self.white_bishops | self.black_bishops | self.white_queens | self.black_queens;
+
+        let rooks = self.white_rooks | self.black_rooks | self.white_queens | self.black_queens;
+
+        let mut color = !self.black_to_move;
+
+        loop {
+            // remove used pieces from attackers
+            attackers &= occupied;
+
+            let (current_pieces, other_pieces) = if color {
+                (self.black_pieces, self.white_pieces)
+            } else {
+                (self.white_pieces, self.black_pieces)
+            };
+            let current_attackers = attackers & current_pieces;
+
+            // current color has no attackers left
+            if current_attackers.is_empty() {
+                break;
+            }
+
+            // find the least valuable piece to take with
+            let piece = *PIECES
+                .iter()
+                .find(|p| {
+                    let pieces = self.piece_mask(color, **p);
+                    (pieces & current_attackers).is_not_empty()
+                })
+                .expect("SEE: no current piece found!");
+
+            let piece_mask = self.piece_mask(color, piece);
+
+            color = !color;
+
+            // negamax the score
+            value = -value - SEE_PIECE_VALUES[piece] - 1;
+
+            if value >= 0 {
+                // if the last capture was with king and it would be in check then fail instead of pass
+                // from this color's perspective
+                if piece == King && (attackers & other_pieces).is_not_empty() {
+                    color = !color;
+                }
+                break;
+            }
+
+            // remove the last used piece from occupied
+            occupied ^= (current_attackers & piece_mask).first_square().bitboard();
+
+            // add discovered attacks from behind sliders
+            if matches!(piece, Pawn | Bishop | Queen) {
+                attackers |= lookup_bishop(mv.to, occupied) & bishops;
+            }
+
+            if matches!(piece, Rook | Queen) {
+                attackers |= lookup_rook(mv.to, occupied) & rooks;
+            }
+        }
+
+        // pass if opponent ran out of attackers or not recapturing wins material
+        // fail if current player ran out of attackers or opponent has won material
+        color != self.black_to_move
+    }
 }
 
 #[cfg(test)]
@@ -152,6 +249,8 @@ mod tests {
         for (fen, move_, score) in test_cases {
             let game = Board::from_fen(fen).unwrap();
             assert_eq!(game.see(Move::from_pair(&game, move_)), score);
+            assert!(game.see_beats_threshold(Move::from_pair(&game, move_), score - 10),);
+            assert!(!game.see_beats_threshold(Move::from_pair(&game, move_), score + 10),);
         }
         Ok(())
     }
