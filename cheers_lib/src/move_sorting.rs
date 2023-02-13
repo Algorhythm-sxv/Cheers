@@ -105,7 +105,7 @@ fn score_capture(board: &Board, mv: Move) -> MoveScore {
     if matches!(mv.promotion, Knight | Bishop | Rook) {
         return MoveScore::UnderPromotion(SEE_PIECE_VALUES[mv.promotion] as i16);
     }
-    let see_score = if board.see_beats_threshold(mv, 0) {
+    let see_score = if board.see_beats_threshold(mv, 10) {
         WINNING_SEE_SCORE
     } else {
         0
