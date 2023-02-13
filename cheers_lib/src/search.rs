@@ -133,7 +133,7 @@ impl Search {
 
         // Iterative Deepening: search with increasing depth, exploiting the results
         // of shallower searches to speed up deeper ones
-        'id_loop: for i in 1.. {
+        'id_loop: for i in 1..SEARCH_MAX_PLY {
             // Aspiration Window: search a narrow window around the score in hope of saving
             // some search time
             let mut window_size = 50;
@@ -278,7 +278,8 @@ impl Search {
         // Check extensions: increase depth by 1 when in check to avoid tactical blindness
         let in_check = board.in_check();
         if in_check {
-            depth += 1;
+            // saturating add to avoid negative depths on overflow
+            depth = depth.saturating_add(1);
         }
 
         // drop into quiescence search at depth 0
