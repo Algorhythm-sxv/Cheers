@@ -414,7 +414,7 @@ impl Search {
             && eval + fp_margins[depth as usize] <= alpha;
 
         // move ordering: try heuristically good moves first to reduce the AB search tree
-        let mut move_sorter = MoveSorter::<All>::new(tt_move);
+        let mut move_sorter = MoveSorter::<All>::new(tt_move, 10 * (depth as i16) * (depth as i16));
 
         let mut best_move = Move::null();
 
@@ -745,7 +745,7 @@ impl Search {
 
         // move ordering: try heuristically good moves first to reduce the AB search tree
         // quiescence search only looks at captures and promotions to ensure termination
-        let mut move_sorter = MoveSorter::<Captures>::new(tt_move);
+        let mut move_sorter = MoveSorter::<Captures>::new(tt_move, 10);
 
         let old_alpha = alpha;
 
