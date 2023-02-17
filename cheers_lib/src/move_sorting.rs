@@ -105,7 +105,7 @@ impl<M: TypeMoveGen> MoveSorter<M> {
 fn score_capture(board: &Board, mv: Move, see_threshold: i16) -> MoveScore {
     // filter out underpromotions
     if matches!(mv.promotion, Knight | Bishop | Rook) {
-        return MoveScore::UnderPromotion(SEE_PIECE_VALUES[mv.promotion] as i16);
+        return MoveScore::UnderPromotion(SEE_PIECE_VALUES[mv.promotion]);
     }
     let see_score = if board.see_beats_threshold(mv, see_threshold) {
         WINNING_SEE_SCORE
@@ -114,7 +114,7 @@ fn score_capture(board: &Board, mv: Move, see_threshold: i16) -> MoveScore {
     };
     if mv.promotion == Queen {
         // promotions here may not be actually be captures
-        return MoveScore::WinningCapture(MVV_LVA[Queen][Pawn] + see_score);
+        return MoveScore::WinningCapture(MVV_LVA[Queen][Pawn] + WINNING_SEE_SCORE / 2);
     }
 
     let mvv_lva = MVV_LVA[board.piece_on(mv.to).unwrap_or(Pawn)][mv.piece];

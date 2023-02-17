@@ -249,6 +249,7 @@ mod tests {
         for (fen, move_, score) in test_cases {
             let game = Board::from_fen(fen).unwrap();
             assert_eq!(game.see(Move::from_pair(&game, move_)), score);
+            assert!(game.see_beats_threshold(Move::from_pair(&game, move_), score),);
             assert!(game.see_beats_threshold(Move::from_pair(&game, move_), score - 10),);
             assert!(!game.see_beats_threshold(Move::from_pair(&game, move_), score + 10),);
         }
