@@ -5,6 +5,7 @@ use std::time::Instant;
 use cheers_pregen::LMR;
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
+use crate::board::see::SEE_PIECE_VALUES;
 use crate::{
     board::{eval_types::TraceTarget, *},
     hash_tables::{score_from_tt, score_into_tt, NodeType::*, PawnHashTable, TranspositionTable},
@@ -758,6 +759,17 @@ impl Search {
             Move::null(),
             &mut self.move_lists[ply],
         ) {
+            // Delta Pruning: if this capture immediately falls short by some margin, skip it
+            if static_eval
+                + board
+                    .piece_on(mv.to)
+                    .map(|p| SEE_PIECE_VALUES[p])
+                    .unwrap_or(0)
+                + self.options.delta_pruning_margin
+                <= alpha
+            {
+                continue;
+            }
             // make the move on a copy of the board
             self.search_history.push(board.hash());
             let mut new = board.clone();

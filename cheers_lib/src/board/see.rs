@@ -6,7 +6,7 @@ use Piece::*;
 
 use super::Board;
 
-pub const SEE_PIECE_VALUES: [i32; 6] = [100, 300, 300, 500, 900, 200000];
+pub const SEE_PIECE_VALUES: [i16; 6] = [100, 300, 300, 500, 900, 20000];
 pub const MVV_LVA: [[i16; 6]; 6] = [
     // pawn captured
     [15, 14, 13, 12, 11, 10],
@@ -37,7 +37,7 @@ impl Board {
 
         // simulate the first capture
         swap_list[0] = match self.piece_on(target) {
-            Some(p) => SEE_PIECE_VALUES[p],
+            Some(p) => SEE_PIECE_VALUES[p] as i32,
             None => 0,
         };
         let mut occupied = self.occupied;
@@ -47,7 +47,7 @@ impl Board {
         if mv.piece == Pawn && mv.to.bitboard() == self.ep_mask {
             // shift the pawn back to the normal square for en passent
             occupied ^= self.ep_mask | (self.ep_mask >> 8 << 16 * (self.black_to_move as u8));
-            swap_list[0] = SEE_PIECE_VALUES[Pawn];
+            swap_list[0] = SEE_PIECE_VALUES[Pawn] as i32;
         }
 
         let mut attackers = self.all_attacks_on(target, occupied);
@@ -55,7 +55,7 @@ impl Board {
         let mut i = 0;
         for _ in 1..32 {
             i += 1;
-            swap_list[i] = SEE_PIECE_VALUES[current_attacker] - swap_list[i - 1];
+            swap_list[i] = SEE_PIECE_VALUES[current_attacker] as i32 - swap_list[i - 1];
             if swap_list[i].max(swap_list[i - 1]) < 0 {
                 break;
             }
