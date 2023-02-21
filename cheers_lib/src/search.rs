@@ -5,6 +5,7 @@ use std::time::Instant;
 use cheers_pregen::LMR;
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
+use crate::board::see::SEE_PIECE_VALUES;
 use crate::{
     board::{eval_types::TraceTarget, *},
     hash_tables::{score_from_tt, score_into_tt, NodeType::*, PawnHashTable, TranspositionTable},
@@ -749,6 +750,9 @@ impl Search {
 
         let old_alpha = alpha;
 
+        // add the current position to the history
+        self.search_history.push(board.hash());
+
         let mut best_move = Move::null();
         while let Some((mv, _)) = move_sorter.next(
             board,
@@ -758,8 +762,19 @@ impl Search {
             Move::null(),
             &mut self.move_lists[ply],
         ) {
+            // Delta Pruning: if this capture immediately falls short by some margin, skip it
+            if static_eval
+                + board
+                    .piece_on(mv.to)
+                    .map(|p| SEE_PIECE_VALUES[p])
+                    .unwrap_or(0)
+                + self.options.delta_pruning_margin
+                <= alpha
+            {
+                continue;
+            }
+
             // make the move on a copy of the board
-            self.search_history.push(board.hash());
             let mut new = board.clone();
             new.make_move(mv);
 
@@ -771,9 +786,6 @@ impl Search {
 
             let (mut score, trace) = self.quiesce_impl::<T>(&new, -beta, -alpha, ply + 1, mv, tt);
             score = -score;
-
-            // 'unmake' the move by removing it from the position history
-            self.search_history.pop();
 
             if score >= beta {
                 // beta cutoff, this move is too good and so the opponent won't go into this position
@@ -787,6 +799,8 @@ impl Search {
                     LowerBound,
                     false,
                 );
+                // return to the previous history state
+                self.search_history.pop();
                 return (score, trace);
             } else if score > alpha {
                 // a score between alpha and beta represents a new best move
@@ -798,6 +812,8 @@ impl Search {
             }
         }
 
+        self.search_history.pop();
+        
         // if there are no legal captures, check for checkmate/stalemate
         // disable when tracing to avoid empty traces
         if !T::TRACING && self.move_lists[ply].len() == 0 {
