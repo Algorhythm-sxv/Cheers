@@ -18,8 +18,8 @@ use crate::{
 pub static ABORT_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-const INF: i16 = i16::MAX;
-const MINUS_INF: i16 = -INF;
+pub const INF: i16 = i16::MAX;
+pub const MINUS_INF: i16 = -INF;
 
 pub const SEARCH_MAX_PLY: usize = 128;
 
@@ -366,7 +366,10 @@ impl Search {
         };
 
         // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
-        if !pv_node && !R::ROOT && eval - (depth as i16 * self.options.rfp_margin) >= beta {
+        if !pv_node
+            && !R::ROOT
+            && eval.saturating_sub(depth as i16 * self.options.rfp_margin) >= beta
+        {
             return eval - (depth as i16 * self.options.rfp_margin);
         }
 
@@ -415,7 +418,7 @@ impl Search {
             && eval + fp_margins[depth as usize] <= alpha;
 
         // move ordering: try heuristically good moves first to reduce the AB search tree
-        let mut move_sorter = MoveSorter::<All>::new(tt_move, 20*(depth as i16)*(depth as i16));
+        let mut move_sorter = MoveSorter::<All>::new(tt_move);
 
         let mut best_move = Move::null();
 
@@ -746,7 +749,7 @@ impl Search {
 
         // move ordering: try heuristically good moves first to reduce the AB search tree
         // quiescence search only looks at captures and promotions to ensure termination
-        let mut move_sorter = MoveSorter::<Captures>::new(tt_move, 10);
+        let mut move_sorter = MoveSorter::<Captures>::new(tt_move);
 
         let old_alpha = alpha;
 
@@ -764,11 +767,13 @@ impl Search {
         ) {
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
-                + board
-                    .piece_on(mv.to)
-                    .map(|p| SEE_PIECE_VALUES[p])
-                    .unwrap_or(0)
-                + self.options.delta_pruning_margin
+                .saturating_add(
+                    board
+                        .piece_on(mv.to)
+                        .map(|p| SEE_PIECE_VALUES[p])
+                        .unwrap_or(0),
+                )
+                .saturating_add(self.options.delta_pruning_margin)
                 <= alpha
             {
                 continue;
@@ -813,7 +818,7 @@ impl Search {
         }
 
         self.search_history.pop();
-        
+
         // if there are no legal captures, check for checkmate/stalemate
         // disable when tracing to avoid empty traces
         if !T::TRACING && self.move_lists[ply].len() == 0 {

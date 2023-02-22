@@ -5,7 +5,7 @@ use cheers_bitboards::{BitBoard, Square};
 use crate::{
     board::{eval_types::EvalScore, evaluate::CHECKMATE_SCORE},
     moves::Move,
-    search::SEARCH_MAX_PLY,
+    search::{SEARCH_MAX_PLY, MINUS_INF},
     types::{Piece, TypeColor},
 };
 
@@ -95,7 +95,7 @@ impl Default for Entry {
         Self {
             data: AtomicU64::new(data_into_u64(
                 0xFFFF,
-                i16::MIN,
+                MINUS_INF,
                 -100,
                 Move::null(),
                 NodeType::LowerBound,

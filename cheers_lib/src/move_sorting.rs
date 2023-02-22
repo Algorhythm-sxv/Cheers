@@ -9,8 +9,6 @@ use crate::{
     types::{Piece::*, TypeMoveGen},
 };
 
-const WINNING_SEE_SCORE: i16 = 10_000;
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Stage {
     TTMove,
@@ -22,13 +20,12 @@ enum Stage {
 pub struct MoveSorter<M: TypeMoveGen> {
     stage: Stage,
     tt_move: Move,
-    see_threshold: i16,
     index: usize,
     _captures: PhantomData<M>,
 }
 
 impl<M: TypeMoveGen> MoveSorter<M> {
-    pub fn new(tt_move: Move, see_threshold: i16) -> Self {
+    pub fn new(tt_move: Move) -> Self {
         Self {
             stage: if tt_move != Move::null() {
                 Stage::TTMove
@@ -36,7 +33,6 @@ impl<M: TypeMoveGen> MoveSorter<M> {
                 Stage::GenerateMoves
             },
             tt_move,
-            see_threshold,
             index: 0,
             _captures: PhantomData::default(),
         }
@@ -67,13 +63,13 @@ impl<M: TypeMoveGen> MoveSorter<M> {
             if M::CAPTURES {
                 board.generate_legal_captures_into(list);
                 for m in list.inner_mut() {
-                    m.score = score_capture(board, m.mv, self.see_threshold);
+                    m.score = score_capture(board, m.mv);
                 }
             } else {
                 board.generate_legal_moves_into(list);
                 for m in list.inner_mut() {
                     if m.mv.promotion != Pawn || board.is_capture(m.mv) {
-                        m.score = score_capture(board, m.mv, self.see_threshold);
+                        m.score = score_capture(board, m.mv);
                     } else {
                         m.score = score_quiet(board, killers, counters, history, last_move, m.mv);
                     }
@@ -102,25 +98,21 @@ impl<M: TypeMoveGen> MoveSorter<M> {
     }
 }
 
-fn score_capture(board: &Board, mv: Move, see_threshold: i16) -> MoveScore {
+fn score_capture(board: &Board, mv: Move) -> MoveScore {
     // filter out underpromotions
     if matches!(mv.promotion, Knight | Bishop | Rook) {
         return MoveScore::UnderPromotion(SEE_PIECE_VALUES[mv.promotion]);
     }
-    let see_score = if board.see_beats_threshold(mv, see_threshold) {
-        WINNING_SEE_SCORE
-    } else {
-        0
-    };
+
     if mv.promotion == Queen {
         // promotions here may not be actually be captures
-        return MoveScore::WinningCapture(MVV_LVA[Queen][Pawn] + WINNING_SEE_SCORE / 2);
+        return MoveScore::WinningCapture(MVV_LVA[Queen][Pawn]);
     }
 
     let mvv_lva = MVV_LVA[board.piece_on(mv.to).unwrap_or(Pawn)][mv.piece];
 
     // sort all captures before quiets
-    MoveScore::WinningCapture(mvv_lva + see_score)
+    MoveScore::WinningCapture(mvv_lva)
 }
 
 fn score_quiet(
