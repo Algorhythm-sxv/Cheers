@@ -359,6 +359,11 @@ impl Search {
             };
         }
 
+        // IIR: reduce the search depth if no TT move is present
+        if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_move.is_null() {
+            depth -= 1;
+        }
+
         let eval = if tt_score != MINUS_INF {
             tt_score
         } else {
@@ -813,7 +818,7 @@ impl Search {
         }
 
         self.search_history.pop();
-        
+
         // if there are no legal captures, check for checkmate/stalemate
         // disable when tracing to avoid empty traces
         if !T::TRACING && self.move_lists[ply].len() == 0 {
