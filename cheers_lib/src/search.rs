@@ -359,6 +359,11 @@ impl Search {
             };
         }
 
+        // IIR: reduce the search depth if no TT move is present
+        if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_move.is_null() {
+            depth -= 1;
+        }
+
         let eval = if tt_score != MINUS_INF {
             tt_score
         } else {
