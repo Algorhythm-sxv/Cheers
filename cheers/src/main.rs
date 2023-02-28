@@ -66,7 +66,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
                 uci::UciOption::Threads(_) => {}
                 uci::UciOption::NmpDepth(n) => options.nmp_depth = n as i8,
-                uci::UciOption::NmpReduction(n) => options.nmp_reduction = n as i8,
+                uci::UciOption::NmpConstReduction(n) => options.nmp_const_reduction = n as i8,
+                uci::UciOption::NmpLinearDivisor(n) => options.nmp_linear_divisor = n as i8,
                 uci::UciOption::SeePruningDepth(n) => options.see_pruning_depth = n as i8,
                 uci::UciOption::SeeCaptureMargin(n) => options.see_capture_margin = n as i16,
                 uci::UciOption::SeeQuietMargin(n) => options.see_quiet_margin = n as i16,

@@ -388,6 +388,12 @@ impl Search {
             && depth >= self.options.nmp_depth
             && board.has_non_pawn_material(current_player)
         {
+            // reduce by at least 1
+            let reduction = (self
+                .options
+                .nmp_const_reduction
+                .saturating_add(depth / self.options.nmp_linear_divisor))
+            .max(1);
             self.search_history.push(board.hash());
             let mut new = board.clone();
             new.make_null_move();
@@ -395,7 +401,7 @@ impl Search {
                 &new,
                 -beta,
                 -beta + 1,
-                (depth - self.options.nmp_reduction).max(0),
+                (depth - reduction).max(0),
                 ply + 1,
                 Move::null(),
                 &mut line,
