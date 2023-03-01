@@ -16,13 +16,13 @@ pub struct SearchOptions {
     pub fp_margin_3: i16,
     pub rfp_margin: i16,
     pub lmp_depth: i8,
-    pub lmp_margin: i16,
+    pub lmp_margin: usize,
     pub iir_depth: i8,
 }
 
-pub const NMP_DEPTH: i8 = 2;
+pub const NMP_DEPTH: i8 = 1;
 pub const NMP_CONST_REDUCTION: i8 = 5;
-pub const NMP_LINEAR_DIVISOR: i8 = 3;
+pub const NMP_LINEAR_DIVISOR: i8 = 4;
 pub const SEE_PRUNING_DEPTH: i8 = 6;
 pub const SEE_CAPTURE_MARGIN: i16 = 59;
 pub const SEE_QUIET_MARGIN: i16 = 39;
@@ -33,7 +33,7 @@ pub const FP_MARGIN_2: i16 = 344;
 pub const FP_MARGIN_3: i16 = 723;
 pub const RFP_MARGIN: i16 = 106;
 pub const LMP_DEPTH: i8 = 1;
-pub const LMP_MARGIN: i16 = 2;
+pub const LMP_MARGIN: usize = 2;
 pub const IIR_DEPTH: i8 = 4;
 
 impl Default for SearchOptions {
