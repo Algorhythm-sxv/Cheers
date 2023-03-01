@@ -20,7 +20,7 @@ uci_options![
     FpMargin2(Spin<i16> { default: 344, min: 0, max: 700 }),
     FpMargin3(Spin<i16> { default: 723, min: 500, max: 1000 }),
     RfpMargin(Spin<i16> { default: 106, min: 0, max: 300 }),
-    LmpDepth(Spin<i8> { default: 1, min: 1, max: 5 }),
+    LmpDepth(Spin<i8> { default: 1, min: 0, max: 10 }),
     LmpMargin(Spin<usize> { default: 2, min: 1, max: 10 }),
     IirDepth(Spin<i8> { default: 4, min: 1, max: 10 }),
 ];
