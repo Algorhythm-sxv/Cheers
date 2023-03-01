@@ -572,7 +572,8 @@ impl Search {
                 if !capture {
                     self.killer_moves.push(mv, ply);
                     self.countermove_tables[current_player][last_move.piece][last_move.to] = mv;
-                    self.history_tables[current_player][mv.piece][mv.to] += (depth * depth) as i16;
+                    self.history_tables[current_player][mv.piece][mv.to] +=
+                        depth as i16 * depth as i16;
                     // scale history scores down if they get too high
                     if self.history_tables[current_player][mv.piece][mv.to] > 4096 {
                         self.history_tables[current_player]
@@ -588,7 +589,7 @@ impl Search {
                     {
                         let mv = smv.mv;
                         self.history_tables[current_player][mv.piece][mv.to] -=
-                            (depth * depth) as i16;
+                            depth as i16 * depth as i16;
                         if self.history_tables[current_player][mv.piece][mv.to] < -4096 {
                             self.history_tables[current_player]
                                 .iter_mut()
