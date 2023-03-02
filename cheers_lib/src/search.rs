@@ -461,6 +461,18 @@ impl Search {
                 move_index += 1;
                 continue;
             }
+
+            // Late Move Pruning: skip moves ordered late, more for shallow searches
+            if !R::ROOT
+                && !pv_node
+                && !capture
+                && depth <= self.options.lmp_depth
+                && move_index >= (depth as usize * depth as usize) * self.options.lmp_margin
+            {
+                move_index += 1;
+                continue;
+            }
+            
             // make the move on a copy of the board
             let mut new = board.clone();
             new.make_move(mv);
