@@ -817,6 +817,11 @@ impl Search {
                 continue;
             }
 
+            // SEE pruning: if the move loses material, skip it
+            if !board.see_beats_threshold(mv, 0) {
+                continue;
+            }
+
             // make the move on a copy of the board
             let mut new = board.clone();
             new.make_move(mv);
