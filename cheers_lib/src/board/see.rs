@@ -6,6 +6,7 @@ use Piece::*;
 
 use super::Board;
 
+pub const SEE_WINNING_SCORE: i16 = 10000;
 pub const SEE_PIECE_VALUES: [i16; 6] = [100, 300, 300, 500, 900, 20000];
 pub const MVV_LVA: [[i16; 6]; 6] = [
     // pawn captured

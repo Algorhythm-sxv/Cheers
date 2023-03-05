@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::{
     board::{
-        see::{MVV_LVA, SEE_PIECE_VALUES},
+        see::{MVV_LVA, SEE_PIECE_VALUES, SEE_WINNING_SCORE},
         Board,
     },
     moves::{Move, MoveList, MoveScore, NUM_KILLER_MOVES},
@@ -106,13 +106,14 @@ fn score_capture(board: &Board, mv: Move) -> MoveScore {
 
     if mv.promotion == Queen {
         // promotions here may not be actually be captures
-        return MoveScore::WinningCapture(MVV_LVA[Queen][Pawn]);
+        return MoveScore::WinningCapture(MVV_LVA[Queen][Pawn] + SEE_WINNING_SCORE / 2);
     }
 
     let mvv_lva = MVV_LVA[board.piece_on(mv.to).unwrap_or(Pawn)][mv.piece];
+    let see_score = SEE_WINNING_SCORE * (board.see_beats_threshold(mv, 10) as i16);
 
     // sort all captures before quiets
-    MoveScore::WinningCapture(mvv_lva)
+    MoveScore::WinningCapture(mvv_lva + see_score)
 }
 
 fn score_quiet(
