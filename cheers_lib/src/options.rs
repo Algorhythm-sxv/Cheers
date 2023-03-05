@@ -23,9 +23,9 @@ pub struct SearchOptions {
 pub const NMP_DEPTH: i8 = 1;
 pub const NMP_CONST_REDUCTION: i8 = 5;
 pub const NMP_LINEAR_DIVISOR: i8 = 4;
-pub const SEE_PRUNING_DEPTH: i8 = 6;
-pub const SEE_CAPTURE_MARGIN: i16 = 59;
-pub const SEE_QUIET_MARGIN: i16 = 39;
+pub const SEE_PRUNING_DEPTH: i8 = 5;
+pub const SEE_CAPTURE_MARGIN: i16 = -31;
+pub const SEE_QUIET_MARGIN: i16 = -87;
 pub const PVS_FULLDEPTH: i8 = 1;
 pub const DELTA_PRUNING_MARGIN: i16 = 91;
 pub const FP_MARGIN_1: i16 = 115;

@@ -472,7 +472,20 @@ impl Search {
                 move_index += 1;
                 continue;
             }
-            
+
+            if !R::ROOT && depth <= self.options.see_pruning_depth {
+                let threshold = depth as i16
+                    * if capture {
+                        self.options.see_capture_margin
+                    } else {
+                        self.options.see_quiet_margin
+                    };
+                if !board.see_beats_threshold(mv, threshold) {
+                    move_index += 1;
+                    continue;
+                }
+            }
+
             // make the move on a copy of the board
             let mut new = board.clone();
             new.make_move(mv);

@@ -246,6 +246,13 @@ mod tests {
             ("4k3/8/1b1p4/2p5/3P4/4B3/5B2/4K3 w - - 0 1", "d4c5", 100),
             ("3k3/8/1b1p4/2p5/3P4/4Q3/5B2/4K3 w - - 0 1", "d4c5", 0),
             ("8/8/8/2pk4/3P4/4P3/8/4K3 b - - 0 1", "c5d4", 100),
+            ("1k1rr3/8/8/8/8/8/3Q4/K2R4 w - - 0 1", "d2d8", 100),
+            (
+                "rnbqk1nr/pppp1ppp/8/2b1p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 1",
+                "c4f7",
+                -200,
+            ),
+            ("6k1/8/8/RrRrP3/8/8/8/6K1 b - - 0 1", "d5e5", -400),
         ];
         for (fen, move_, score) in test_cases {
             let game = Board::from_fen(fen).unwrap();

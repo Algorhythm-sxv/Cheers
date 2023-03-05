@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use cheers_lib::{board::Board, moves::Move, types::Piece, Square};
+use cheers_lib::{board::Board, moves::Move, types::Piece, Square, options::*};
 
 #[macro_use]
 mod macros;
@@ -8,21 +8,21 @@ mod macros;
 uci_options![
     Hash(Spin<usize> { default: 32, min: 1, max: 32768 }),
     Threads(Spin<usize> { default: 1, min: 1, max: 1 }),
-    NmpDepth(Spin<i8> { default: 1, min: 1, max: 10 }),
-    NmpConstReduction(Spin<i8> { default: 5, min: 1, max: 10 }),
-    NmpLinearDivisor(Spin<i8> { default: 4, min: 1, max: 10 }),
-    SeePruningDepth(Spin<i8> { default: 6, min: 1, max: 10 }),
-    SeeCaptureMargin(Spin<i16> { default: 59, min: 0, max: 200 }),
-    SeeQuietMargin(Spin<i16> { default: 39, min: 0, max: 100 }),
-    PvsFulldepth(Spin<i8> { default: 1, min: 1, max: 5 }),
-    DeltaPruningMargin(Spin<i16> { default: 91, min: 0, max: 300 }),
-    FpMargin1(Spin<i16> { default: 115, min: 0, max: 300 }),
-    FpMargin2(Spin<i16> { default: 344, min: 0, max: 700 }),
-    FpMargin3(Spin<i16> { default: 723, min: 500, max: 1000 }),
-    RfpMargin(Spin<i16> { default: 106, min: 0, max: 300 }),
-    LmpDepth(Spin<i8> { default: 3, min: 0, max: 10 }),
-    LmpMargin(Spin<usize> { default: 13, min: 1, max: 15 }),
-    IirDepth(Spin<i8> { default: 4, min: 2, max: 10 }),
+    NmpDepth(Spin<i8> { default: NMP_DEPTH, min: 1, max: 10 }),
+    NmpConstReduction(Spin<i8> { default: NMP_CONST_REDUCTION, min: 1, max: 10 }),
+    NmpLinearDivisor(Spin<i8> { default: NMP_LINEAR_DIVISOR, min: 1, max: 10 }),
+    SeePruningDepth(Spin<i8> { default: SEE_PRUNING_DEPTH, min: 1, max: 10 }),
+    SeeCaptureMargin(Spin<i16> { default: SEE_CAPTURE_MARGIN, min: -200, max: 200 }),
+    SeeQuietMargin(Spin<i16> { default: SEE_QUIET_MARGIN, min: -100, max: 100 }),
+    PvsFulldepth(Spin<i8> { default: PVS_FULLDEPTH, min: 1, max: 5 }),
+    DeltaPruningMargin(Spin<i16> { default: DELTA_PRUNING_MARGIN, min: 0, max: 300 }),
+    FpMargin1(Spin<i16> { default: FP_MARGIN_1, min: 0, max: 300 }),
+    FpMargin2(Spin<i16> { default: FP_MARGIN_2, min: 0, max: 700 }),
+    FpMargin3(Spin<i16> { default: FP_MARGIN_3, min: 500, max: 1000 }),
+    RfpMargin(Spin<i16> { default: RFP_MARGIN, min: 0, max: 300 }),
+    LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
+    LmpMargin(Spin<usize> { default: LMP_MARGIN, min: 1, max: 15 }),
+    IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 10 }),
 ];
 
 pub enum UciCommand {
