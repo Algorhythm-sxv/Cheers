@@ -1,5 +1,3 @@
-
-
 #[derive(Clone, Copy)]
 pub struct SearchOptions {
     pub tt_size_mb: usize,
@@ -21,20 +19,20 @@ pub struct SearchOptions {
 }
 
 pub const NMP_DEPTH: i8 = 1;
-pub const NMP_CONST_REDUCTION: i8 = 5;
-pub const NMP_LINEAR_DIVISOR: i8 = 4;
-pub const SEE_PRUNING_DEPTH: i8 = 5;
-pub const SEE_CAPTURE_MARGIN: i16 = -31;
-pub const SEE_QUIET_MARGIN: i16 = -87;
+pub const NMP_CONST_REDUCTION: i8 = 3;
+pub const NMP_LINEAR_DIVISOR: i8 = 3;
+pub const SEE_PRUNING_DEPTH: i8 = 6;
+pub const SEE_CAPTURE_MARGIN: i16 = -16;
+pub const SEE_QUIET_MARGIN: i16 = -100;
 pub const PVS_FULLDEPTH: i8 = 1;
-pub const DELTA_PRUNING_MARGIN: i16 = 91;
-pub const FP_MARGIN_1: i16 = 115;
-pub const FP_MARGIN_2: i16 = 344;
-pub const FP_MARGIN_3: i16 = 723;
-pub const RFP_MARGIN: i16 = 106;
-pub const LMP_DEPTH: i8 = 3;
-pub const LMP_MARGIN: usize = 13;
-pub const IIR_DEPTH: i8 = 4;
+pub const DELTA_PRUNING_MARGIN: i16 = 90;
+pub const FP_MARGIN_1: i16 = 151;
+pub const FP_MARGIN_2: i16 = 322;
+pub const FP_MARGIN_3: i16 = 699;
+pub const RFP_MARGIN: i16 = 119;
+pub const LMP_DEPTH: i8 = 4;
+pub const LMP_MARGIN: usize = 5;
+pub const IIR_DEPTH: i8 = 6;
 
 impl Default for SearchOptions {
     fn default() -> Self {
