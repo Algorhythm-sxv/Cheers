@@ -131,12 +131,18 @@ impl Search {
     pub fn smp_search(&self) -> (i16, PrincipalVariation) {
         let mut score = MINUS_INF;
         let mut pv = PrincipalVariation::new();
+
+        // Lazy SMP: start all threads at the same depth, communicating only
+        // via the shared TT
         let _ = thread::scope(|s| {
+            // main thread: this is the only thread that reports back over UCI
             let _main_thread = s.spawn(|| {
                 let search = self.clone();
                 (score, pv) = search.search::<MainThread>();
                 ABORT_SEARCH.store(true, Ordering::Relaxed);
             });
+
+            // helper threads: these only have their results added to the TT
             for _ in 1..self.options.threads {
                 s.spawn(|| {
                     let search = self.clone();
