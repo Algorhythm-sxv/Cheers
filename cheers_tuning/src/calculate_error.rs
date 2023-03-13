@@ -7,7 +7,7 @@ use cheers_lib::{
     },
     hash_tables::TranspositionTable,
     moves::Move,
-    search::Search,
+    search::Search, types::MainThread,
 };
 
 use crate::data_extraction::GameResult;
@@ -42,7 +42,7 @@ pub fn data_to_entry(line: &str) -> TuningEntry {
     let mut search = Search::new(game);
     let tt_placeholder = TranspositionTable::new(0);
 
-    let (_, trace) = search.quiesce_impl::<EvalTrace>(
+    let (_, trace) = search.quiesce_impl::<EvalTrace, MainThread>(
         &game.clone(),
         i16::MIN + 1,
         i16::MAX - 1,

@@ -1,5 +1,6 @@
 #[derive(Clone, Copy)]
 pub struct SearchOptions {
+    pub threads: usize,
     pub tt_size_mb: usize,
     pub nmp_depth: i8,
     pub nmp_const_reduction: i8,
@@ -37,6 +38,7 @@ pub const IIR_DEPTH: i8 = 6;
 impl Default for SearchOptions {
     fn default() -> Self {
         Self {
+            threads: 1,
             tt_size_mb: 8,
             nmp_depth: NMP_DEPTH,
             nmp_const_reduction: NMP_CONST_REDUCTION,

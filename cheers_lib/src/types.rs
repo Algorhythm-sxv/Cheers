@@ -77,6 +77,18 @@ impl TypeRoot for NotRoot {
     const ROOT: bool = false;
 }
 
+pub struct MainThread;
+pub struct HelperThread;
+pub trait TypeMainThread {
+    const MAIN_THREAD: bool;
+}
+impl TypeMainThread for MainThread {
+    const MAIN_THREAD: bool = true;
+}
+impl TypeMainThread for HelperThread {
+    const MAIN_THREAD: bool = false;
+}
+
 pub struct Captures;
 pub struct All;
 pub trait TypeMoveGen {

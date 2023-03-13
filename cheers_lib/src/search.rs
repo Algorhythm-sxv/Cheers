@@ -1,11 +1,13 @@
 use std::sync::atomic::*;
 use std::sync::{atomic::Ordering::*, Arc, RwLock};
+use std::thread;
 use std::time::Instant;
 
 use cheers_pregen::LMR;
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
 use crate::board::see::SEE_PIECE_VALUES;
+use crate::types::{HelperThread, MainThread, TypeMainThread};
 use crate::{
     board::{eval_types::TraceTarget, *},
     hash_tables::{score_from_tt, score_into_tt, NodeType::*, PawnHashTable, TranspositionTable},
@@ -42,6 +44,7 @@ pub struct Search {
     start_time: Instant,
     output: bool,
     options: SearchOptions,
+    local_nodes: usize,
 }
 
 impl Search {
@@ -64,6 +67,7 @@ impl Search {
             start_time: Instant::now(),
             output: false,
             options: SearchOptions::default(),
+            local_nodes: 0,
         }
     }
 
@@ -86,6 +90,7 @@ impl Search {
             start_time: Instant::now(),
             output: false,
             options: SearchOptions::default(),
+            local_nodes: 0,
         }
     }
 
@@ -123,7 +128,27 @@ impl Search {
         self
     }
 
-    pub fn search(&self) -> (i16, PrincipalVariation) {
+    pub fn smp_search(&self) -> (i16, PrincipalVariation) {
+        let mut score = MINUS_INF;
+        let mut pv = PrincipalVariation::new();
+        let _ = thread::scope(|s| {
+            let _main_thread = s.spawn(|| {
+                let search = self.clone();
+                (score, pv) = search.search::<MainThread>();
+                ABORT_SEARCH.store(true, Ordering::Relaxed);
+            });
+            for _ in 1..self.options.threads {
+                s.spawn(|| {
+                    let search = self.clone();
+                    let _ = search.search::<HelperThread>();
+                });
+            }
+        });
+
+        (score, pv)
+    }
+
+    pub fn search<M: TypeMainThread>(&self) -> (i16, PrincipalVariation) {
         let mut last_score = i16::MIN;
         let mut last_pv = PrincipalVariation::new();
 
@@ -154,7 +179,7 @@ impl Search {
             let score = loop {
                 search.seldepth = 0;
 
-                let score = search.negamax::<Root>(
+                let score = search.negamax::<Root, M>(
                     &self.game.clone(),
                     window.0,
                     window.1,
@@ -164,6 +189,12 @@ impl Search {
                     &mut pv,
                     tt,
                 );
+
+                // add helper thread nodes to global count
+                if !M::MAIN_THREAD {
+                    NODE_COUNT.fetch_add(search.local_nodes, Ordering::Relaxed);
+                    search.local_nodes = 0;
+                }
 
                 if ABORT_SEARCH.load(Ordering::Relaxed) && i > 1 {
                     // can't trust results from a partial search
@@ -203,7 +234,7 @@ impl Search {
             let hash_fill = tt.sample_fill();
             let nodes = NODE_COUNT.load(Ordering::Relaxed);
             // we can trust the results from the previous search
-            if self.output {
+            if M::MAIN_THREAD && self.output {
                 println!(
                     "info depth {i} seldepth {} score {score_string} nodes {} nps {} hashfull {} time {} pv {pv}",
                     search.seldepth,
@@ -226,20 +257,20 @@ impl Search {
 
             // terminate search at max depth or with forced mate/draw
             if let Some(max_depth) = self.max_depth {
-                if i >= max_depth {
-                    ABORT_SEARCH.store(false, Ordering::Relaxed);
+                if M::MAIN_THREAD && i >= max_depth {
+                    ABORT_SEARCH.store(true, Ordering::Relaxed);
                     break;
                 }
             }
             if i >= SEARCH_MAX_PLY {
-                ABORT_SEARCH.store(false, Ordering::Relaxed);
+                ABORT_SEARCH.store(true, Ordering::Relaxed);
                 break;
             }
         }
         (last_score, last_pv)
     }
 
-    fn negamax<R: TypeRoot>(
+    fn negamax<R: TypeRoot, M: TypeMainThread>(
         &mut self,
         board: &Board,
         mut alpha: i16,
@@ -250,9 +281,9 @@ impl Search {
         pv: &mut PrincipalVariation,
         tt: &TranspositionTable,
     ) -> i16 {
-        // check time and max nodes every 2048 nodes
-        let nodes = NODE_COUNT.load(Relaxed);
-        if nodes & 2047 == 2047 {
+        // check time and max nodes every 2048 nodes in the main thread
+        let nodes = self.local_nodes;
+        if M::MAIN_THREAD && nodes & 2047 == 2047 {
             if let Some((_, abort_time)) = self.max_time_ms {
                 // signal an abort if time has exceeded alloted time
                 if Instant::now().duration_since(self.start_time).as_millis() as usize > abort_time
@@ -286,11 +317,14 @@ impl Search {
         // drop into quiescence search at depth 0
         if depth == 0 {
             pv.clear();
-            return self.quiesce(board, alpha, beta, ply, last_move, tt);
+            return self.quiesce::<M>(board, alpha, beta, ply, last_move, tt);
         }
 
         // increment the node counters
-        NODE_COUNT.fetch_add(1, Relaxed);
+        if M::MAIN_THREAD {
+            NODE_COUNT.fetch_add(1, Relaxed);
+        }
+        self.local_nodes += 1;
 
         // increase the seldepth if this node is deeper
         self.seldepth = self.seldepth.max(ply);
@@ -397,7 +431,7 @@ impl Search {
             self.search_history.push(board.hash());
             let mut new = board.clone();
             new.make_null_move();
-            let score = -self.negamax::<NotRoot>(
+            let score = -self.negamax::<NotRoot, M>(
                 &new,
                 -beta,
                 -beta + 1,
@@ -526,7 +560,7 @@ impl Search {
 
                 // perform a cheap reduced, null-window search in the hope it fails low immediately
                 let reduced_depth = (depth - 1 - reduction).max(0);
-                score = -self.negamax::<NotRoot>(
+                score = -self.negamax::<NotRoot, M>(
                     &new,
                     -alpha - 1,
                     -alpha,
@@ -547,7 +581,7 @@ impl Search {
             // perform a full-depth null-window search on reduced moves that improve alpha, later moves or in non-pv nodes
             // we can't expand the window in non-pv nodes as alpha = beta-1
             if full_depth_null_window {
-                score = -self.negamax::<NotRoot>(
+                score = -self.negamax::<NotRoot, M>(
                     &new,
                     -alpha - 1,
                     -alpha,
@@ -561,7 +595,7 @@ impl Search {
 
             // perform a full-depth full-window search in PV nodes on the first move and reduced moves that improve alpha
             if pv_node && (i == 0 || (score > alpha && score < beta)) {
-                score = -self.negamax::<NotRoot>(
+                score = -self.negamax::<NotRoot, M>(
                     &new,
                     -beta,
                     -alpha,
@@ -671,7 +705,7 @@ impl Search {
         alpha
     }
 
-    pub fn quiesce(
+    pub fn quiesce<M: TypeMainThread>(
         &mut self,
         board: &Board,
         alpha: i16,
@@ -680,11 +714,11 @@ impl Search {
         last_move: Move,
         tt: &TranspositionTable,
     ) -> i16 {
-        self.quiesce_impl::<()>(board, alpha, beta, ply, last_move, tt)
+        self.quiesce_impl::<(), M>(board, alpha, beta, ply, last_move, tt)
             .0
     }
 
-    pub fn quiesce_impl<T: TraceTarget + Default>(
+    pub fn quiesce_impl<T: TraceTarget + Default, M: TypeMainThread>(
         &mut self,
         board: &Board,
         mut alpha: i16,
@@ -694,8 +728,8 @@ impl Search {
         tt: &TranspositionTable,
     ) -> (i16, T) {
         // check time and max nodes every 2048 nodes
-        let nodes = NODE_COUNT.load(Relaxed);
-        if nodes & 2047 == 2047 {
+        let nodes = self.local_nodes;
+        if M::MAIN_THREAD && nodes & 2047 == 2047 {
             if let Some((_, abort_time)) = self.max_time_ms {
                 // signal an abort if time has exceeded alloted time
                 if Instant::now().duration_since(self.start_time).as_millis() as usize > abort_time
@@ -717,8 +751,11 @@ impl Search {
             return (0, T::default());
         }
 
-        // increment node counter
-        NODE_COUNT.fetch_add(1, Relaxed);
+        // increment node counters
+        if M::MAIN_THREAD {
+            NODE_COUNT.fetch_add(1, Relaxed);
+        }
+        self.local_nodes += 1;
 
         // increase the seldepth if this node is deeper
         self.seldepth = self.seldepth.max(ply);
@@ -832,7 +869,8 @@ impl Search {
                 continue;
             }
 
-            let (mut score, trace) = self.quiesce_impl::<T>(&new, -beta, -alpha, ply + 1, mv, tt);
+            let (mut score, trace) =
+                self.quiesce_impl::<T, M>(&new, -beta, -alpha, ply + 1, mv, tt);
             score = -score;
 
             if score >= beta {

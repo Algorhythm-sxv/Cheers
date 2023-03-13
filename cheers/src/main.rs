@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .tt_size_mb(8)
             .output(false);
         let start = Instant::now();
-        search.search();
+        search.smp_search();
         let end = Instant::now();
         let time = end - start;
 
@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     options.tt_size_mb = mb;
                     tt.write().unwrap().set_size(mb);
                 }
-                uci::UciOption::Threads(_) => {}
+                uci::UciOption::Threads(n) => options.threads = n,
                 uci::UciOption::NmpDepth(n) => options.nmp_depth = n,
                 uci::UciOption::NmpConstReduction(n) => options.nmp_const_reduction = n,
                 uci::UciOption::NmpLinearDivisor(n) => options.nmp_linear_divisor = n,
@@ -163,7 +163,7 @@ fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
     ABORT_SEARCH.store(false, Ordering::Relaxed);
     NODE_COUNT.store(0, Ordering::Relaxed);
 
-    let (_, pv) = search.search();
+    let (_, pv) = search.smp_search();
 
     println!("bestmove {}", pv[0].coords());
 
