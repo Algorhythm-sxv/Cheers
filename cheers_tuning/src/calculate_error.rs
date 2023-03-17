@@ -5,9 +5,10 @@ use cheers_lib::{
         evaluate::{EvalParams, EvalTrace},
         Board,
     },
-    hash_tables::TranspositionTable,
+    hash_tables::{PawnHashTable, TranspositionTable},
     moves::Move,
-    search::Search, types::MainThread,
+    search::Search,
+    types::MainThread,
 };
 
 use crate::data_extraction::GameResult;
@@ -30,6 +31,53 @@ pub struct TuningEntry {
 }
 fn sigmoid(s: f64, k: f64) -> f64 {
     1.0 / (1.0 + (-k * s / 400.0).exp())
+}
+
+pub fn epd_to_entry(epd: &str) -> TuningEntry {
+    let mut split = epd.split(" c9 ");
+    let almost_fen = split.next().expect("Empty line in EPD");
+    let result_text = split
+        .next()
+        .expect(&format!("Result missing in EPD: {epd}"));
+
+    let mut fen = String::from(almost_fen);
+    fen += " 0 1"; // add the move counters to the end of the FEN
+    let game = Board::from_fen(&fen).expect(&format!("Invalid FEN extracted: {fen}"));
+
+    let result = match result_text {
+        "\"1-0\";" => 1.0,
+        "\"1/2-1/2\";" => 0.5,
+        "\"0-1\";" => 0.0,
+        _ => panic!("Invalid result extracted from EPD: {result_text}"),
+    };
+
+    let mut pawn_hash_table = PawnHashTable::new(0);
+
+    let (_, trace) = game.evaluate_impl::<EvalTrace>(&mut pawn_hash_table);
+
+    let tuples = trace
+        .to_array()
+        .chunks_exact(2)
+        .enumerate()
+        .filter(|(_i, c)| c[0] != c[1])
+        .map(|(i, c)| TuningTuple {
+            index: 2 * i,
+            white_coeff: c[0],
+            black_coeff: c[1],
+        })
+        .collect::<Vec<TuningTuple>>();
+
+    let material: i16 = trace.knight_count.into_iter().sum::<i16>()
+        + trace.bishop_count.into_iter().sum::<i16>()
+        + 2 * trace.rook_count.into_iter().sum::<i16>()
+        + 4 * trace.queen_count.into_iter().sum::<i16>();
+    let phase = (256 * (24 - material)) / 24;
+
+    TuningEntry {
+        phase: phase as u16,
+        result: GameResult::from_f64(result),
+        tuples,
+    }
 }
 
 pub fn data_to_entry(line: &str) -> TuningEntry {

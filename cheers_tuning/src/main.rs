@@ -8,8 +8,9 @@ use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use pgn_reader::BufferedReader;
 use rayon::prelude::*;
+use rayon::ThreadPoolBuilder;
 
-use crate::calculate_error::{calculate_error, calculate_gradient, data_to_entry, TuningEntry};
+use crate::calculate_error::{calculate_error, calculate_gradient, epd_to_entry, TuningEntry};
 use crate::data_extraction::FENWriter;
 use crate::k_tuning::tune_k;
 
@@ -74,6 +75,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     if !args.skip_tuning {
         println!("Commencing tuning");
 
+        ThreadPoolBuilder::new()
+            .num_threads(6)
+            .build_global()
+            .unwrap();
+
         let mut data_file = OpenOptions::new().read(true).open(data_path)?;
         let mut data_string = String::new();
         print!("Reading data to memory... ");
@@ -97,7 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .par_lines()
             .map(|l| {
                 entries_bar.clone().inc(1);
-                data_to_entry(l)
+                epd_to_entry(l)
             })
             .collect::<Vec<TuningEntry>>();
         entries_bar.finish();
