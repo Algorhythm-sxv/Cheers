@@ -15,5 +15,4 @@ features = ["eval-tracing"]
 [dependencies]
 clap = { version = "3.1", features = ["derive"] }
 indicatif = { version = "0.16.2", features = ["rayon"] }
-pgn-reader = "0.20"
 rayon = "1.5"

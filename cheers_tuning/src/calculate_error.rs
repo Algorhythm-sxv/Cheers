@@ -5,13 +5,10 @@ use cheers_lib::{
         evaluate::{EvalParams, EvalTrace},
         Board,
     },
-    hash_tables::{PawnHashTable, TranspositionTable},
-    moves::Move,
-    search::Search,
-    types::MainThread,
+    hash_tables::PawnHashTable,
 };
 
-use crate::data_extraction::GameResult;
+use crate::types::GameResult;
 
 #[derive(Clone, Copy)]
 pub struct TuningTuple {
@@ -75,62 +72,6 @@ pub fn epd_to_entry(epd: &str) -> TuningEntry {
 
     TuningEntry {
         phase: phase as u16,
-        result: GameResult::from_f64(result),
-        tuples,
-    }
-}
-
-pub fn data_to_entry(line: &str) -> TuningEntry {
-    let mut split = line.split(" result: ");
-    let position = split.next().unwrap();
-    let result = split.next().unwrap().parse::<f64>().unwrap();
-
-    let game = Board::from_fen(position).unwrap();
-
-    let mut search = Search::new(game);
-    let tt_placeholder = TranspositionTable::new(0);
-
-    let (_, trace) = search.quiesce_impl::<EvalTrace, MainThread>(
-        &game.clone(),
-        i16::MIN + 1,
-        i16::MAX - 1,
-        0,
-        Move::null(),
-        &tt_placeholder,
-    );
-    // if game.current_player() == ColorIndex::Black {
-    //     score = -score;
-    // }
-    let tuples = trace
-        .to_array()
-        .chunks_exact(2)
-        .enumerate()
-        .filter(|(_i, c)| c[0] != c[1])
-        .map(|(i, c)| TuningTuple {
-            index: 2 * i,
-            white_coeff: c[0],
-            black_coeff: c[1],
-        })
-        .collect::<Vec<TuningTuple>>();
-    let material: i16 = trace.knight_count.into_iter().sum::<i16>()
-        + trace.bishop_count.into_iter().sum::<i16>()
-        + 2 * trace.rook_count.into_iter().sum::<i16>()
-        + 4 * trace.queen_count.into_iter().sum::<i16>();
-    let phase = (256 * (24 - material)) / 24;
-
-    // let mut static_score = game.evaluate::<()>().0;
-
-    // let turn = game.current_player();
-    // if turn == ColorIndex::Black {
-    //     static_score = -static_score;
-    //     score = -score
-    // }
-
-    TuningEntry {
-        phase: phase as u16,
-        //static_score: static_score as i16,
-        //score: score as i16,
-        // turn,
         result: GameResult::from_f64(result),
         tuples,
     }
