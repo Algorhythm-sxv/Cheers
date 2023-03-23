@@ -1,6 +1,6 @@
 use std::{fmt::Display, ops::Index};
 
-use crate::{board::Board, search::SEARCH_MAX_PLY, types::*};
+use crate::{board::Board, types::*};
 use Piece::*;
 
 use cheers_bitboards::*;
@@ -248,16 +248,25 @@ impl Index<usize> for MoveList {
     }
 }
 
+impl Default for MoveList {
+    fn default() -> Self {
+        Self {
+            len: 0,
+            inner: [SortingMove::new(Move::default()); 218],
+        }
+    }
+}
+
 pub const NUM_KILLER_MOVES: usize = 2;
 #[derive(Copy, Clone)]
-pub struct KillerMoves<const N: usize>([[Move; N]; SEARCH_MAX_PLY]);
+pub struct KillerMoves<const N: usize>([Move; N]);
 
 impl<const N: usize> KillerMoves<N> {
     pub fn new() -> Self {
-        Self([[Move::null(); N]; SEARCH_MAX_PLY])
+        Self([Move::null(); N])
     }
-    pub fn push(&mut self, m: Move, ply: usize) {
-        let moves = &mut self.0[ply];
+    pub fn push(&mut self, m: Move) {
+        let moves = &mut self.0;
         if !moves.contains(&m) {
             for i in (1..N).rev() {
                 moves[i] = moves[i - 1];
@@ -265,13 +274,8 @@ impl<const N: usize> KillerMoves<N> {
             moves[0] = m;
         }
     }
-}
-
-impl<const N: usize> Index<usize> for KillerMoves<N> {
-    type Output = [Move; N];
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
+    pub fn contains(&self, mv: &Move) -> bool {
+        self.0.contains(mv)
     }
 }
 

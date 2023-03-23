@@ -26,15 +26,31 @@ pub const MINUS_INF: i16 = -INF;
 pub const SEARCH_MAX_PLY: usize = 128;
 
 #[derive(Clone)]
+pub struct SearchStackEntry {
+    pub eval: i16,
+    pub move_list: MoveList,
+    pub killer_moves: KillerMoves<NUM_KILLER_MOVES>,
+}
+
+impl SearchStackEntry {
+    pub fn new() -> Self {
+        Self {
+            eval: MINUS_INF,
+            move_list: MoveList::default(),
+            killer_moves: KillerMoves::default(),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Search {
     pub game: Board,
     pub search_history: Vec<u64>,
     pub pre_history: Vec<u64>,
-    pub move_lists: Vec<MoveList>,
+    pub search_stack: Vec<SearchStackEntry>,
     pub seldepth: usize,
     transposition_table: Arc<RwLock<TranspositionTable>>,
     pawn_hash_table: PawnHashTable,
-    pub killer_moves: KillerMoves<NUM_KILLER_MOVES>,
     pub history_tables: [[[i16; 64]; 6]; 2],
     pub countermove_tables: [[[Move; 64]; 6]; 2],
     pub max_depth: Option<usize>,
@@ -53,11 +69,10 @@ impl Search {
             game,
             search_history: Vec::new(),
             pre_history: Vec::new(),
-            move_lists: vec![MoveList::new(); 128],
+            search_stack: vec![SearchStackEntry::new(); SEARCH_MAX_PLY],
             seldepth: 0,
             transposition_table: Arc::new(RwLock::new(TranspositionTable::new(0))),
             pawn_hash_table: PawnHashTable::new(0),
-            killer_moves: KillerMoves::new(),
             history_tables: [[[0; 64]; 6]; 2],
             countermove_tables: [[[Move::null(); 64]; 6]; 2],
             max_depth: None,
@@ -76,11 +91,10 @@ impl Search {
             game,
             search_history: Vec::new(),
             pre_history: Vec::new(),
-            move_lists: vec![MoveList::new(); 128],
+            search_stack: vec![SearchStackEntry::new(); SEARCH_MAX_PLY],
             seldepth: 0,
             transposition_table: tt,
             pawn_hash_table: PawnHashTable::new(0),
-            killer_moves: KillerMoves::new(),
             history_tables: [[[0; 64]; 6]; 2],
             countermove_tables: [[[Move::null(); 64]; 6]; 2],
             max_depth: None,
@@ -410,6 +424,13 @@ impl Search {
             board.evaluate(&mut self.pawn_hash_table)
         };
 
+        // store the current 'static' eval to use with heuristics
+        self.search_stack[ply].eval = eval;
+
+        // Improving: if the current eval is better than 2 plies ago we prune/reduce differently
+        let improving =
+            ply >= 2 && !in_check && self.search_stack[ply].eval > self.search_stack[ply - 2].eval;
+
         // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
         if !pv_node
             && !R::ROOT
@@ -482,11 +503,10 @@ impl Search {
         let mut move_index = 0;
         while let Some((mv, move_score)) = move_sorter.next(
             board,
-            &self.killer_moves[ply],
+            &mut self.search_stack[ply],
             &self.countermove_tables,
             &self.history_tables,
             last_move,
-            &mut self.move_lists[ply],
         ) {
             let capture = board.is_capture(mv);
 
@@ -502,12 +522,14 @@ impl Search {
                 continue;
             }
 
-            // Late Move Pruning: skip moves ordered late, more for shallow searches
+            // Late Move Pruning: skip moves ordered late, earlier if not improving
             if !R::ROOT
                 && !pv_node
                 && !capture
                 && depth <= self.options.lmp_depth
-                && move_index >= (depth as usize * depth as usize) * self.options.lmp_margin
+                && move_index
+                    >= (depth as usize * depth as usize) * self.options.lmp_margin
+                        / (1 + !improving as usize)
             {
                 move_index += 1;
                 continue;
@@ -636,7 +658,7 @@ impl Search {
 
                 // update killer, countermove and history tables for good quiets
                 if !capture {
-                    self.killer_moves.push(mv, ply);
+                    self.search_stack[ply].killer_moves.push(mv);
                     self.countermove_tables[current_player][last_move.piece][last_move.to] = mv;
                     self.history_tables[current_player][mv.piece][mv.to] +=
                         depth as i16 * depth as i16;
@@ -649,7 +671,7 @@ impl Search {
                     }
 
                     // punish quiets that were played but didn't cause a beta cutoff
-                    for smv in self.move_lists[ply].inner()[..(i.max(1) - 1)]
+                    for smv in self.search_stack[ply].move_list.inner()[..(i.max(1) - 1)]
                         .iter()
                         .filter(|smv| !board.is_capture(smv.mv))
                     {
@@ -684,7 +706,7 @@ impl Search {
         self.search_history.pop();
 
         // check for checkmate and stalemate
-        if self.move_lists[ply].len() == 0 {
+        if self.search_stack[ply].move_list.len() == 0 {
             if in_check {
                 // checkmate, preferring shorter mating sequences
                 pv.clear();
@@ -840,11 +862,10 @@ impl Search {
         let mut best_move = Move::null();
         while let Some((mv, _)) = move_sorter.next(
             board,
-            &self.killer_moves[ply],
+            &mut self.search_stack[ply],
             &self.countermove_tables,
             &self.history_tables,
             Move::null(),
-            &mut self.move_lists[ply],
         ) {
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
@@ -908,7 +929,7 @@ impl Search {
 
         // if there are no legal captures, check for checkmate/stalemate
         // disable when tracing to avoid empty traces
-        if !T::TRACING && self.move_lists[ply].len() == 0 {
+        if !T::TRACING && self.search_stack[ply].move_list.len() == 0 {
             let mut some_moves = false;
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 

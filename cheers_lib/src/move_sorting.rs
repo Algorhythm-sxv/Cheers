@@ -5,7 +5,8 @@ use crate::{
         see::{MVV_LVA, SEE_PIECE_VALUES},
         Board,
     },
-    moves::{Move, MoveList, MoveScore, NUM_KILLER_MOVES},
+    moves::{KillerMoves, Move, MoveScore, NUM_KILLER_MOVES},
+    search::SearchStackEntry,
     types::{Piece::*, TypeMoveGen},
 };
 
@@ -41,11 +42,10 @@ impl<M: TypeMoveGen> MoveSorter<M> {
     pub fn next(
         &mut self,
         board: &Board,
-        killers: &[Move; NUM_KILLER_MOVES],
+        search_stack_entry: &mut SearchStackEntry,
         counters: &[[[Move; 64]; 6]; 2],
         history: &[[[i16; 64]; 6]; 2],
         last_move: Move,
-        list: &mut MoveList,
     ) -> Option<(Move, MoveScore)> {
         // return the TT move first if it is pseudolegal and pray that there is no hash collision
         // a beta cutoff here could skip movegen altogether
@@ -61,17 +61,24 @@ impl<M: TypeMoveGen> MoveSorter<M> {
         if self.stage == Stage::GenerateMoves {
             self.stage = Stage::SortMoves;
             if M::CAPTURES {
-                board.generate_legal_captures_into(list);
-                for m in list.inner_mut() {
+                board.generate_legal_captures_into(&mut search_stack_entry.move_list);
+                for m in search_stack_entry.move_list.inner_mut() {
                     m.score = score_capture(board, m.mv);
                 }
             } else {
-                board.generate_legal_moves_into(list);
-                for m in list.inner_mut() {
+                board.generate_legal_moves_into(&mut search_stack_entry.move_list);
+                for m in search_stack_entry.move_list.inner_mut() {
                     if m.mv.promotion != Pawn || board.is_capture(m.mv) {
                         m.score = score_capture(board, m.mv);
                     } else {
-                        m.score = score_quiet(board, killers, counters, history, last_move, m.mv);
+                        m.score = score_quiet(
+                            board,
+                            &search_stack_entry.killer_moves,
+                            counters,
+                            history,
+                            last_move,
+                            m.mv,
+                        );
                     }
                 }
             }
@@ -79,13 +86,13 @@ impl<M: TypeMoveGen> MoveSorter<M> {
 
         // find the move with the next highest sort score
         // or return None if the end of the list has been reached
-        if self.index < list.len() {
-            let (mut mv, mut score) = list.pick_move(self.index);
+        if self.index < search_stack_entry.move_list.len() {
+            let (mut mv, mut score) = search_stack_entry.move_list.pick_move(self.index);
             // tt move has already been reported
             if mv == self.tt_move {
                 self.index += 1;
-                if self.index < list.len() {
-                    (mv, score) = list.pick_move(self.index);
+                if self.index < search_stack_entry.move_list.len() {
+                    (mv, score) = search_stack_entry.move_list.pick_move(self.index);
                 } else {
                     return None;
                 }
@@ -115,7 +122,7 @@ fn score_capture(board: &Board, mv: Move) -> MoveScore {
 
 fn score_quiet(
     board: &Board,
-    killers: &[Move; NUM_KILLER_MOVES],
+    killers: &KillerMoves<NUM_KILLER_MOVES>,
     counters: &[[[Move; 64]; 6]; 2],
     history: &[[[i16; 64]; 6]; 2],
     last_move: Move,
