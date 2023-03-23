@@ -31,8 +31,8 @@ pub const FP_MARGIN_1: i16 = 154;
 pub const FP_MARGIN_2: i16 = 334;
 pub const FP_MARGIN_3: i16 = 633;
 pub const RFP_MARGIN: i16 = 142;
-pub const LMP_DEPTH: i8 = 4;
-pub const LMP_MARGIN: usize = 8;
+pub const LMP_DEPTH: i8 = 7;
+pub const LMP_MARGIN: usize = 14;
 pub const IIR_DEPTH: i8 = 5;
 
 impl Default for SearchOptions {
