@@ -125,8 +125,12 @@ impl Board {
     }
 
     #[inline(always)]
-    pub fn current_player(&self) -> usize {
-        self.black_to_move as usize
+    pub fn current_player(&self) -> Color {
+        if self.black_to_move {
+            Color::Black
+        } else {
+            Color::White
+        }
     }
 
     #[inline(always)]
@@ -161,8 +165,8 @@ impl Board {
     }
 
     #[inline(always)]
-    pub fn has_non_pawn_material(&self, color: usize) -> bool {
-        let material = if color == 0 {
+    pub fn has_non_pawn_material(&self, color: Color) -> bool {
+        let material = if color == Color::White {
             self.white_knights | self.white_bishops | self.white_rooks | self.white_queens
         } else {
             self.black_knights | self.black_bishops | self.black_rooks | self.black_queens

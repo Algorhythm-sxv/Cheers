@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use cheers_lib::{board::Board, moves::Move, types::Piece, Square, options::*};
+use cheers_lib::{board::Board, moves::Move, types::{Piece, Color}, Square, options::*};
 
 #[macro_use]
 mod macros;
@@ -281,7 +281,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                 for move_string in moves {
                                     // convert regular castling moves
                                     let move_string = if *move_string == "e1g1"
-                                        && test.current_player() == 0
+                                        && test.current_player() == Color::White
                                         && test.piece_on(Square::E1) == Some(Piece::King)
                                     {
                                         let kingside = test.castling_rights()[0][0]
@@ -289,7 +289,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                             .file_letter();
                                         move_string.replace("g", kingside)
                                     } else if *move_string == "e8g8"
-                                        && test.current_player() == 1
+                                        && test.current_player() == Color::Black
                                         && test.piece_on(Square::E8) == Some(Piece::King)
                                     {
                                         let kingside = test.castling_rights()[1][0]
@@ -297,7 +297,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                             .file_letter();
                                         move_string.replace("g", kingside)
                                     } else if *move_string == "e1c1"
-                                        && test.current_player() == 0
+                                        && test.current_player() == Color::White
                                         && test.piece_on(Square::E1) == Some(Piece::King)
                                     {
                                         let queenside = test.castling_rights()[0][1]
@@ -305,7 +305,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                             .file_letter();
                                         move_string.to_string().replace("c", queenside)
                                     } else if *move_string == "e8c8"
-                                        && test.current_player() == 1
+                                        && test.current_player() == Color::Black
                                         && test.piece_on(Square::E8) == Some(Piece::King)
                                     {
                                         let queenside = test.castling_rights()[1][1]
@@ -366,7 +366,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
 
                     parse_uci_go_value!(words, perft, usize);
 
-                    parse_uci_go_value!(words, infinite, bool);
+                    let infinite = words.iter().find(|&&s| s == "infinite");
                     if infinite.is_some() {
                         if wtime.is_some()
                             || btime.is_some()

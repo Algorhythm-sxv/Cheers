@@ -3,6 +3,7 @@ use cheers_lib::{
     hash_tables::TranspositionTable,
     options::SearchOptions,
     search::{Search, ABORT_SEARCH, NODE_COUNT},
+    types::Color,
 };
 
 use std::{
@@ -120,14 +121,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                         Some(time) => Some((time, time)),
                         None => match movestogo {
                             Some(n) => {
-                                if position.current_player() != 0 {
-                                    Some((wtime.unwrap() / n, wtime.unwrap() / n))
+                                if position.current_player() == Color::White {
+                                    // add a 50ms margin to avoid timeouts
+                                    Some((wtime.unwrap() / n, wtime.unwrap().saturating_sub(50)))
                                 } else {
-                                    Some((btime.unwrap() / n, btime.unwrap() / n))
+                                    // add a 50ms margin to avoid timeouts
+                                    Some((btime.unwrap() / n, btime.unwrap().saturating_sub(50)))
                                 }
                             }
                             None => {
-                                if position.current_player() == 0 {
+                                if position.current_player() == Color::White {
                                     move_time(wtime, winc)
                                 } else {
                                     move_time(btime, binc)

@@ -1,4 +1,25 @@
 use std::ops::{Index, IndexMut};
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Color {
+    White = 0,
+    Black = 1,
+}
+
+impl<T, const N: usize> Index<Color> for [T; N] {
+    type Output = T;
+
+    fn index(&self, index: Color) -> &Self::Output {
+        &self[index as usize]
+    }
+}
+
+impl<T, const N: usize> IndexMut<Color> for [T; N] {
+    fn index_mut(&mut self, index: Color) -> &mut Self::Output {
+        &mut self[index as usize]
+    }
+}
+
 pub struct White;
 pub struct Black;
 

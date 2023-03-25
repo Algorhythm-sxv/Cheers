@@ -117,8 +117,8 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
         eval += self.evaluate_king::<W>(&info) - self.evaluate_king::<W::Other>(&info);
 
-        if (W::WHITE && self.game.current_player() == 0)
-            || (!W::WHITE && self.game.current_player() != 0)
+        if (W::WHITE && self.game.current_player() == Color::White)
+            || (!W::WHITE && self.game.current_player() == Color::Black)
         {
             eval.mg += EVAL_PARAMS.tempo[Midgame];
             eval.eg += EVAL_PARAMS.tempo[Endgame];
