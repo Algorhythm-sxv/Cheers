@@ -501,6 +501,7 @@ impl Search {
         self.search_history.push(board.hash());
 
         let mut move_index = 0;
+        let mut quiets_tried = 0;
         while let Some((mv, move_score)) = move_sorter.next(
             board,
             &mut self.search_stack[ply],
@@ -518,19 +519,28 @@ impl Search {
                     MoveScore::KillerMove(_) | MoveScore::CounterMove,
                 )
             {
+                quiets_tried += 1;
                 move_index += 1;
                 continue;
             }
 
             // Late Move Pruning: skip moves ordered late, earlier if not improving
+            fn quiets_to_try(options: &SearchOptions, depth: i8, improving: bool) -> usize {
+                let depth = depth as f32;
+                if improving {
+                    (options.lmp_improving_const + options.lmp_improving_coeff * depth * depth)
+                        as usize
+                } else {
+                    (options.lmp_const + options.lmp_coeff * depth * depth) as usize
+                }
+            }
             if !R::ROOT
                 && !pv_node
                 && !capture
                 && depth <= self.options.lmp_depth
-                && move_index
-                    >= (depth as usize * depth as usize) * self.options.lmp_margin
-                        / (1 + !improving as usize)
+                && quiets_tried >= quiets_to_try(&self.options, depth, improving)
             {
+                quiets_tried += 1;
                 move_index += 1;
                 continue;
             }
@@ -544,6 +554,7 @@ impl Search {
                         self.options.see_quiet_margin
                     };
                 if !board.see_beats_threshold(mv, threshold) {
+                    quiets_tried += usize::from(!capture);
                     move_index += 1;
                     continue;
                 }
@@ -562,6 +573,7 @@ impl Search {
             // increment the move counter if the move was legal
             let i = move_index;
             move_index += 1;
+            quiets_tried += usize::from(!capture);
 
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV

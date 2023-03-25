@@ -1,6 +1,12 @@
 use std::{fmt::Display, str::FromStr};
 
-use cheers_lib::{board::Board, moves::Move, types::{Piece, Color}, Square, options::*};
+use cheers_lib::{
+    board::Board,
+    moves::Move,
+    options::*,
+    types::{Color, Piece},
+    Square,
+};
 
 #[macro_use]
 mod macros;
@@ -21,7 +27,10 @@ uci_options![
     FpMargin3(Spin<i16> { default: FP_MARGIN_3, min: 500, max: 1000 }),
     RfpMargin(Spin<i16> { default: RFP_MARGIN, min: 0, max: 300 }),
     LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
-    LmpMargin(Spin<usize> { default: LMP_MARGIN, min: 1, max: 15 }),
+    LmpConst(Spin<f32> { default: LMP_CONST, min: 0.0, max: 10.0 }),
+    LmpCoeff(Spin<f32> { default: LMP_COEFF, min: 0.0, max: 10.0 }),
+    LmpImprovingConst(Spin<f32> { default: LMP_IMPROVING_CONST, min: 0.0, max: 10.0 }),
+    LmpImprovingCoeff(Spin<f32> { default: LMP_IMPROVING_COEFF, min: 0.0, max: 10.0 }),
     IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 10 }),
 ];
 

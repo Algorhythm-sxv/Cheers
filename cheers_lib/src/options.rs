@@ -15,7 +15,10 @@ pub struct SearchOptions {
     pub fp_margin_3: i16,
     pub rfp_margin: i16,
     pub lmp_depth: i8,
-    pub lmp_margin: usize,
+    pub lmp_const: f32,
+    pub lmp_coeff: f32,
+    pub lmp_improving_const: f32,
+    pub lmp_improving_coeff: f32,
     pub iir_depth: i8,
 }
 
@@ -32,7 +35,10 @@ pub const FP_MARGIN_2: i16 = 334;
 pub const FP_MARGIN_3: i16 = 633;
 pub const RFP_MARGIN: i16 = 142;
 pub const LMP_DEPTH: i8 = 7;
-pub const LMP_MARGIN: usize = 14;
+pub const LMP_CONST: f32 = 2.5;
+pub const LMP_COEFF: f32 = 0.625;
+pub const LMP_IMPROVING_CONST: f32 = 4.22;
+pub const LMP_IMPROVING_COEFF: f32 = 1.414;
 pub const IIR_DEPTH: i8 = 5;
 
 impl Default for SearchOptions {
@@ -53,7 +59,10 @@ impl Default for SearchOptions {
             fp_margin_3: FP_MARGIN_3,
             rfp_margin: RFP_MARGIN,
             lmp_depth: LMP_DEPTH,
-            lmp_margin: LMP_MARGIN,
+            lmp_const: LMP_CONST,
+            lmp_coeff: LMP_COEFF,
+            lmp_improving_const: LMP_IMPROVING_CONST,
+            lmp_improving_coeff: LMP_IMPROVING_COEFF,
             iir_depth: IIR_DEPTH,
         }
     }
