@@ -79,10 +79,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 uci::UciOption::FpMargin3(n) => options.fp_margin_3 = n,
                 uci::UciOption::RfpMargin(n) => options.rfp_margin = n,
                 uci::UciOption::LmpDepth(n) => options.lmp_depth = n,
-                uci::UciOption::LmpConst(n) => options.lmp_const = n,
-                uci::UciOption::LmpCoeff(n) => options.lmp_coeff = n,
-                uci::UciOption::LmpImprovingConst(n) => options.lmp_improving_const = n,
-                uci::UciOption::LmpImprovingCoeff(n) => options.lmp_improving_coeff = n,
                 uci::UciOption::IirDepth(n) => options.iir_depth = n,
             },
             uci::UciCommand::UciNewGame => {

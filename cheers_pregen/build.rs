@@ -10,8 +10,10 @@ fn main() {
     fs::write(
         lmr_out,
         format!(
-            "pub static LMR: [[i8; 32]; 32] = {:?};",
-            generate_lmr_reductions()
+            "pub static LMR: [[i8; 32]; 32] = {:?};\
+             pub static LMP_MARGINS: [[usize; 2]; 32] = {:?};",
+            generate_lmr_reductions(),
+            generate_lmp_margins(),
         ),
     )
     .unwrap();
@@ -51,6 +53,17 @@ fn generate_lmr_reductions() -> [[i8; 32]; 32] {
     }
     reductions
 }
+
+fn generate_lmp_margins() -> [[usize; 2]; 32] {
+    let mut reductions = [[0; 2]; 32];
+
+    for depth in 1..32 {
+        reductions[depth][0] = (2.5 + 0.625 * (depth as f32).powi(2)) as usize;
+        reductions[depth][1] = (4.22 + 1.414 * (depth as f32).powi(2)) as usize;
+    }
+    reductions
+}
+
 // is t between a and b?
 pub fn between(a: i8, t: i8, b: i8) -> bool {
     if a < b {

@@ -3,7 +3,7 @@ use std::sync::{atomic::Ordering::*, Arc, RwLock};
 use std::thread;
 use std::time::Instant;
 
-use cheers_pregen::LMR;
+use cheers_pregen::{LMP_MARGINS, LMR};
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
 use crate::board::see::SEE_PIECE_VALUES;
@@ -525,20 +525,11 @@ impl Search {
             }
 
             // Late Move Pruning: skip moves ordered late, earlier if not improving
-            fn quiets_to_try(options: &SearchOptions, depth: i8, improving: bool) -> usize {
-                let depth = depth as f32;
-                if improving {
-                    (options.lmp_improving_const + options.lmp_improving_coeff * depth * depth)
-                        as usize
-                } else {
-                    (options.lmp_const + options.lmp_coeff * depth * depth) as usize
-                }
-            }
             if !R::ROOT
                 && !pv_node
                 && !capture
                 && depth <= self.options.lmp_depth
-                && quiets_tried >= quiets_to_try(&self.options, depth, improving)
+                && quiets_tried >= LMP_MARGINS[depth.min(31) as usize][improving as usize]
             {
                 quiets_tried += 1;
                 move_index += 1;
