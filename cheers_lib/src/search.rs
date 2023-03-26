@@ -450,6 +450,7 @@ impl Search {
         // if the opponent gets two moves in a row and the position is still good then prune
         if !pv_node
             && !in_check
+            && !last_move.is_null()
             && depth >= self.options.nmp_depth
             && board.has_non_pawn_material(current_player)
         {
