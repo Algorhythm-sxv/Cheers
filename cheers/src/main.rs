@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let bench_game = position.clone();
         let search = Search::new(bench_game)
             .max_depth(Some(15))
-            .tt_size_mb(8)
+            .tt_size_mb(options.tt_size_mb)
             .output(false);
         let start = Instant::now();
         search.smp_search();
