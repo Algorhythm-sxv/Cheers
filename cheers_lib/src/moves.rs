@@ -157,30 +157,23 @@ impl Iterator for MoveMaskIter {
     }
 }
 
-// deriving PartialOrd means that these are sorted with the last variant being the largest
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum MoveScore {
-    UnderPromotion(i16),
-    LosingCapture(i16),
-    Quiet(i16),
-    CounterMove,
-    KillerMove(i16),
-    WinningCapture(i16),
-    TTMove,
-}
+// constants to score moves by type without overlap
+pub const TT_MOVE_SCORE: i32 = 400_000;
+pub const WINNING_CAPTURE_SCORE: i32 = 300_000;
+pub const KILLER_MOVE_SCORE: i32 = 200_000;
+pub const COUNTERMOVE_SCORE: i32 = 100_000;
+pub const QUIET_SCORE: i32 = 0;
+pub const UNDERPROMO_SCORE: i32 = -100_000;
 
 #[derive(Copy, Clone, Debug)]
 pub struct SortingMove {
     pub mv: Move,
-    pub score: MoveScore,
+    pub score: i32,
 }
 
 impl SortingMove {
     pub fn new(mv: Move) -> Self {
-        Self {
-            mv,
-            score: MoveScore::Quiet(0),
-        }
+        Self { mv, score: 0 }
     }
 }
 
@@ -222,7 +215,7 @@ impl MoveList {
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
-    pub fn pick_move(&mut self, current_index: usize) -> (Move, MoveScore) {
+    pub fn pick_move(&mut self, current_index: usize) -> (Move, i32) {
         let mut best_index = current_index;
 
         for i in (current_index + 1)..self.len {

@@ -7,12 +7,12 @@ use cheers_pregen::{LMP_MARGINS, LMR};
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
 use crate::board::see::SEE_PIECE_VALUES;
+use crate::moves::*;
 use crate::types::{HelperThread, MainThread, TypeMainThread};
 use crate::{
     board::{eval_types::TraceTarget, *},
     hash_tables::{score_from_tt, score_into_tt, NodeType::*, PawnHashTable, TranspositionTable},
     move_sorting::MoveSorter,
-    moves::{KillerMoves, Move, MoveList, MoveScore, PrincipalVariation, NUM_KILLER_MOVES},
     options::SearchOptions,
     types::{All, Captures, NotRoot, Piece::*, Root, TypeRoot},
 };
@@ -514,10 +514,11 @@ impl Search {
             // Futility Pruning: skip quiets on nodes with bad static eval
             if futility_pruning
                 && !capture
-                && !matches!(
-                    move_score,
-                    MoveScore::KillerMove(_) | MoveScore::CounterMove,
-                )
+                && !(move_score >= COUNTERMOVE_SCORE && move_score < KILLER_MOVE_SCORE + 50_000)
+            // && !matches!(
+            //     move_score,
+            //     MoveScore::KillerMove(_) | MoveScore::CounterMove,
+            // )
             {
                 quiets_tried += 1;
                 move_index += 1;
@@ -576,10 +577,11 @@ impl Search {
 
                     // Late Move Reduction: moves that are sorted later are likely to fail low
                     if !capture
-                        && !matches!(
-                            move_score,
-                            MoveScore::KillerMove(_) | MoveScore::CounterMove
-                        )
+                        && !(move_score >= COUNTERMOVE_SCORE && move_score < KILLER_MOVE_SCORE + 50_000)
+                        // && !matches!(
+                        //     move_score,
+                        //     MoveScore::KillerMove(_) | MoveScore::CounterMove
+                        // )
                         && mv.promotion != Queen
                         && !in_check
                     {

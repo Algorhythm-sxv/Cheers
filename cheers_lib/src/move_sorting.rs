@@ -5,7 +5,7 @@ use crate::{
         see::{MVV_LVA, SEE_PIECE_VALUES},
         Board,
     },
-    moves::{KillerMoves, Move, MoveScore, NUM_KILLER_MOVES},
+    moves::*,
     search::SearchStackEntry,
     types::{Piece::*, TypeMoveGen},
 };
@@ -46,14 +46,14 @@ impl<M: TypeMoveGen> MoveSorter<M> {
         counters: &[[[Move; 64]; 6]; 2],
         history: &[[[i16; 64]; 6]; 2],
         last_move: Move,
-    ) -> Option<(Move, MoveScore)> {
+    ) -> Option<(Move, i32)> {
         // return the TT move first if it is pseudolegal and pray that there is no hash collision
         // a beta cutoff here could skip movegen altogether
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
 
             if board.is_pseudolegal(self.tt_move) {
-                return Some((self.tt_move, MoveScore::TTMove));
+                return Some((self.tt_move, TT_MOVE_SCORE));
             }
         }
 
@@ -105,10 +105,10 @@ impl<M: TypeMoveGen> MoveSorter<M> {
     }
 }
 
-fn score_capture(board: &Board, mv: Move) -> MoveScore {
+fn score_capture(board: &Board, mv: Move) -> i32 {
     // filter out underpromotions
     if matches!(mv.promotion, Knight | Bishop | Rook) {
-        return MoveScore::UnderPromotion(SEE_PIECE_VALUES[mv.promotion]);
+        return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion] as i32);
     }
     let mvv_lva = if mv.promotion == Queen {
         MVV_LVA[Queen][Pawn]
@@ -117,7 +117,7 @@ fn score_capture(board: &Board, mv: Move) -> MoveScore {
     };
 
     // sort all captures before quiets
-    MoveScore::WinningCapture(mvv_lva)
+    WINNING_CAPTURE_SCORE + (mvv_lva as i32)
 }
 
 fn score_quiet(
@@ -127,14 +127,14 @@ fn score_quiet(
     history: &[[[i16; 64]; 6]; 2],
     last_move: Move,
     mv: Move,
-) -> MoveScore {
+) -> i32 {
     let current_player = board.current_player();
     if killers.contains(&mv) {
         // there can be more than 1 killer move, so sort them by their respective histories
-        MoveScore::KillerMove(history[current_player][mv.piece][mv.to])
+        KILLER_MOVE_SCORE + (history[current_player][mv.piece][mv.to] as i32)
     } else if counters[current_player][last_move.piece][last_move.to] == mv {
-        MoveScore::CounterMove
+        COUNTERMOVE_SCORE
     } else {
-        MoveScore::Quiet(history[current_player][mv.piece][mv.to])
+        QUIET_SCORE + (history[current_player][mv.piece][mv.to] as i32)
     }
 }
