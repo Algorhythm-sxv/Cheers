@@ -5,7 +5,7 @@ use cheers_bitboards::{BitBoard, Square};
 use crate::{
     board::{eval_types::EvalScore, evaluate::CHECKMATE_SCORE},
     moves::Move,
-    search::{SEARCH_MAX_PLY, MINUS_INF},
+    search::{MINUS_INF, SEARCH_MAX_PLY},
     types::{Piece, TypeColor},
 };
 
@@ -121,6 +121,16 @@ impl TranspositionTable {
     pub fn set_size(&mut self, size_mb: usize) {
         let length = size_mb * 1024 * 1024 / std::mem::size_of::<Entry>();
         self.table.resize_with(length, Entry::default);
+    }
+
+    pub fn prefetch(&self, hash: u64) {
+        let index = self.wrap_hash(hash);
+        let entry = &self.table[index];
+        #[cfg(target_arch = "x86_64")]
+        unsafe {
+            use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T0};
+            _mm_prefetch((entry as *const Entry).cast::<i8>(), _MM_HINT_T0);
+        }
     }
 
     pub fn set(

@@ -327,6 +327,10 @@ impl Search {
             return 0;
         }
 
+        // prefetch the transposition table: hint to the CPU that we want this in the cache well
+        // before we actually use it
+        tt.prefetch(board.hash());
+
         // Check extensions: increase depth by 1 when in check to avoid tactical blindness
         let in_check = board.in_check();
         if in_check {
@@ -783,6 +787,10 @@ impl Search {
         if ABORT_SEARCH.load(Relaxed) || ply >= SEARCH_MAX_PLY {
             return (0, T::default());
         }
+
+        // prefetch the transposition table: hint to the CPU that we want this in the cache well
+        // before we actually use it
+        tt.prefetch(board.hash());
 
         // increment node counters
         if M::MAIN_THREAD {
