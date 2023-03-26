@@ -123,10 +123,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                             Some(n) => {
                                 if position.current_player() == Color::White {
                                     // add a 50ms margin to avoid timeouts
-                                    Some((wtime.unwrap() / n, wtime.unwrap().saturating_sub(50)))
+                                    Some(((wtime.unwrap() - 50) / n, (wtime.unwrap() - 50) / n))
                                 } else {
                                     // add a 50ms margin to avoid timeouts
-                                    Some((btime.unwrap() / n, btime.unwrap().saturating_sub(50)))
+                                    Some(((btime.unwrap() - 50) / n, (btime.unwrap() - 50) / n))
                                 }
                             }
                             None => {
