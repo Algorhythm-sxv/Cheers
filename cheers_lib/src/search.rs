@@ -452,6 +452,7 @@ impl Search {
             && !in_check
             && !last_move.is_null()
             && depth >= self.options.nmp_depth
+            && eval >= beta
             && board.has_non_pawn_material(current_player)
         {
             // reduce by at least 1
