@@ -116,8 +116,14 @@ fn score_capture(board: &Board, mv: Move) -> i32 {
         MVV_LVA[board.piece_on(mv.to).unwrap_or(Pawn)][mv.piece]
     };
 
+    let see_score = if board.see_beats_threshold(mv, 0) {
+        10_000
+    } else {
+        0
+    };
+
     // sort all captures before quiets
-    WINNING_CAPTURE_SCORE + (mvv_lva as i32)
+    WINNING_CAPTURE_SCORE + (mvv_lva as i32) + see_score
 }
 
 fn score_quiet(
