@@ -438,7 +438,10 @@ impl Search {
         // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
         if !pv_node
             && !R::ROOT
-            && eval.saturating_sub(depth as i16 * self.options.rfp_margin) >= beta
+            && eval.saturating_sub(
+                depth as i16 * self.options.rfp_margin
+                    + i16::from(improving) * self.options.rfp_improving_margin,
+            ) >= beta
         {
             return eval - (depth as i16 * self.options.rfp_margin);
         }

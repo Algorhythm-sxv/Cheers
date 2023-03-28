@@ -78,6 +78,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 uci::UciOption::FpMargin2(n) => options.fp_margin_2 = n,
                 uci::UciOption::FpMargin3(n) => options.fp_margin_3 = n,
                 uci::UciOption::RfpMargin(n) => options.rfp_margin = n,
+                uci::UciOption::RfpImprovingMargin(n) => options.rfp_improving_margin = n,
                 uci::UciOption::LmpDepth(n) => options.lmp_depth = n,
                 uci::UciOption::IirDepth(n) => options.iir_depth = n,
             },
