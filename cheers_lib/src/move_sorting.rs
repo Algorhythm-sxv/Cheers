@@ -2,12 +2,14 @@ use std::marker::PhantomData;
 
 use crate::{
     board::{
+        eval_types::GamePhase,
+        evaluate::{relative_board_index, EVAL_PARAMS},
         see::{MVV_LVA, SEE_PIECE_VALUES},
         Board,
     },
     moves::*,
     search::SearchStackEntry,
-    types::{Piece::*, TypeMoveGen},
+    types::{Black, Color, Piece::*, TypeMoveGen, White},
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -115,9 +117,16 @@ fn score_capture(board: &Board, mv: Move) -> i32 {
     } else {
         MVV_LVA[board.piece_on(mv.to).unwrap_or(Pawn)][mv.piece]
     };
+    let relative_square = if board.current_player() == Color::White {
+        relative_board_index::<White>(mv.to)
+    } else {
+        relative_board_index::<Black>(mv.to)
+    };
+    let psqt_score =
+        EVAL_PARAMS.piece_tables[(GamePhase::Midgame, mv.piece, relative_square)] as i32 / 16;
 
     // sort all captures before quiets
-    WINNING_CAPTURE_SCORE + (mvv_lva as i32)
+    WINNING_CAPTURE_SCORE + 1000 * (mvv_lva as i32) + psqt_score
 }
 
 fn score_quiet(
