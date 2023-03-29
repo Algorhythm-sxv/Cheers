@@ -24,9 +24,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut pre_history = Vec::new();
 
     if std::env::args().nth(1) == Some(String::from("bench")) {
+        let depth = std::env::args()
+            .nth(2)
+            .map(|n| n.parse::<usize>().ok())
+            .flatten()
+            .unwrap_or(15);
         let bench_game = position.clone();
         let search = Search::new(bench_game)
-            .max_depth(Some(15))
+            .max_depth(Some(depth))
             .tt_size_mb(options.tt_size_mb)
             .output(false);
         let start = Instant::now();
@@ -66,6 +71,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     tt.write().unwrap().set_size(mb);
                 }
                 uci::UciOption::Threads(n) => options.threads = n,
+                uci::UciOption::UCI_Chess960(_) => {},
                 uci::UciOption::NmpDepth(n) => options.nmp_depth = n,
                 uci::UciOption::NmpConstReduction(n) => options.nmp_const_reduction = n,
                 uci::UciOption::NmpLinearDivisor(n) => options.nmp_linear_divisor = n,

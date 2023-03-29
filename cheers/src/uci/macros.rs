@@ -1,5 +1,6 @@
 macro_rules! uci_options {
     [$($opt_name:ident ( $($opt_def:tt)* )),* $(,)?] => {
+        #[allow(non_camel_case_types)]
         pub enum UciOption {
             $($opt_name ( extract_value_type!( $($opt_def)*) )),*
         }
