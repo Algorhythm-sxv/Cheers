@@ -459,7 +459,8 @@ impl Search {
             let reduction = (self
                 .options
                 .nmp_const_reduction
-                .saturating_add(depth / self.options.nmp_linear_divisor))
+                .saturating_add(depth / self.options.nmp_linear_divisor)
+                .saturating_add(((eval - beta) / 200).min(3) as i8))
             .max(1);
             self.search_history.push(board.hash());
             let mut new = board.clone();
