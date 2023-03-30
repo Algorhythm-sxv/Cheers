@@ -112,18 +112,32 @@ fn score_capture(board: &Board, mv: Move) -> i32 {
     if matches!(mv.promotion, Knight | Bishop | Rook) {
         return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion] as i32);
     }
+    let capture = board.piece_on(mv.to).unwrap_or(Pawn);
     let mvv_lva = if mv.promotion == Queen {
         MVV_LVA[Queen][Pawn]
     } else {
-        MVV_LVA[board.piece_on(mv.to).unwrap_or(Pawn)][mv.piece]
+        MVV_LVA[capture][mv.piece]
     };
-    let relative_square = if board.current_player() == Color::White {
-        relative_board_index::<White>(mv.to)
+
+    // tie-break MVV-LVA with how piece placement changes
+    let (relative_from, relative_to) = if board.current_player() == Color::White {
+        (
+            relative_board_index::<White>(mv.from),
+            relative_board_index::<White>(mv.from),
+        )
     } else {
-        relative_board_index::<Black>(mv.to)
+        (
+            relative_board_index::<Black>(mv.from),
+            relative_board_index::<Black>(mv.to),
+        )
     };
-    let psqt_score =
-        EVAL_PARAMS.piece_tables[(GamePhase::Midgame, mv.piece, relative_square)] as i32 / 16;
+    let psqt_score = (EVAL_PARAMS.piece_tables[(
+        GamePhase::Midgame,
+        capture,
+        relative_board_index::<Black>(relative_to),
+    )] + EVAL_PARAMS.piece_tables[(GamePhase::Midgame, mv.piece, relative_to)]
+        - EVAL_PARAMS.piece_tables[(GamePhase::Midgame, mv.piece, relative_from)])
+        as i32;
 
     // sort all captures before quiets
     WINNING_CAPTURE_SCORE + 1000 * (mvv_lva as i32) + psqt_score
