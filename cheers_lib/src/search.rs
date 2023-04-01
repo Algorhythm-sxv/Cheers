@@ -522,10 +522,6 @@ impl Search {
             if futility_pruning
                 && !capture
                 && !(move_score >= COUNTERMOVE_SCORE && move_score < KILLER_MOVE_SCORE + 50_000)
-            // && !matches!(
-            //     move_score,
-            //     MoveScore::KillerMove(_) | MoveScore::CounterMove,
-            // )
             {
                 quiets_tried += 1;
                 move_index += 1;
@@ -569,54 +565,46 @@ impl Search {
                 continue;
             }
 
-            // increment the move counter if the move was legal
-            let i = move_index;
-            move_index += 1;
-            quiets_tried += usize::from(!capture);
-
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
-            let full_depth_null_window = if depth > self.options.pvs_fulldepth && i > 0 && !R::ROOT
-            {
-                // reducing certain moves to same time, avoided for tactical and killer/counter moves
-                let reduction = {
-                    let mut r = 0;
+            let full_depth_null_window =
+                if depth > self.options.pvs_fulldepth && move_index > 0 && !R::ROOT {
+                    // reducing certain moves to same time, avoided for tactical and killer/counter moves
+                    let reduction = {
+                        let mut r = 0;
 
-                    // Late Move Reduction: moves that are sorted later are likely to fail low
-                    if !capture
-                        && !(move_score >= COUNTERMOVE_SCORE && move_score < KILLER_MOVE_SCORE + 50_000)
-                        // && !matches!(
-                        //     move_score,
-                        //     MoveScore::KillerMove(_) | MoveScore::CounterMove
-                        // )
-                        && mv.promotion != Queen
-                        && !in_check
-                    {
-                        r += LMR[(depth as usize).min(31)][i.min(31)];
-                    }
+                        // Late Move Reduction: moves that are sorted later are likely to fail low
+                        if !capture
+                            && !(move_score >= COUNTERMOVE_SCORE
+                                && move_score < KILLER_MOVE_SCORE + 50_000)
+                            && mv.promotion != Queen
+                            && !in_check
+                        {
+                            r += LMR[(depth as usize).min(31)][move_index.min(31)];
+                        }
 
-                    r
+                        r
+                    };
+
+                    // perform a cheap reduced, null-window search in the hope it fails low immediately
+                    let reduced_depth = (depth - 1 - reduction).max(0);
+                    score = -self.negamax::<NotRoot, M>(
+                        &new,
+                        -alpha - 1,
+                        -alpha,
+                        reduced_depth,
+                        ply + 1,
+                        mv,
+                        &mut line,
+                        tt,
+                    );
+
+                    // perform a full-depth null-window search if the reduced search improves alpha and the move was actually reduced
+                    score > alpha && reduction > 0
+                } else {
+                    // if the first condition fails, perform the full depth null window search in non-pv nodes or later moves in PVS
+                    !pv_node || move_index > 0
                 };
-
-                // perform a cheap reduced, null-window search in the hope it fails low immediately
-                let reduced_depth = (depth - 1 - reduction).max(0);
-                score = -self.negamax::<NotRoot, M>(
-                    &new,
-                    -alpha - 1,
-                    -alpha,
-                    reduced_depth,
-                    ply + 1,
-                    mv,
-                    &mut line,
-                    tt,
-                );
-
-                // perform a full-depth null-window search if the reduced search improves alpha and the move was actually reduced
-                score > alpha && reduction > 0
-            } else {
-                // if the first condition fails, perform the full depth null window search in non-pv nodes or later moves in PVS
-                !pv_node || i > 0
-            };
 
             // perform a full-depth null-window search on reduced moves that improve alpha, later moves or in non-pv nodes
             // we can't expand the window in non-pv nodes as alpha = beta-1
@@ -634,7 +622,7 @@ impl Search {
             }
 
             // perform a full-depth full-window search in PV nodes on the first move and reduced moves that improve alpha
-            if pv_node && (i == 0 || (score > alpha && score < beta)) {
+            if pv_node && (move_index == 0 || (score > alpha && score < beta)) {
                 score = -self.negamax::<NotRoot, M>(
                     &new,
                     -beta,
@@ -683,7 +671,7 @@ impl Search {
                     }
 
                     // punish quiets that were played but didn't cause a beta cutoff
-                    for smv in self.search_stack[ply].move_list.inner()[..(i.max(1) - 1)]
+                    for smv in self.search_stack[ply].move_list.inner()[..(move_index.max(1) - 1)]
                         .iter()
                         .filter(|smv| !board.is_capture(smv.mv))
                     {
@@ -713,6 +701,9 @@ impl Search {
                 // raise alpha so worse moves after this one will be pruned early
                 alpha = score;
             }
+            // increment the move counter if the move was legal
+            move_index += 1;
+            quiets_tried += usize::from(!capture);
         }
         // remove this position from the history
         self.search_history.pop();
