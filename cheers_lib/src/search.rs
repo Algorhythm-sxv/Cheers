@@ -25,6 +25,8 @@ pub const MINUS_INF: i16 = -INF;
 
 pub const SEARCH_MAX_PLY: usize = 128;
 
+pub const MAX_HISTORY: i16 = 4096;
+
 #[derive(Clone)]
 pub struct SearchStackEntry {
     pub eval: i16,
@@ -660,15 +662,11 @@ impl Search {
                 if !capture {
                     self.search_stack[ply].killer_moves.push(mv);
                     self.countermove_tables[current_player][last_move.piece][last_move.to] = mv;
+
+                    let delta = depth as i16 * depth as i16;
+                    let history = self.history_tables[current_player][mv.piece][mv.to];
                     self.history_tables[current_player][mv.piece][mv.to] +=
-                        depth as i16 * depth as i16;
-                    // scale history scores down if they get too high
-                    if self.history_tables[current_player][mv.piece][mv.to] > 4096 {
-                        self.history_tables[current_player]
-                            .iter_mut()
-                            .flatten()
-                            .for_each(|x| *x /= 64);
-                    }
+                        delta - (delta * history) / MAX_HISTORY;
 
                     // punish quiets that were played but didn't cause a beta cutoff
                     for smv in self.search_stack[ply].move_list.inner()[..(move_index.max(1) - 1)]
@@ -676,14 +674,9 @@ impl Search {
                         .filter(|smv| !board.is_capture(smv.mv))
                     {
                         let mv = smv.mv;
+                        let history = self.history_tables[current_player][mv.piece][mv.to];
                         self.history_tables[current_player][mv.piece][mv.to] -=
-                            depth as i16 * depth as i16;
-                        if self.history_tables[current_player][mv.piece][mv.to] < -4096 {
-                            self.history_tables[current_player]
-                                .iter_mut()
-                                .flatten()
-                                .for_each(|x| *x /= 64)
-                        }
+                            delta + (delta * history) / MAX_HISTORY;
                     }
                 }
 
