@@ -510,7 +510,7 @@ impl Search {
         self.search_history.push(board.hash());
 
         let mut move_index = 0;
-        let mut quiets_tried = 0;
+        let mut quiets_tried = MoveList::new();
         while let Some((mv, move_score)) = move_sorter.next(
             board,
             &mut self.search_stack[ply],
@@ -525,7 +525,7 @@ impl Search {
                 && !capture
                 && !(move_score >= COUNTERMOVE_SCORE && move_score < KILLER_MOVE_SCORE + 50_000)
             {
-                quiets_tried += 1;
+                quiets_tried.push(SortingMove::new(mv));
                 move_index += 1;
                 continue;
             }
@@ -535,9 +535,9 @@ impl Search {
                 && !pv_node
                 && !capture
                 && depth <= self.options.lmp_depth
-                && quiets_tried >= LMP_MARGINS[depth.min(31) as usize][improving as usize]
+                && quiets_tried.len() >= LMP_MARGINS[depth.min(31) as usize][improving as usize]
             {
-                quiets_tried += 1;
+                quiets_tried.push(SortingMove::new(mv));
                 move_index += 1;
                 continue;
             }
@@ -551,7 +551,9 @@ impl Search {
                         self.options.see_quiet_margin
                     };
                 if !board.see_beats_threshold(mv, threshold) {
-                    quiets_tried += usize::from(!capture);
+                    if !capture {
+                        quiets_tried.push(SortingMove::new(mv));
+                    }
                     move_index += 1;
                     continue;
                 }
@@ -669,10 +671,7 @@ impl Search {
                         delta - (delta * history) / MAX_HISTORY;
 
                     // punish quiets that were played but didn't cause a beta cutoff
-                    for smv in self.search_stack[ply].move_list.inner()[..(move_index.max(1) - 1)]
-                        .iter()
-                        .filter(|smv| !board.is_capture(smv.mv))
-                    {
+                    for smv in quiets_tried.inner().iter() {
                         let mv = smv.mv;
                         let history = self.history_tables[current_player][mv.piece][mv.to];
                         self.history_tables[current_player][mv.piece][mv.to] -=
@@ -696,7 +695,9 @@ impl Search {
             }
             // increment the move counter if the move was legal
             move_index += 1;
-            quiets_tried += usize::from(!capture);
+            if !capture {
+                quiets_tried.push(SortingMove::new(mv));
+            }
         }
         // remove this position from the history
         self.search_history.pop();
