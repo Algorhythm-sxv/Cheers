@@ -1,4 +1,7 @@
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
+use std::{
+    fmt::{Debug, Display},
+    ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign},
+};
 
 #[cfg(feature = "eval-tracing")]
 use bytemuck::{Pod, Zeroable};
@@ -7,16 +10,6 @@ use crate::types::Piece;
 use cheers_bitboards::{BitBoard, Square};
 
 use super::eval_params::EvalTrace;
-
-// pub struct CoeffArray<T, const N: usize>(pub [T; N]);
-//
-// impl<T, const N: usize, I: Into<usize>> Index<I> for CoeffArray<T, N> {
-//     type Output = T;
-//
-//     fn index(&self, index: I) -> &Self::Output {
-//         &self.0[index.into()]
-//     }
-// }
 
 pub struct EvalInfo {
     pub mobility_area: [BitBoard; 2],
@@ -29,7 +22,7 @@ pub struct EvalInfo {
 }
 
 #[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
+#[derive(Copy, Clone, Eq, PartialEq, Default)]
 #[repr(C)]
 pub struct EvalScore(i32);
 
@@ -50,6 +43,15 @@ impl EvalScore {
         *self = Self::new(self.mg() / n, self.eg() / n)
     }
 }
+
+#[macro_export]
+macro_rules! s {
+    ($mg:literal, $eg:literal) => {
+        EvalScore::new($mg, $eg)
+    };
+}
+
+pub use s;
 
 impl Add<Self> for EvalScore {
     type Output = Self;
@@ -92,6 +94,18 @@ impl Mul<i16> for EvalScore {
 
     fn mul(self, rhs: i16) -> Self::Output {
         Self(self.0 * (rhs as i32))
+    }
+}
+
+impl Display for EvalScore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "s!({}, {})", self.mg(), self.eg())
+    }
+}
+
+impl Debug for EvalScore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self}")
     }
 }
 
