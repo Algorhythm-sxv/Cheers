@@ -25,12 +25,13 @@ pub const MINUS_INF: i16 = -INF;
 
 pub const SEARCH_MAX_PLY: usize = 128;
 
+pub type HistoryTable = [[i16; 64]; 6];
 pub const MAX_HISTORY: i16 = 4096;
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct SearchStackEntry {
     pub eval: i16,
-    pub move_list: MoveList,
+    pub mv: Move,
     pub killer_moves: KillerMoves<NUM_KILLER_MOVES>,
 }
 
@@ -38,7 +39,7 @@ impl SearchStackEntry {
     pub fn new() -> Self {
         Self {
             eval: MINUS_INF,
-            move_list: MoveList::default(),
+            mv: Move::null(),
             killer_moves: KillerMoves::default(),
         }
     }
@@ -49,11 +50,13 @@ pub struct Search {
     pub game: Board,
     pub search_history: Vec<u64>,
     pub pre_history: Vec<u64>,
-    pub search_stack: Vec<SearchStackEntry>,
+    pub search_stack: [SearchStackEntry; SEARCH_MAX_PLY],
+    pub move_lists: [MoveList; SEARCH_MAX_PLY],
     pub seldepth: usize,
     transposition_table: Arc<RwLock<TranspositionTable>>,
     pawn_hash_table: PawnHashTable,
-    pub history_tables: [[[i16; 64]; 6]; 2],
+    pub history_tables: [HistoryTable; 2],
+    pub conthist_table: [[HistoryTable; 64]; 6],
     pub countermove_tables: [[[Move; 64]; 6]; 2],
     pub max_depth: Option<usize>,
     pub max_nodes: Option<usize>,
@@ -71,11 +74,13 @@ impl Search {
             game,
             search_history: Vec::new(),
             pre_history: Vec::new(),
-            search_stack: vec![SearchStackEntry::new(); SEARCH_MAX_PLY],
+            search_stack: [SearchStackEntry::new(); SEARCH_MAX_PLY],
+            move_lists: [MoveList::default(); SEARCH_MAX_PLY],
             seldepth: 0,
             transposition_table: Arc::new(RwLock::new(TranspositionTable::new(0))),
             pawn_hash_table: PawnHashTable::new(0),
             history_tables: [[[0; 64]; 6]; 2],
+            conthist_table: [[[[0; 64]; 6]; 64]; 6],
             countermove_tables: [[[Move::null(); 64]; 6]; 2],
             max_depth: None,
             max_nodes: None,
@@ -93,11 +98,13 @@ impl Search {
             game,
             search_history: Vec::new(),
             pre_history: Vec::new(),
-            search_stack: vec![SearchStackEntry::new(); SEARCH_MAX_PLY],
+            search_stack: [SearchStackEntry::new(); SEARCH_MAX_PLY],
+            move_lists: [MoveList::default(); SEARCH_MAX_PLY],
             seldepth: 0,
             transposition_table: tt,
             pawn_hash_table: PawnHashTable::new(0),
             history_tables: [[[0; 64]; 6]; 2],
+            conthist_table: [[[[0; 64]; 6]; 64]; 6],
             countermove_tables: [[[Move::null(); 64]; 6]; 2],
             max_depth: None,
             max_nodes: None,
@@ -465,6 +472,7 @@ impl Search {
                 .saturating_add(((eval - beta) / 200).min(3) as i8))
             .max(1);
             self.search_history.push(board.hash());
+            self.search_stack[ply].mv = Move::null();
             let mut new = board.clone();
             new.make_null_move();
             let score = -self.negamax::<NotRoot, M>(
@@ -513,10 +521,13 @@ impl Search {
         let mut quiets_tried = MoveList::new();
         while let Some((mv, move_score)) = move_sorter.next(
             board,
-            &mut self.search_stack[ply],
+            &self.search_stack,
+            &mut self.move_lists[ply],
+            ply,
             &self.countermove_tables,
             &self.history_tables,
-            last_move,
+            &self.conthist_table,
+            &self.options,
         ) {
             let capture = board.is_capture(mv);
 
@@ -560,6 +571,7 @@ impl Search {
             }
 
             // make the move on a copy of the board
+            self.search_stack[ply].mv = mv;
             let mut new = board.clone();
             new.make_move(mv);
 
@@ -666,16 +678,40 @@ impl Search {
                     self.countermove_tables[current_player][last_move.piece][last_move.to] = mv;
 
                     let delta = depth as i16 * depth as i16;
+
+                    // history heuristic bonus
                     let history = self.history_tables[current_player][mv.piece][mv.to];
                     self.history_tables[current_player][mv.piece][mv.to] +=
                         delta - ((delta as i32 * history as i32) / MAX_HISTORY as i32) as i16;
 
+                    // continuation history bonus
+                    for i in ply.saturating_sub(self.options.conthist_depth)..ply {
+                        let prev = self.search_stack[i].mv;
+                        if !mv.is_null() {
+                            let conthist =
+                                self.conthist_table[prev.piece][prev.to][mv.piece][mv.to];
+                            self.conthist_table[prev.piece][prev.to][mv.piece][mv.to] += delta
+                                - ((delta as i32 * conthist as i32) / MAX_HISTORY as i32) as i16;
+                        }
+                    }
                     // punish quiets that were played but didn't cause a beta cutoff
                     for smv in quiets_tried.inner().iter() {
                         let mv = smv.mv;
                         let history = self.history_tables[current_player][mv.piece][mv.to];
                         self.history_tables[current_player][mv.piece][mv.to] -=
                             delta + ((delta as i32 * history as i32) / MAX_HISTORY as i32) as i16;
+
+                        // also punish the continuation histories for this move
+                        for i in ply.saturating_sub(self.options.conthist_depth)..ply {
+                            let prev = self.search_stack[i].mv;
+                            if !mv.is_null() {
+                                let conthist =
+                                    self.conthist_table[prev.piece][prev.to][mv.piece][mv.to];
+                                self.conthist_table[prev.piece][prev.to][mv.piece][mv.to] -= delta
+                                    + ((delta as i32 * conthist as i32) / MAX_HISTORY as i32)
+                                        as i16;
+                            }
+                        }
                     }
                 }
 
@@ -703,7 +739,7 @@ impl Search {
         self.search_history.pop();
 
         // check for checkmate and stalemate
-        if self.search_stack[ply].move_list.len() == 0 {
+        if self.move_lists[ply].len() == 0 {
             if in_check {
                 // checkmate, preferring shorter mating sequences
                 pv.clear();
@@ -863,10 +899,13 @@ impl Search {
         let mut best_move = Move::null();
         while let Some((mv, _)) = move_sorter.next(
             board,
-            &mut self.search_stack[ply],
+            &self.search_stack,
+            &mut self.move_lists[ply],
+            ply,
             &self.countermove_tables,
             &self.history_tables,
-            Move::null(),
+            &self.conthist_table,
+            &self.options,
         ) {
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
@@ -888,6 +927,7 @@ impl Search {
             }
 
             // make the move on a copy of the board
+            self.search_stack[ply].mv = mv;
             let mut new = board.clone();
             new.make_move(mv);
 
@@ -930,7 +970,7 @@ impl Search {
 
         // if there are no legal captures, check for checkmate/stalemate
         // disable when tracing to avoid empty traces
-        if !T::TRACING && self.search_stack[ply].move_list.len() == 0 {
+        if !T::TRACING && self.move_lists[ply].len() == 0 {
             let mut some_moves = false;
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 

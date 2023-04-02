@@ -7,7 +7,8 @@ use crate::{
         Board,
     },
     moves::*,
-    search::SearchStackEntry,
+    options::SearchOptions,
+    search::{HistoryTable, SearchStackEntry, SEARCH_MAX_PLY},
     types::{Black, Color, Piece::*, TypeMoveGen, White},
 };
 
@@ -43,10 +44,13 @@ impl<M: TypeMoveGen> MoveSorter<M> {
     pub fn next(
         &mut self,
         board: &Board,
-        search_stack_entry: &mut SearchStackEntry,
+        search_stack: &[SearchStackEntry; SEARCH_MAX_PLY],
+        move_list: &mut MoveList,
+        ply: usize,
         counters: &[[[Move; 64]; 6]; 2],
-        history: &[[[i16; 64]; 6]; 2],
-        last_move: Move,
+        history: &[HistoryTable; 2],
+        conthist: &[[HistoryTable; 64]; 6],
+        options: &SearchOptions,
     ) -> Option<(Move, i32)> {
         // return the TT move first if it is pseudolegal and pray that there is no hash collision
         // a beta cutoff here could skip movegen altogether
@@ -62,22 +66,24 @@ impl<M: TypeMoveGen> MoveSorter<M> {
         if self.stage == Stage::GenerateMoves {
             self.stage = Stage::SortMoves;
             if M::CAPTURES {
-                board.generate_legal_captures_into(&mut search_stack_entry.move_list);
-                for m in search_stack_entry.move_list.inner_mut() {
+                board.generate_legal_captures_into(move_list);
+                for m in move_list.inner_mut() {
                     m.score = score_capture(board, m.mv);
                 }
             } else {
-                board.generate_legal_moves_into(&mut search_stack_entry.move_list);
-                for m in search_stack_entry.move_list.inner_mut() {
+                board.generate_legal_moves_into(move_list);
+                for m in move_list.inner_mut() {
                     if m.mv.promotion != Pawn || board.is_capture(m.mv) {
                         m.score = score_capture(board, m.mv);
                     } else {
                         m.score = score_quiet(
                             board,
-                            &search_stack_entry.killer_moves,
+                            search_stack,
+                            ply,
                             counters,
                             history,
-                            last_move,
+                            conthist,
+                            options.conthist_depth,
                             m.mv,
                         );
                     }
@@ -87,13 +93,13 @@ impl<M: TypeMoveGen> MoveSorter<M> {
 
         // find the move with the next highest sort score
         // or return None if the end of the list has been reached
-        if self.index < search_stack_entry.move_list.len() {
-            let (mut mv, mut score) = search_stack_entry.move_list.pick_move(self.index);
+        if self.index < move_list.len() {
+            let (mut mv, mut score) = move_list.pick_move(self.index);
             // tt move has already been reported
             if mv == self.tt_move {
                 self.index += 1;
-                if self.index < search_stack_entry.move_list.len() {
-                    (mv, score) = search_stack_entry.move_list.pick_move(self.index);
+                if self.index < move_list.len() {
+                    (mv, score) = move_list.pick_move(self.index);
                 } else {
                     return None;
                 }
@@ -129,19 +135,36 @@ fn score_capture(board: &Board, mv: Move) -> i32 {
 
 fn score_quiet(
     board: &Board,
-    killers: &KillerMoves<NUM_KILLER_MOVES>,
+    search_stack: &[SearchStackEntry; SEARCH_MAX_PLY],
+    ply: usize,
     counters: &[[[Move; 64]; 6]; 2],
-    history: &[[[i16; 64]; 6]; 2],
-    last_move: Move,
+    history: &[HistoryTable; 2],
+    conthist: &[[HistoryTable; 64]; 6],
+    conthist_depth: usize,
     mv: Move,
 ) -> i32 {
     let current_player = board.current_player();
-    if killers.contains(&mv) {
+    let last_move = search_stack[ply.saturating_sub(1)].mv;
+    if counters[current_player][last_move.piece][last_move.to] == mv {
+        return COUNTERMOVE_SCORE;
+    }
+
+    let history_score = history[current_player][mv.piece][mv.to] as i32;
+    let conthist_score = (ply.saturating_sub(conthist_depth)..ply)
+        .map(|i| {
+            let prev = search_stack[i].mv;
+            if !prev.is_null() {
+                conthist[prev.piece][prev.to][mv.piece][mv.to]
+            } else {
+                0
+            }
+        })
+        .sum::<i16>() as i32;
+
+    if search_stack[ply].killer_moves.contains(&mv) {
         // there can be more than 1 killer move, so sort them by their respective histories
-        KILLER_MOVE_SCORE + (history[current_player][mv.piece][mv.to] as i32)
-    } else if counters[current_player][last_move.piece][last_move.to] == mv {
-        COUNTERMOVE_SCORE
+        KILLER_MOVE_SCORE + history_score + conthist_score
     } else {
-        QUIET_SCORE + (history[current_player][mv.piece][mv.to] as i32)
+        QUIET_SCORE + history_score + conthist_score
     }
 }

@@ -29,6 +29,7 @@ uci_options![
     RfpMargin(Spin<i16> { default: RFP_MARGIN, min: 0, max: 300 }),
     LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
     IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 10 }),
+    ContHistDepth(Spin<usize> { default: CONTHIST_DEPTH, min: 0, max: 10 }),
 ];
 
 pub enum UciCommand {
