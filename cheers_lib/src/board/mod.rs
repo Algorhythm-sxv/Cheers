@@ -524,7 +524,7 @@ impl Board {
                 };
                 if (to & (rights[0] | rights[1])).is_not_empty() {
                     // get for full castling legality
-                    let queenside = (to | rights[1]).is_not_empty();
+                    let queenside = (to & rights[1]).is_not_empty();
                     return self.castling_legal::<T>(queenside);
                 }
             }
