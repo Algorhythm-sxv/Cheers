@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Index, IndexMut, Sub};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Neg, Sub, SubAssign};
 
 #[cfg(feature = "eval-tracing")]
 use bytemuck::{Pod, Zeroable};
@@ -8,15 +8,15 @@ use cheers_bitboards::{BitBoard, Square};
 
 use super::eval_params::EvalTrace;
 
-pub struct CoeffArray<T, const N: usize>(pub [T; N]);
-
-impl<T, const N: usize, I: Into<usize>> Index<I> for CoeffArray<T, N> {
-    type Output = T;
-
-    fn index(&self, index: I) -> &Self::Output {
-        &self.0[index.into()]
-    }
-}
+// pub struct CoeffArray<T, const N: usize>(pub [T; N]);
+//
+// impl<T, const N: usize, I: Into<usize>> Index<I> for CoeffArray<T, N> {
+//     type Output = T;
+//
+//     fn index(&self, index: I) -> &Self::Output {
+//         &self.0[index.into()]
+//     }
+// }
 
 pub struct EvalInfo {
     pub mobility_area: [BitBoard; 2],
@@ -28,44 +28,70 @@ pub struct EvalInfo {
     pub passed_pawns: [BitBoard; 2],
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct EvalScore {
-    pub mg: i16,
-    pub eg: i16,
-}
+#[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
+#[repr(C)]
+pub struct EvalScore(i32);
 
 impl EvalScore {
-    pub fn zero() -> Self {
-        Self { mg: 0, eg: 0 }
+    pub const fn new(mg: i16, eg: i16) -> Self {
+        Self(((eg as i32) << 16).wrapping_add(mg as i32))
+    }
+    pub const fn zero() -> Self {
+        Self(0)
+    }
+    pub const fn mg(&self) -> i16 {
+        self.0 as i16
+    }
+    pub const fn eg(&self) -> i16 {
+        ((self.0 + 0x8000) >> 16) as i16
+    }
+    pub fn div_by(&mut self, n: i16) {
+        *self = Self::new(self.mg() / n, self.eg() / n)
     }
 }
 
-impl Add<EvalScore> for EvalScore {
+impl Add<Self> for EvalScore {
     type Output = Self;
 
-    fn add(self, rhs: EvalScore) -> Self::Output {
-        Self {
-            mg: self.mg + rhs.mg,
-            eg: self.eg + rhs.eg,
-        }
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
     }
 }
 
-impl AddAssign<EvalScore> for EvalScore {
-    fn add_assign(&mut self, rhs: EvalScore) {
-        self.mg += rhs.mg;
-        self.eg += rhs.eg;
+impl AddAssign<Self> for EvalScore {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
     }
 }
 
-impl Sub<EvalScore> for EvalScore {
+impl Sub<Self> for EvalScore {
     type Output = Self;
 
-    fn sub(self, rhs: EvalScore) -> Self::Output {
-        Self {
-            mg: self.mg - rhs.mg,
-            eg: self.eg - rhs.eg,
-        }
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl SubAssign<Self> for EvalScore {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl Neg for EvalScore {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self::new(-self.mg(), -self.eg())
+    }
+}
+
+impl Mul<i16> for EvalScore {
+    type Output = Self;
+
+    fn mul(self, rhs: i16) -> Self::Output {
+        Self(self.0 * (rhs as i32))
     }
 }
 
@@ -105,28 +131,28 @@ impl<T, const N: usize> IndexMut<GamePhase> for [T; N] {
 #[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
-pub struct PieceTables(pub [[[i16; 2]; 64]; 6]);
-impl std::ops::Index<(GamePhase, Piece, Square)> for PieceTables {
-    type Output = i16;
-    fn index(&self, index: (GamePhase, Piece, Square)) -> &Self::Output {
-        &self.0[index.1 as usize][index.2][index.0 as usize]
+pub struct PieceTables(pub [[EvalScore; 64]; 6]);
+impl std::ops::Index<(Piece, Square)> for PieceTables {
+    type Output = EvalScore;
+    fn index(&self, index: (Piece, Square)) -> &Self::Output {
+        &self.0[index.0 as usize][index.1]
     }
 }
 
 impl Default for PieceTables {
     fn default() -> Self {
-        PieceTables([[[0; 2]; 64]; 6])
+        PieceTables([[EvalScore::default(); 64]; 6])
     }
 }
 
 #[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[repr(C)]
-pub struct PieceValues(pub [[i16; 2]; 6]);
+pub struct PieceValues(pub [EvalScore; 6]);
 
-impl std::ops::Index<(GamePhase, Piece)> for PieceValues {
-    type Output = i16;
-    fn index(&self, index: (GamePhase, Piece)) -> &Self::Output {
-        &self.0[index.1 as usize][index.0 as usize]
+impl std::ops::Index<Piece> for PieceValues {
+    type Output = EvalScore;
+    fn index(&self, index: Piece) -> &Self::Output {
+        &self.0[index as usize]
     }
 }

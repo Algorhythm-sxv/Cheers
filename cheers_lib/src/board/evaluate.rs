@@ -2,8 +2,6 @@ use crate::{hash_tables::PawnHashTable, lookup_tables::*, types::*};
 use cheers_bitboards::*;
 use Piece::*;
 
-use self::GamePhase::*;
-
 use super::Board;
 pub use super::{eval_params::*, eval_types::*};
 
@@ -89,8 +87,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                         - self.evaluate_pawns_only::<W::Other>(&mut info);
                     self.pawn_hash_table.set::<W>(
                         self.game.pawn_hash,
-                        score.mg,
-                        score.eg,
+                        score,
                         white_passers | black_passers,
                     );
                     eval += score;
@@ -120,19 +117,17 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         if (W::WHITE && self.game.current_player() == Color::White)
             || (!W::WHITE && self.game.current_player() == Color::Black)
         {
-            eval.mg += EVAL_PARAMS.tempo[Midgame];
-            eval.eg += EVAL_PARAMS.tempo[Endgame];
+            eval += EVAL_PARAMS.tempo;
             // tempo doesn't texel tune at all since it compares to WDL
             // self.trace.term(|t| t.tempo[W::INDEX] = 1);
         }
 
         // scale down evals for material draws
         if self.game.material_draw() {
-            eval.mg /= 32;
-            eval.eg /= 32;
+            eval.div_by(32);
         }
 
-        (((eval.mg as i32 * (256 - phase)) + (eval.eg as i32 * phase)) / 256) as i16
+        (((eval.mg() as i32 * (256 - phase)) + (eval.eg() as i32 * phase)) / 256) as i16
     }
 
     #[inline]
@@ -149,23 +144,20 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
         // material value
         let count = knights.count_ones() as i16;
-        eval.mg += EVAL_PARAMS.piece_values[(Midgame, Knight)] * count;
-        eval.eg += EVAL_PARAMS.piece_values[(Endgame, Knight)] * count;
+        eval += EVAL_PARAMS.piece_values[Knight] * count;
         self.trace.term(|t| t.knight_count[color as usize] = count);
 
         // knights behind pawns
         let knights_behind_pawns =
             (knights & info.behind_pawns[color as usize]).count_ones() as i16;
-        eval.mg += EVAL_PARAMS.knight_behind_pawn[Midgame] * knights_behind_pawns;
-        eval.eg += EVAL_PARAMS.knight_behind_pawn[Endgame] * knights_behind_pawns;
+        eval += EVAL_PARAMS.knight_behind_pawn * knights_behind_pawns;
         self.trace
             .term(|t| t.knights_behind_pawns[color] = knights_behind_pawns);
 
         for knight in knights {
             let relative_knight = relative_board_index::<W>(knight);
             // placement
-            eval.mg += EVAL_PARAMS.piece_tables[(Midgame, Knight, relative_knight)];
-            eval.eg += EVAL_PARAMS.piece_tables[(Endgame, Knight, relative_knight)];
+            eval += EVAL_PARAMS.piece_tables[(Knight, relative_knight)];
             self.trace
                 .term(|t| t.knight_placement[relative_knight][color] += 1);
 
@@ -176,8 +168,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .abs_diff(knight.file())
                 .max(king.rank().abs_diff(knight.rank())) as usize;
             if distance >= 4 {
-                eval.mg += EVAL_PARAMS.knight_king_distance[distance - 4][Midgame];
-                eval.eg += EVAL_PARAMS.knight_king_distance[distance - 4][Endgame];
+                eval += EVAL_PARAMS.knight_king_distance[distance - 4];
                 self.trace
                     .term(|t| t.knight_king_distance[distance - 4][color] += 1);
             }
@@ -191,16 +182,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 };
                 let defended =
                     (self.game.pawn_attack::<W::Other>(knight) & pawns).is_not_empty() as usize;
-                eval.mg += EVAL_PARAMS.knight_outpost[defended][Midgame];
-                eval.eg += EVAL_PARAMS.knight_outpost[defended][Endgame];
+                eval += EVAL_PARAMS.knight_outpost[defended];
                 self.trace.term(|t| t.knight_outposts[defended][color] += 1);
             }
 
             // mobility
             let attacks = lookup_knight(knight);
             let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
-            eval.mg += EVAL_PARAMS.knight_mobility[mobility][Midgame];
-            eval.eg += EVAL_PARAMS.knight_mobility[mobility][Endgame];
+            eval += EVAL_PARAMS.knight_mobility[mobility];
             self.trace.term(|t| t.knight_mobility[mobility][color] += 1);
         }
         eval
@@ -220,37 +209,32 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
         // material value
         let count = bishops.count_ones() as i16;
-        eval.mg += EVAL_PARAMS.piece_values[(Midgame, Bishop)] * count;
-        eval.eg += EVAL_PARAMS.piece_values[(Endgame, Bishop)] * count;
+        eval += EVAL_PARAMS.piece_values[Bishop] * count;
         self.trace.term(|t| t.bishop_count[color] = count);
 
         // bishops behind pawns
         let bishops_behind_pawns = (bishops & info.behind_pawns[color]).count_ones() as i16;
-        eval.mg += EVAL_PARAMS.bishop_behind_pawn[Midgame] * bishops_behind_pawns;
-        eval.eg += EVAL_PARAMS.bishop_behind_pawn[Endgame] * bishops_behind_pawns;
+        eval += EVAL_PARAMS.bishop_behind_pawn * bishops_behind_pawns;
         self.trace
             .term(|t| t.bishops_behind_pawns[color] = bishops_behind_pawns);
 
         // bishop pair
         if (bishops & LIGHT_SQUARES).count_ones() >= 1 && (bishops & DARK_SQUARES).count_ones() >= 1
         {
-            eval.mg += EVAL_PARAMS.bishop_pair[Midgame];
-            eval.eg += EVAL_PARAMS.bishop_pair[Endgame];
+            eval += EVAL_PARAMS.bishop_pair;
             self.trace.term(|t| t.bishop_pair[color] += 1);
         }
 
         // long diagonals
         let bishop_long_diagonals = (bishops & LONG_DIAGONALS).count_ones() as i16;
-        eval.mg += EVAL_PARAMS.bishop_long_diagonal[Midgame] * bishop_long_diagonals;
-        eval.eg += EVAL_PARAMS.bishop_long_diagonal[Endgame] * bishop_long_diagonals;
+        eval += EVAL_PARAMS.bishop_long_diagonal * bishop_long_diagonals;
         self.trace
             .term(|t| t.bishop_long_diagonals[color] = bishop_long_diagonals);
 
         for bishop in bishops {
             // placement
             let relative_bishop = relative_board_index::<W>(bishop);
-            eval.mg += EVAL_PARAMS.piece_tables[(Midgame, Bishop, relative_bishop)];
-            eval.eg += EVAL_PARAMS.piece_tables[(Endgame, Bishop, relative_bishop)];
+            eval += EVAL_PARAMS.piece_tables[(Bishop, relative_bishop)];
             self.trace
                 .term(|t| t.bishop_placement[relative_bishop][color] += 1);
 
@@ -261,8 +245,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .abs_diff(bishop.file())
                 .max(king.rank().abs_diff(bishop.rank())) as usize;
             if distance >= 4 {
-                eval.mg += EVAL_PARAMS.bishop_king_distance[distance - 4][Midgame];
-                eval.eg += EVAL_PARAMS.bishop_king_distance[distance - 4][Endgame];
+                eval += EVAL_PARAMS.bishop_king_distance[distance - 4];
                 self.trace
                     .term(|t| t.bishop_king_distance[distance - 4][color] += 1);
             }
@@ -276,16 +259,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 };
                 let defended =
                     (self.game.pawn_attack::<W::Other>(bishop) & pawns).is_not_empty() as usize;
-                eval.mg += EVAL_PARAMS.bishop_outpost[defended][Midgame];
-                eval.eg += EVAL_PARAMS.bishop_outpost[defended][Endgame];
+                eval += EVAL_PARAMS.bishop_outpost[defended];
                 self.trace.term(|t| t.bishop_outposts[defended][color] += 1);
             }
 
             // mobility
             let attacks = lookup_bishop(bishop, self.game.occupied);
             let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
-            eval.mg += EVAL_PARAMS.bishop_mobility[mobility][Midgame];
-            eval.eg += EVAL_PARAMS.bishop_mobility[mobility][Endgame];
+            eval += EVAL_PARAMS.bishop_mobility[mobility];
             self.trace.term(|t| t.bishop_mobility[mobility][color] += 1);
         }
         eval
@@ -305,23 +286,20 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
         // material value
         let count = rooks.count_ones() as i16;
-        eval.mg += EVAL_PARAMS.piece_values[(Midgame, Rook)] * count;
-        eval.eg += EVAL_PARAMS.piece_values[(Endgame, Rook)] * count;
+        eval += EVAL_PARAMS.piece_values[Rook] * count;
         self.trace.term(|t| t.rook_count[color as usize] = count);
 
         // rooks on seventh
         let seventh = if W::WHITE { SEVENTH_RANK } else { SECOND_RANK };
         let rooks_on_seventh = (rooks & seventh).count_ones() as i16;
-        eval.mg += EVAL_PARAMS.rook_on_seventh[Midgame as usize] * rooks_on_seventh;
-        eval.mg += EVAL_PARAMS.rook_on_seventh[Endgame as usize] * rooks_on_seventh;
+        eval += EVAL_PARAMS.rook_on_seventh * rooks_on_seventh;
         self.trace
             .term(|t| t.rooks_on_seventh[color as usize] = rooks_on_seventh);
 
         for rook in rooks {
             // placement
             let relative_rook = relative_board_index::<W>(rook);
-            eval.mg += EVAL_PARAMS.piece_tables[(Midgame, Rook, relative_rook)];
-            eval.eg += EVAL_PARAMS.piece_tables[(Endgame, Rook, relative_rook)];
+            eval += EVAL_PARAMS.piece_tables[(Rook, relative_rook)];
             self.trace
                 .term(|t| t.rook_placement[relative_rook][color] += 1);
 
@@ -334,16 +312,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
             if (pawns & FILES[rook.file()]).is_empty() {
                 let open = (enemy_pawns & FILES[rook.file()]).is_empty() as usize;
-                eval.mg += EVAL_PARAMS.rook_open_file[open][Midgame];
-                eval.eg += EVAL_PARAMS.rook_open_file[open][Endgame];
+                eval += EVAL_PARAMS.rook_open_file[open];
                 self.trace.term(|t| t.rook_open_files[open][color] += 1);
             }
 
             // mobility
             let attacks = lookup_rook(rook, self.game.occupied);
             let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
-            eval.mg += EVAL_PARAMS.rook_mobility[mobility][Midgame];
-            eval.eg += EVAL_PARAMS.rook_mobility[mobility][Endgame];
+            eval += EVAL_PARAMS.rook_mobility[mobility];
             self.trace.term(|t| t.rook_mobility[mobility][color] += 1);
 
             // trapped by king
@@ -353,8 +329,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                     let can_castle = self.game.castling_rights[color]
                         .iter()
                         .any(|&c| c.is_not_empty()) as usize;
-                    eval.mg += EVAL_PARAMS.rook_trapped[can_castle][Midgame];
-                    eval.eg += EVAL_PARAMS.rook_trapped[can_castle][Endgame];
+                    eval += EVAL_PARAMS.rook_trapped[can_castle];
                     self.trace.term(|t| t.rook_trapped[can_castle][color] += 1)
                 }
             }
@@ -374,30 +349,26 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let color = W::INDEX;
         // material value
         let count = queens.count_ones() as i16;
-        eval.mg += EVAL_PARAMS.piece_values[(Midgame, Queen)] * count;
-        eval.eg += EVAL_PARAMS.piece_values[(Endgame, Queen)] * count;
+        eval += EVAL_PARAMS.piece_values[Queen] * count;
         self.trace.term(|t| t.queen_count[color] = count);
 
         for queen in queens {
             // placement
             let relative_queen = relative_board_index::<W>(queen);
-            eval.mg += EVAL_PARAMS.piece_tables[(Midgame, Queen, relative_queen)];
-            eval.eg += EVAL_PARAMS.piece_tables[(Endgame, Queen, relative_queen)];
+            eval += EVAL_PARAMS.piece_tables[(Queen, relative_queen)];
             self.trace
                 .term(|t| t.queen_placement[relative_queen][color] += 1);
 
             // discovery risk
             if self.game.discovered_attacks::<W>(queen).is_not_empty() {
-                eval.mg += EVAL_PARAMS.queen_discovery_risk[Midgame];
-                eval.eg += EVAL_PARAMS.queen_discovery_risk[Endgame];
+                eval += EVAL_PARAMS.queen_discovery_risk;
                 self.trace.term(|t| t.queen_discovery_risks[color] += 1);
             }
 
             // mobility
             let attacks = lookup_queen(queen, self.game.occupied);
             let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
-            eval.mg += EVAL_PARAMS.queen_mobility[mobility][Midgame];
-            eval.eg += EVAL_PARAMS.queen_mobility[mobility][Endgame];
+            eval += EVAL_PARAMS.queen_mobility[mobility];
             self.trace.term(|t| t.queen_mobility[mobility][color] += 1);
         }
         eval
@@ -411,8 +382,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
         // placement
         let relative_king = relative_board_index::<W>(info.king_square[color]);
-        eval.mg += EVAL_PARAMS.piece_tables[(Midgame, King, relative_king)];
-        eval.eg += EVAL_PARAMS.piece_tables[(Endgame, King, relative_king)];
+        eval += EVAL_PARAMS.piece_tables[(King, relative_king)];
         self.trace
             .term(|t| t.king_placement[relative_king][color] += 1);
 
@@ -423,8 +393,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             self.game.black_pawns | self.game.black_knights | self.game.black_bishops
         };
         let defenders = (info.king_area[color] & minors).count_ones() as usize;
-        eval.mg += EVAL_PARAMS.king_defenders[defenders][Midgame];
-        eval.eg += EVAL_PARAMS.king_defenders[defenders][Endgame];
+        eval+= EVAL_PARAMS.king_defenders[defenders];
         self.trace.term(|t| t.king_defenders[defenders][color] += 1);
 
         // (half-) open files
@@ -435,8 +404,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         };
         if (pawns & FILES[info.king_square[color].file()]).is_empty() {
             let open = (enemy_pawns & FILES[info.king_square[color].file()]).is_empty() as usize;
-            eval.mg += EVAL_PARAMS.king_open_file[open][Midgame];
-            eval.eg += EVAL_PARAMS.king_open_file[open][Endgame];
+            eval+= EVAL_PARAMS.king_open_file[open];
             self.trace.term(|t| t.king_open_file[open][color] += 1);
         }
 
@@ -447,16 +415,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             self.game.white_queens
         };
         if enemy_queens.is_empty() {
-            eval.mg += EVAL_PARAMS.no_enemy_queen[Midgame];
-            eval.eg += EVAL_PARAMS.no_enemy_queen[Endgame];
+            eval+= EVAL_PARAMS.no_enemy_queen;
             self.trace.term(|t| t.no_enemy_queen[color] += 1);
         }
 
         // mobility
         let attacks = lookup_king(info.king_square[color]);
         let mobility = (attacks & info.mobility_area[color]).count_ones() as usize;
-        eval.mg += EVAL_PARAMS.king_mobility[mobility][Midgame];
-        eval.eg += EVAL_PARAMS.king_mobility[mobility][Endgame];
+        eval += EVAL_PARAMS.king_mobility[mobility];
         self.trace.term(|t| t.king_mobility[mobility][color] += 1);
 
         eval
@@ -476,15 +442,13 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
         // material value
         let count = pawns.count_ones() as i16;
-        eval.mg += EVAL_PARAMS.piece_values[(Midgame, Pawn)] * count;
-        eval.eg += EVAL_PARAMS.piece_values[(Endgame, Pawn)] * count;
+        eval+= EVAL_PARAMS.piece_values[Pawn] * count;
         self.trace.term(|t| t.pawn_count[color] = count);
 
         for pawn in pawns.clone() {
             // placement
             let relative_pawn = relative_board_index::<W>(pawn);
-            eval.mg += EVAL_PARAMS.piece_tables[(Midgame, Pawn, relative_pawn)];
-            eval.eg += EVAL_PARAMS.piece_tables[(Endgame, Pawn, relative_pawn)];
+            eval+= EVAL_PARAMS.piece_tables[(Pawn, relative_pawn)];
             self.trace
                 .term(|t| t.pawn_placement[relative_pawn][color] += 1);
 
@@ -504,41 +468,35 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             // passed pawns
             if (board & info.passed_pawns[color]).is_not_empty() {
                 info.passed_pawns[color] |= board;
-                eval.mg += EVAL_PARAMS.passed_pawn[file][Midgame];
-                eval.eg += EVAL_PARAMS.passed_pawn[file][Endgame];
+                eval+= EVAL_PARAMS.passed_pawn[file];
                 self.trace.term(|t| t.passed_pawn[file][color] += 1);
 
-                eval.mg += EVAL_PARAMS.passed_pawn_advanced[relative_rank - 1][Midgame];
-                eval.eg += EVAL_PARAMS.passed_pawn_advanced[relative_rank - 1][Endgame];
+                eval+= EVAL_PARAMS.passed_pawn_advanced[relative_rank - 1];
                 self.trace
                     .term(|t| t.passed_pawn_advanced[relative_rank - 1][color] += 1);
 
                 if supporters.is_not_empty() {
-                    eval.mg += EVAL_PARAMS.passed_pawn_connected[Midgame];
-                    eval.eg += EVAL_PARAMS.passed_pawn_connected[Endgame];
+                    eval+= EVAL_PARAMS.passed_pawn_connected;
                     self.trace.term(|t| t.passed_pawn_connected[color] += 1);
                 }
             }
 
             // connected pawns
             if supporters.is_not_empty() {
-                eval.mg += EVAL_PARAMS.connected_pawn[file][Midgame];
-                eval.eg += EVAL_PARAMS.connected_pawn[file][Endgame];
+                eval+= EVAL_PARAMS.connected_pawn[file];
                 self.trace.term(|t| t.connected_pawn[file][color] += 1);
             }
 
             // double pawns
             let behind = if W::WHITE { board >> 8 } else { board << 8 };
             if supporters.is_empty() && (pawns & behind).is_not_empty() {
-                eval.mg += EVAL_PARAMS.double_pawn[file][Midgame];
-                eval.eg += EVAL_PARAMS.double_pawn[file][Endgame];
+                eval+= EVAL_PARAMS.double_pawn[file];
                 self.trace.term(|t| t.double_pawn[file][color] += 1);
             }
 
             // isolated pawns
             if threats.is_empty() && neighbors.is_empty() {
-                eval.mg += EVAL_PARAMS.isolated_pawn[pawn.file()][Midgame];
-                eval.eg += EVAL_PARAMS.isolated_pawn[pawn.file()][Endgame];
+                eval+= EVAL_PARAMS.isolated_pawn[pawn.file()];
                 self.trace
                     .term(|t| t.isolated_pawn[pawn.file()][color] += 1);
             }
@@ -560,8 +518,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             let unblocked =
                 (self.game.forward::<W>(pawn.bitboard()) & self.game.occupied).is_empty();
             if unblocked {
-                eval.mg += EVAL_PARAMS.passed_pawn_unblocked[Midgame];
-                eval.eg += EVAL_PARAMS.passed_pawn_unblocked[Endgame];
+                eval+= EVAL_PARAMS.passed_pawn_unblocked;
                 self.trace.term(|t| t.passed_pawn_unblocked[color] += 1);
             }
             let rooks = if W::WHITE {
@@ -571,8 +528,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             };
 
             if (rear_span & rooks).is_not_empty() {
-                eval.mg += EVAL_PARAMS.passed_pawn_friendly_rook[Midgame];
-                eval.eg += EVAL_PARAMS.passed_pawn_friendly_rook[Endgame];
+                eval+= EVAL_PARAMS.passed_pawn_friendly_rook;
                 self.trace.term(|t| t.passed_pawn_friendly_rook[color] += 1);
             }
 
@@ -583,8 +539,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             if enemy_king_relative_rank < relative_rank
                 || king_file_distance > front_span.count_ones() as usize
             {
-                eval.mg += EVAL_PARAMS.passed_pawn_enemy_king_too_far[Midgame];
-                eval.eg += EVAL_PARAMS.passed_pawn_enemy_king_too_far[Endgame];
+                eval+= EVAL_PARAMS.passed_pawn_enemy_king_too_far;
                 self.trace
                     .term(|t| t.passed_pawn_enemy_king_too_far[color] += 1);
             }

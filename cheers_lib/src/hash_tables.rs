@@ -231,16 +231,14 @@ fn hash_to_tt_key(hash: u64) -> u16 {
 #[derive(Copy, Clone, Debug)]
 pub struct PawnHashEntry {
     pub hash: u64,
-    pub mg: i16,
-    pub eg: i16,
+    pub score: EvalScore,
     passed_pawns: BitBoard,
 }
 impl Default for PawnHashEntry {
     fn default() -> Self {
         Self {
             hash: 1,
-            mg: 0,
-            eg: 0,
+            score: EvalScore::default(),
             passed_pawns: BitBoard::empty(),
         }
     }
@@ -267,12 +265,8 @@ impl PawnHashTable {
     pub fn get<T: TypeColor>(&self, hash: u64) -> Option<(EvalScore, BitBoard)> {
         let entry = self.table[(hash & self.mask) as usize];
         if entry.hash == hash {
-            let sign = if !T::WHITE { -1 } else { 1 };
             Some((
-                EvalScore {
-                    mg: sign * entry.mg,
-                    eg: sign * entry.eg,
-                },
+                if T::WHITE { entry.score } else { -entry.score },
                 entry.passed_pawns,
             ))
         } else {
@@ -280,12 +274,11 @@ impl PawnHashTable {
         }
     }
 
-    pub fn set<T: TypeColor>(&mut self, hash: u64, mg: i16, eg: i16, passed_pawns: BitBoard) {
-        let (mg, eg) = if T::WHITE { (mg, eg) } else { (-mg, -eg) };
+    pub fn set<T: TypeColor>(&mut self, hash: u64, score: EvalScore, passed_pawns: BitBoard) {
+        let score = if T::WHITE { score } else { -score };
         self.table[(hash & self.mask) as usize] = PawnHashEntry {
             hash,
-            mg,
-            eg,
+            score,
             passed_pawns,
         };
     }
