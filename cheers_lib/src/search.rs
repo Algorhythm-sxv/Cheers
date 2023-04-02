@@ -687,7 +687,7 @@ impl Search {
                     // continuation history bonus
                     for i in ply.saturating_sub(self.options.conthist_depth)..ply {
                         let prev = self.search_stack[i].mv;
-                        if !mv.is_null() {
+                        if !prev.is_null() {
                             let conthist =
                                 self.conthist_table[prev.piece][prev.to][mv.piece][mv.to];
                             self.conthist_table[prev.piece][prev.to][mv.piece][mv.to] += delta
@@ -704,7 +704,7 @@ impl Search {
                         // also punish the continuation histories for this move
                         for i in ply.saturating_sub(self.options.conthist_depth)..ply {
                             let prev = self.search_stack[i].mv;
-                            if !mv.is_null() {
+                            if !prev.is_null() {
                                 let conthist =
                                     self.conthist_table[prev.piece][prev.to][mv.piece][mv.to];
                                 self.conthist_table[prev.piece][prev.to][mv.piece][mv.to] -= delta
