@@ -668,14 +668,14 @@ impl Search {
                     let delta = depth as i16 * depth as i16;
                     let history = self.history_tables[current_player][mv.piece][mv.to];
                     self.history_tables[current_player][mv.piece][mv.to] +=
-                        delta - (delta * history) / MAX_HISTORY;
+                        delta - ((delta as i32 * history as i32) / MAX_HISTORY as i32) as i16;
 
                     // punish quiets that were played but didn't cause a beta cutoff
                     for smv in quiets_tried.inner().iter() {
                         let mv = smv.mv;
                         let history = self.history_tables[current_player][mv.piece][mv.to];
                         self.history_tables[current_player][mv.piece][mv.to] -=
-                            delta + (delta * history) / MAX_HISTORY;
+                            delta + ((delta as i32 * history as i32) / MAX_HISTORY as i32) as i16;
                     }
                 }
 
