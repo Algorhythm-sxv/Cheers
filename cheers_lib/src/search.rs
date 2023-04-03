@@ -333,11 +333,15 @@ impl Search {
         // before we actually use it
         tt.prefetch(board.hash());
 
+        // keep track of whether a node is being extended to avoid reducing it again
+        let mut extended = false;
+
         // Check extensions: increase depth by 1 when in check to avoid tactical blindness
         let in_check = board.in_check();
         if in_check {
             // saturating add to avoid negative depths on overflow
             depth = depth.saturating_add(1);
+            extended = true;
         }
 
         // drop into quiescence search at depth 0
@@ -572,7 +576,7 @@ impl Search {
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
             let full_depth_null_window =
-                if depth > self.options.pvs_fulldepth && move_index > 0 && !R::ROOT {
+                if depth > self.options.pvs_fulldepth && move_index > 0 && !extended && !R::ROOT {
                     // reducing certain moves to same time, avoided for tactical and killer/counter moves
                     let reduction = {
                         let mut r = 0;
