@@ -126,5 +126,8 @@ fn score_quiet(
     last_move: Move,
     mv: Move,
 ) -> i32 {
-    0
+    let current_player = board.current_player();
+    let history = history[current_player][mv.piece][mv.to] as i32;
+
+    QUIET_SCORE + history
 }
