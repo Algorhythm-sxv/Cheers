@@ -585,6 +585,7 @@ impl Search {
                             && !in_check
                         {
                             r += LMR[(depth as usize).min(31)][move_index.min(31)];
+                            r += (!pv_node) as i8;
                         }
 
                         r
