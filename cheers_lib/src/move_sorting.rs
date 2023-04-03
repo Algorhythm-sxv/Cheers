@@ -107,7 +107,15 @@ impl<M: TypeMoveGen> MoveSorter<M> {
 }
 
 fn score_capture(board: &Board, mv: Move) -> i32 {
-    0
+    // filter out underpromotions
+    if matches!(mv.promotion, Bishop | Knight | Rook) {
+        return UNDERPROMO_SCORE;
+    }
+    // captures to empty squares are en passent
+    let capture = board.piece_on(mv.to).unwrap_or(Pawn);
+    let mvv_lva = MVV_LVA[capture][mv.piece] as i32;
+
+    WINNING_CAPTURE_SCORE + mvv_lva
 }
 
 fn score_quiet(
