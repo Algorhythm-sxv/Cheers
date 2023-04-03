@@ -115,7 +115,14 @@ fn score_capture(board: &Board, mv: Move) -> i32 {
     let capture = board.piece_on(mv.to).unwrap_or(Pawn);
     let mvv_lva = MVV_LVA[capture][mv.piece] as i32;
 
-    WINNING_CAPTURE_SCORE + mvv_lva
+    // boost moves that have a winning SEE score
+    let see = if board.see_beats_threshold(mv, 0) {
+        10_000
+    } else {
+        0
+    };
+
+    WINNING_CAPTURE_SCORE + mvv_lva + see
 }
 
 fn score_quiet(
