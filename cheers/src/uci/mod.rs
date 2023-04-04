@@ -29,6 +29,8 @@ uci_options![
     RfpMargin(Spin<i16> { default: RFP_MARGIN, min: 0, max: 300 }),
     LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
     IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 10 }),
+    LmrConstReduction(Spin<f32> { default: LMR_CONST_REDUCTION, min: 0.0, max: 3.0 }),
+    LmrLogDivisor(Spin<f32> { default: LMR_LOG_DIVISOR, min: 0.5, max: 5.0 }),
 ];
 
 pub enum UciCommand {

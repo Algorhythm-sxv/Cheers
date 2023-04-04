@@ -584,7 +584,13 @@ impl Search {
                             && mv.promotion != Queen
                             && !in_check
                         {
-                            r += LMR[(depth as usize).min(31)][move_index.min(31)];
+                            fn lmr(depth: i8, move_index: usize, options: &SearchOptions) -> i8 {
+                                (options.lmr_const_reduction
+                                    + (depth as f32).ln() * (move_index as f32).ln()
+                                        / options.lmr_log_divisor)
+                                    as i8
+                            }
+                            r += lmr(depth, move_index, &self.options);
                         }
 
                         r
