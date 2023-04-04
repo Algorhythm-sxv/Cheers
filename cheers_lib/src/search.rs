@@ -576,7 +576,7 @@ impl Search {
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
             let full_depth_null_window =
-                if depth > self.options.pvs_fulldepth && move_index > 0 && !extended && !R::ROOT {
+                if depth > self.options.pvs_fulldepth && move_index > 0 && !R::ROOT {
                     // reducing certain moves to same time, avoided for tactical and killer/counter moves
                     let reduction = {
                         let mut r = 0;
@@ -586,12 +586,15 @@ impl Search {
                             && !(move_score >= COUNTERMOVE_SCORE
                                 && move_score < KILLER_MOVE_SCORE + 50_000)
                             && mv.promotion != Queen
-                            && !in_check
                         {
                             r += LMR[(depth as usize).min(31)][move_index.min(31)];
                         }
 
-                        r
+                        // reduce extended moves by less
+                        r -= extended as i8;
+
+                        // prevent any extensions here
+                        r.max(0)
                     };
 
                     // perform a cheap reduced, null-window search in the hope it fails low immediately
