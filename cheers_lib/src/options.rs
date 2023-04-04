@@ -18,6 +18,8 @@ pub struct SearchOptions {
     pub iir_depth: i8,
     pub lmr_const_reduction: f32,
     pub lmr_log_divisor: f32,
+    pub upper_history_threshold: i16,
+    pub lower_history_threshold: i16,
 }
 
 pub const NMP_DEPTH: i8 = 1;
@@ -36,6 +38,8 @@ pub const LMP_DEPTH: i8 = 7;
 pub const IIR_DEPTH: i8 = 5;
 pub const LMR_CONST_REDUCTION: f32 = 1.5;
 pub const LMR_LOG_DIVISOR: f32 = 1.75;
+pub const UPPER_HISTORY_THRESHOLD: i16 = 5000;
+pub const LOWER_HISTORY_THRESHOLD: i16 = -5000;
 
 impl Default for SearchOptions {
     fn default() -> Self {
@@ -58,6 +62,8 @@ impl Default for SearchOptions {
             iir_depth: IIR_DEPTH,
             lmr_const_reduction: LMR_CONST_REDUCTION,
             lmr_log_divisor: LMR_LOG_DIVISOR,
+            upper_history_threshold: UPPER_HISTORY_THRESHOLD,
+            lower_history_threshold: LOWER_HISTORY_THRESHOLD,
         }
     }
 }

@@ -88,6 +88,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 uci::UciOption::IirDepth(n) => options.iir_depth = n,
                 uci::UciOption::LmrConstReduction(n) => options.lmr_const_reduction = n,
                 uci::UciOption::LmrLogDivisor(n) => options.lmr_log_divisor = n,
+                uci::UciOption::UpperHistoryThreshold(n) => options.upper_history_threshold = n,
+                uci::UciOption::LowerHistoryThreshold(n) => options.lower_history_threshold = n,
             },
             uci::UciCommand::UciNewGame => {
                 position = Board::new();
