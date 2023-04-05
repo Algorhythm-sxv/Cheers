@@ -16,8 +16,8 @@ pub struct SearchOptions {
     pub rfp_margin: i16,
     pub lmp_depth: i8,
     pub iir_depth: i8,
-    pub lmr_const_reduction: f32,
-    pub lmr_log_divisor: f32,
+    pub lmr_const_reduction: i32,
+    pub lmr_log_divisor: i32,
     pub upper_history_threshold: i16,
     pub lower_history_threshold: i16,
 }
@@ -36,8 +36,8 @@ pub const FP_MARGIN_3: i16 = 633;
 pub const RFP_MARGIN: i16 = 142;
 pub const LMP_DEPTH: i8 = 7;
 pub const IIR_DEPTH: i8 = 5;
-pub const LMR_CONST_REDUCTION: f32 = 1.5;
-pub const LMR_LOG_DIVISOR: f32 = 1.75;
+pub const LMR_CONST_REDUCTION: i32 = 150;
+pub const LMR_LOG_DIVISOR: i32 = 175;
 pub const UPPER_HISTORY_THRESHOLD: i16 = 5000;
 pub const LOWER_HISTORY_THRESHOLD: i16 = -5000;
 
