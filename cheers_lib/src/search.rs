@@ -518,6 +518,13 @@ impl Search {
             &self.history_tables,
             last_move,
         ) {
+            // Only move extension: if this is the only legal move, extend by 1
+            let depth = if tt_move.is_null() && self.search_stack[ply].move_list.len() == 1 {
+                depth + 1
+            } else {
+                depth
+            };
+
             let capture = board.is_capture(mv);
 
             // Futility Pruning: skip quiets on nodes with bad static eval
