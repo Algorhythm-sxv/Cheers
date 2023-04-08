@@ -543,7 +543,7 @@ impl Search {
             }
 
             // SEE pruning: if the move loses too much material at low depth then skip it
-            if !R::ROOT && depth <= self.options.see_pruning_depth {
+            if !R::ROOT && !pv_node && depth <= self.options.see_pruning_depth {
                 let threshold = depth as i16
                     * if capture {
                         self.options.see_capture_margin
