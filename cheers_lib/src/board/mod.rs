@@ -475,6 +475,16 @@ impl Board {
         }
     }
 
+    pub fn color_on(&self, square: Square) -> Option<Color> {
+        if (square.bitboard() & self.white_pieces).is_not_empty() {
+            Some(Color::White)
+        } else if (square.bitboard() & self.black_pieces).is_not_empty() {
+            Some(Color::Black)
+        } else {
+            None
+        }
+    }
+
     pub fn is_pseudolegal(&self, mv: Move) -> bool {
         if self.black_to_move {
             self._is_pseudolegal::<Black>(mv)

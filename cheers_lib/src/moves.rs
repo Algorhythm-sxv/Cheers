@@ -208,6 +208,17 @@ impl MoveList {
         self.len += 1;
     }
 
+    pub fn remove(&mut self, index: usize) {
+        if self.is_empty() {
+            println!("{:?}", self.inner);
+            println!("index: {index}");
+            panic!("Attempted remove from empty MoveList");
+        }
+        let other = self.len() - 1;
+        self.inner.swap(index, other);
+        self.len -= 1;
+    }
+
     pub fn reset(&mut self) {
         self.len = 0;
     }
