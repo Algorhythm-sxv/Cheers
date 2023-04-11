@@ -62,7 +62,7 @@ pub struct Search {
     start_time: Instant,
     output: bool,
     options: SearchOptions,
-    local_nodes: usize,
+    pub local_nodes: usize,
 }
 
 impl Search {
@@ -88,7 +88,7 @@ impl Search {
         }
     }
 
-    pub fn new_with_tt(game: Board, tt: Arc<RwLock<TranspositionTable>>) -> Self {
+    pub fn new_with_tt(game: Board, tt: Arc<RwLock<TranspositionTable>>, pawn_hash: usize) -> Self {
         Self {
             game,
             search_history: Vec::new(),
@@ -96,7 +96,7 @@ impl Search {
             search_stack: vec![SearchStackEntry::new(); SEARCH_MAX_PLY],
             seldepth: 0,
             transposition_table: tt,
-            pawn_hash_table: PawnHashTable::new(0),
+            pawn_hash_table: PawnHashTable::new(pawn_hash),
             history_tables: [[[0; 64]; 6]; 2],
             countermove_tables: [[[Move::null(); 64]; 6]; 2],
             max_depth: None,
@@ -110,12 +110,12 @@ impl Search {
         }
     }
 
-    pub fn tt_size_mb(mut self, tt_size_mb: usize) -> Self {
+    pub fn tt_size_mb(mut self, tt_size_mb: usize, pawn_hash_size_mb: usize) -> Self {
         self.transposition_table
             .write()
             .unwrap()
             .set_size(tt_size_mb);
-        self.pawn_hash_table = PawnHashTable::new(tt_size_mb / 8);
+        self.pawn_hash_table = PawnHashTable::new(pawn_hash_size_mb);
         self
     }
 
@@ -145,6 +145,8 @@ impl Search {
     }
 
     pub fn smp_search(&self) -> (i16, PrincipalVariation) {
+        ABORT_SEARCH.store(false, Relaxed);
+        NODE_COUNT.store(0, Ordering::Relaxed);
         let mut score = MINUS_INF;
         let mut pv = PrincipalVariation::new();
 
@@ -154,15 +156,15 @@ impl Search {
             // main thread: this is the only thread that reports back over UCI
             let _main_thread = s.spawn(|| {
                 let search = self.clone();
-                (score, pv) = search.search::<MainThread>();
-                ABORT_SEARCH.store(true, Ordering::Relaxed);
+                (score, pv) = search.search::<MainThread>(true);
+                ABORT_SEARCH.store(true, Relaxed);
             });
 
             // helper threads: these only have their results added to the TT
             for _ in 1..self.options.threads {
                 s.spawn(|| {
                     let search = self.clone();
-                    let _ = search.search::<HelperThread>();
+                    let _ = search.search::<HelperThread>(true);
                 });
             }
         });
@@ -170,7 +172,11 @@ impl Search {
         (score, pv)
     }
 
-    pub fn search<M: TypeMainThread>(&self) -> (i16, PrincipalVariation) {
+    pub fn search<M: TypeMainThread>(&self, set_global_abort: bool) -> (i16, PrincipalVariation) {
+        ABORT_SEARCH.store(false, Relaxed);
+        if M::MAIN_THREAD {
+            NODE_COUNT.store(0, Ordering::Relaxed);
+        }
         let mut last_score = i16::MIN;
         let mut last_pv = PrincipalVariation::new();
 
@@ -214,11 +220,11 @@ impl Search {
 
                 // add helper thread nodes to global count
                 if !M::MAIN_THREAD {
-                    NODE_COUNT.fetch_add(search.local_nodes, Ordering::Relaxed);
+                    NODE_COUNT.fetch_add(search.local_nodes, Relaxed);
                     search.local_nodes = 0;
                 }
 
-                if ABORT_SEARCH.load(Ordering::Relaxed) && i > 1 {
+                if ABORT_SEARCH.load(Relaxed) && i > 1 {
                     // can't trust results from a partial search
                     break 'id_loop;
                 }
@@ -254,7 +260,11 @@ impl Search {
                 format!("cp {score}")
             };
             let hash_fill = tt.sample_fill();
-            let nodes = NODE_COUNT.load(Ordering::Relaxed);
+            let nodes = if set_global_abort {
+                NODE_COUNT.load(Relaxed)
+            } else {
+                search.local_nodes
+            };
             // we can trust the results from the previous search
             if M::MAIN_THREAD && self.output {
                 println!(
@@ -277,15 +287,28 @@ impl Search {
                 }
             }
 
+            // terminate search at max nodes
+            if let Some(max_nodes) = self.max_nodes {
+                if nodes >= max_nodes {
+                    if set_global_abort {
+                        ABORT_SEARCH.store(true, Relaxed);
+                    }
+                    break;
+                }
+            }
             // terminate search at max depth or with forced mate/draw
             if let Some(max_depth) = self.max_depth {
                 if M::MAIN_THREAD && i >= max_depth {
-                    ABORT_SEARCH.store(true, Ordering::Relaxed);
+                    if set_global_abort {
+                        ABORT_SEARCH.store(true, Relaxed);
+                    }
                     break;
                 }
             }
             if i >= SEARCH_MAX_PLY {
-                ABORT_SEARCH.store(true, Ordering::Relaxed);
+                if set_global_abort {
+                    ABORT_SEARCH.store(true, Relaxed);
+                }
                 break;
             }
         }
@@ -310,12 +333,6 @@ impl Search {
                 // signal an abort if time has exceeded alloted time
                 if Instant::now().duration_since(self.start_time).as_millis() as usize > abort_time
                 {
-                    ABORT_SEARCH.store(true, Relaxed);
-                    return 0;
-                }
-            }
-            if let Some(nodes) = self.max_nodes {
-                if NODE_COUNT.load(Relaxed) >= nodes {
                     ABORT_SEARCH.store(true, Relaxed);
                     return 0;
                 }
@@ -640,7 +657,7 @@ impl Search {
             }
 
             // scores can't be trusted after an abort, don't let them get into the TT
-            if ABORT_SEARCH.load(Relaxed) {
+            if ABORT_SEARCH.load(Relaxed) && depth > 1 {
                 // remove this position from the history
                 self.search_history.pop();
                 return 0;
@@ -759,12 +776,6 @@ impl Search {
                 // signal an abort if time has exceeded alloted time
                 if Instant::now().duration_since(self.start_time).as_millis() as usize > abort_time
                 {
-                    ABORT_SEARCH.store(true, Relaxed);
-                    return (0, T::default());
-                }
-            }
-            if let Some(nodes) = self.max_nodes {
-                if NODE_COUNT.load(Relaxed) >= nodes {
                     ABORT_SEARCH.store(true, Relaxed);
                     return (0, T::default());
                 }

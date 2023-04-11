@@ -1,0 +1,16 @@
+[package]
+name = "cheers_datagen"
+version = "0.1.0"
+authors = ["Sebastian Venter <sebastian.venter@gmail.com>"]
+edition = "2021"
+
+[[bin]]
+name = "cheers_datagen"
+path = "src/main.rs"
+
+[dependencies.cheers_lib]
+path = "../cheers_lib"
+
+[dependencies]
+clap = { version = "4.2", features = ["derive"] }
+rand = "0.8"

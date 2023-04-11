@@ -263,7 +263,7 @@ impl PawnHashTable {
     }
 
     pub fn get<T: TypeColor>(&self, hash: u64) -> Option<(EvalScore, BitBoard)> {
-        let entry = self.table[(hash & self.mask) as usize];
+        let entry = self.table.get((hash & self.mask) as usize)?;
         if entry.hash == hash {
             Some((
                 if T::WHITE { entry.score } else { -entry.score },
@@ -276,11 +276,13 @@ impl PawnHashTable {
 
     pub fn set<T: TypeColor>(&mut self, hash: u64, score: EvalScore, passed_pawns: BitBoard) {
         let score = if T::WHITE { score } else { -score };
-        self.table[(hash & self.mask) as usize] = PawnHashEntry {
-            hash,
-            score,
-            passed_pawns,
-        };
+        if let Some(entry) = self.table.get_mut((hash & self.mask) as usize) {
+            *entry = PawnHashEntry {
+                hash,
+                score,
+                passed_pawns,
+            };
+        }
     }
 }
 

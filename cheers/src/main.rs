@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let bench_game = position.clone();
         let search = Search::new(bench_game)
             .max_depth(Some(depth))
-            .tt_size_mb(options.tt_size_mb)
+            .tt_size_mb(options.tt_size_mb, options.tt_size_mb / 8)
             .output(false);
         let start = Instant::now();
         search.smp_search();
@@ -71,7 +71,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     tt.write().unwrap().set_size(mb);
                 }
                 uci::UciOption::Threads(n) => options.threads = n,
-                uci::UciOption::UCI_Chess960(_) => {},
+                uci::UciOption::UCI_Chess960(_) => {}
                 uci::UciOption::NmpDepth(n) => options.nmp_depth = n,
                 uci::UciOption::NmpConstReduction(n) => options.nmp_const_reduction = n,
                 uci::UciOption::NmpLinearDivisor(n) => options.nmp_linear_divisor = n,
@@ -145,8 +145,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 };
 
-                let mut search = Search::new_with_tt(position.clone(), tt.clone())
-                    .tt_size_mb(options.tt_size_mb)
+                let mut search = Search::new_with_tt(position.clone(), tt.clone(), 0)
+                    .tt_size_mb(options.tt_size_mb, options.tt_size_mb / 8)
                     .pre_history(pre_history.clone())
                     .max_nodes(nodes)
                     .max_depth(depth)

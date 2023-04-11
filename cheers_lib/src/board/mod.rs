@@ -176,6 +176,34 @@ impl Board {
     }
 
     #[inline(always)]
+    pub fn non_pawn_piece_count(&self, color: Color) -> usize {
+        if color == Color::White {
+            (self.white_king
+                | self.white_knights
+                | self.white_bishops
+                | self.white_rooks
+                | self.white_queens)
+                .count_ones() as usize
+        } else {
+            (self.black_king
+                | self.black_knights
+                | self.black_bishops
+                | self.black_rooks
+                | self.black_queens)
+                .count_ones() as usize
+        }
+    }
+
+    #[inline(always)]
+    pub fn pawn_count(&self, color: Color) -> usize {
+        if color == Color::White {
+            self.white_pawns.count_ones() as usize
+        } else {
+            self.black_pawns.count_ones() as usize
+        }
+    }
+
+    #[inline(always)]
     fn all_attacks_on(&self, target: Square, mask: BitBoard) -> BitBoard {
         let knights = self.white_knights | self.black_knights;
         let bishops =

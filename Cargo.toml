@@ -3,6 +3,7 @@ members = [
     "cheers_lib",
     "cheers",
     "cheers_tuning",
+    "cheers_datagen",
     "cheers_bitboards",
     "cheers_pregen"
 ]
