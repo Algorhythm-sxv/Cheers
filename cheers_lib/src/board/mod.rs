@@ -486,6 +486,21 @@ impl Board {
     }
 
     pub fn is_pseudolegal(&self, mv: Move) -> bool {
+        // Cheers 1376: remove castling, double pushes and EP from TT moves
+        if mv.piece == King {
+            // filter out castling
+            let color = self.current_player();
+            if self.color_on(mv.to) == Some(color) {
+                return false;
+            }
+        } else if mv.piece == Pawn {
+            // filter out EP and double pushes
+            if (self.piece_on(mv.to) == None && self.is_capture(mv))
+                || (mv.to.abs_diff(*mv.from) == 16)
+            {
+                return false;
+            }
+        }
         if self.black_to_move {
             self._is_pseudolegal::<Black>(mv)
         } else {

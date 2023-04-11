@@ -208,15 +208,15 @@ impl MoveList {
         self.len += 1;
     }
 
-    pub fn remove(&mut self, index: usize) {
-        if self.is_empty() {
-            println!("{:?}", self.inner);
-            println!("index: {index}");
-            panic!("Attempted remove from empty MoveList");
+    pub fn filter_1376(&mut self, board: &Board) {
+        let mut new = MoveList::new();
+        for mv in self.inner()[..self.len()].iter() {
+            if board.is_pseudolegal(mv.mv) {
+                new.push(*mv);
+            }
         }
-        let other = self.len() - 1;
-        self.inner.swap(index, other);
-        self.len -= 1;
+
+        *self = new;
     }
 
     pub fn reset(&mut self) {

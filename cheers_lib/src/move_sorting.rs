@@ -63,52 +63,15 @@ impl<M: TypeMoveGen> MoveSorter<M> {
             self.stage = Stage::SortMoves;
             if M::CAPTURES {
                 board.generate_legal_captures_into(&mut search_stack_entry.move_list);
-                // filter out EP
-                let mut i = 0;
-                loop {
-                    if search_stack_entry.move_list.len() == 0 {
-                        break;
-                    }
-                    let mv = search_stack_entry.move_list[i];
-                    if mv.piece == Pawn && board.piece_on(mv.to) == None && board.is_capture(mv) {
-                        search_stack_entry.move_list.remove(i);
-                    }
-                    i += 1;
-                    if i >= search_stack_entry.move_list.len() {
-                        break;
-                    }
-                }
+                // filter out moves that haven't been invented yet
+                search_stack_entry.move_list.filter_1376(board);
                 for m in search_stack_entry.move_list.inner_mut() {
                     m.score = score_capture(board, m.mv);
                 }
             } else {
                 board.generate_legal_moves_into(&mut search_stack_entry.move_list);
-                // filter out double pushes, castling and EP
-                let mut i = 0;
-                loop {
-                    if search_stack_entry.move_list.len() == 0 {
-                        break;
-                    }
-                    let mv = search_stack_entry.move_list[i];
-                    if mv.piece == King {
-                        // filter out castling
-                        let color = board.current_player();
-                        if board.color_on(mv.to) == Some(color) {
-                            search_stack_entry.move_list.remove(i);
-                        }
-                    } else if mv.piece == Pawn {
-                        // filter out EP and double pushes
-                        if (board.piece_on(mv.to) == None && board.is_capture(mv))
-                            || (mv.to.abs_diff(*mv.from) == 16)
-                        {
-                            search_stack_entry.move_list.remove(i);
-                        }
-                    }
-                    i += 1;
-                    if i >= search_stack_entry.move_list.len() {
-                        break;
-                    }
-                }
+                // filter out moves that haven't been invented yet
+                search_stack_entry.move_list.filter_1376(board);
                 for m in search_stack_entry.move_list.inner_mut() {
                     if m.mv.promotion != Pawn || board.is_capture(m.mv) {
                         m.score = score_capture(board, m.mv);
