@@ -42,6 +42,15 @@ impl EvalScore {
     pub fn div_by(&mut self, n: i16) {
         *self = Self::new(self.mg() / n, self.eg() / n)
     }
+    pub fn convert(array: &mut [i16]) {
+        assert!(array.len() == 2);
+        let score = Self(((array[1] as i32) << 16) | (array[0] as u16 as i32));
+        array[1] = score.eg();
+        array[0] = score.mg();
+    }
+    pub fn inner(&self) -> i32 {
+        self.0
+    }
 }
 
 #[macro_export]

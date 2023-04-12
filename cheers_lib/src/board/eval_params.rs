@@ -54,13 +54,20 @@ pub struct EvalParams {
 #[cfg(feature = "eval-tracing")]
 impl EvalParams {
     pub const LEN: usize = std::mem::size_of::<Self>() / std::mem::size_of::<i16>();
-    pub fn to_array(&self) -> [i16; Self::LEN] {
-        bytemuck::cast::<EvalParams, [i16; Self::LEN]>(*self)
+    pub fn to_array(&mut self) -> [i16; Self::LEN] {
+        let array = &mut bytemuck::cast::<EvalParams, [i16; Self::LEN]>(*self);
+        array.chunks_exact_mut(2).for_each(|p| EvalScore::convert(p));
+        *array
     }
     pub fn as_array(&self) -> &[i16; Self::LEN] {
         bytemuck::cast_ref::<EvalParams, [i16; Self::LEN]>(self)
     }
-    pub fn from_array(params: [i16; Self::LEN]) -> Self {
+    pub fn from_array(mut params: [i16; Self::LEN]) -> Self {
+        params.chunks_exact_mut(2).for_each(|p| {
+            let score = EvalScore::new(p[0], p[1]);
+            p[1] = (score.inner() >> 16) as i16;
+            p[0] = score.inner() as i16;
+        });
         bytemuck::cast::<[i16; Self::LEN], EvalParams>(params)
     }
 }
