@@ -30,6 +30,51 @@ fn sigmoid(s: f64, k: f64) -> f64 {
     1.0 / (1.0 + (-k * s / 400.0).exp())
 }
 
+pub fn mf_to_entry(mf: &str) -> TuningEntry {
+    let mut split = mf.split("|");
+    let fen = split.next().expect("Empty line in MF data");
+    let _eval_text = split
+        .next()
+        .expect(&format!("Incomplete line in MF data: {mf}"));
+    let result_text = split
+        .next()
+        .expect(&format!("Incomplete line in MF data: {mf}"));
+
+    let game = Board::from_fen(fen).expect(&format!("Invalid FEN extracted from MF data: {mf}"));
+
+    let result = result_text
+        .parse::<f64>()
+        .expect(&format!("Invalid result in MF data: {mf}"));
+
+    let mut pawn_hash_table = PawnHashTable::new(0);
+
+    let (_, trace) = game.evaluate_impl::<EvalTrace>(&mut pawn_hash_table);
+
+    let tuples = trace
+        .to_array()
+        .chunks_exact(2)
+        .enumerate()
+        .filter(|(_i, c)| c[0] != c[1])
+        .map(|(i, c)| TuningTuple {
+            index: 2 * i,
+            white_coeff: c[0],
+            black_coeff: c[1],
+        })
+        .collect::<Vec<TuningTuple>>();
+
+    let material: i16 = trace.knight_count.into_iter().sum::<i16>()
+        + trace.bishop_count.into_iter().sum::<i16>()
+        + 2 * trace.rook_count.into_iter().sum::<i16>()
+        + 4 * trace.queen_count.into_iter().sum::<i16>();
+    let phase = (256 * (24 - material)) / 24;
+
+    TuningEntry {
+        phase: phase as u16,
+        result: GameResult::from_f64(result),
+        tuples,
+    }
+}
+
 pub fn epd_to_entry(epd: &str) -> TuningEntry {
     let mut split = epd.split(" c9 ");
     let almost_fen = split.next().expect("Empty line in EPD");

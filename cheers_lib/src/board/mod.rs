@@ -1284,6 +1284,7 @@ impl Board {
         }
 
         if self.ep_mask.is_not_empty() {
+            fen.push(' ');
             fen.push_str(&self.ep_mask.first_square().coord());
         } else {
             fen.push_str(" -")

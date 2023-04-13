@@ -9,12 +9,12 @@ use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
 
-use crate::calculate_error::{calculate_error, calculate_gradient, epd_to_entry, TuningEntry};
+use crate::calculate_error::{calculate_error, calculate_gradient, mf_to_entry, TuningEntry};
 use crate::k_tuning::tune_k;
 
 mod calculate_error;
-mod types;
 mod k_tuning;
+mod types;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -74,7 +74,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .par_lines()
         .map(|l| {
             entries_bar.clone().inc(1);
-            epd_to_entry(l)
+            mf_to_entry(l)
         })
         .collect::<Vec<TuningEntry>>();
     entries_bar.finish();
