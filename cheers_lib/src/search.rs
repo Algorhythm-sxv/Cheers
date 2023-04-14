@@ -357,10 +357,14 @@ impl Search {
             depth = depth.saturating_add(1);
         }
 
+        // the PV from this node will be gathered into this array
+        let mut line = PrincipalVariation::new();
+
         // drop into quiescence search at depth 0
         if depth == 0 {
-            pv.clear();
-            return self.quiesce::<M>(board, alpha, beta, ply, last_move, tt);
+            let score = self.quiesce::<M>(board, alpha, beta, ply, &mut line, tt);
+            *pv = line;
+            return score;
         }
 
         // increment the node counters
@@ -461,9 +465,6 @@ impl Search {
         {
             return eval - (depth as i16 * self.options.rfp_margin);
         }
-
-        // the PV from this node will be gathered into this array
-        let mut line = PrincipalVariation::new();
 
         // Null Move Pruning
         // if the opponent gets two moves in a row and the position is still good then prune
@@ -753,10 +754,10 @@ impl Search {
         alpha: i16,
         beta: i16,
         ply: usize,
-        last_move: Move,
+        pv: &mut PrincipalVariation,
         tt: &TranspositionTable,
     ) -> i16 {
-        self.quiesce_impl::<(), M>(board, alpha, beta, ply, last_move, tt)
+        self.quiesce_impl::<(), M>(board, alpha, beta, ply, pv, tt)
             .0
     }
 
@@ -766,7 +767,7 @@ impl Search {
         mut alpha: i16,
         beta: i16,
         ply: usize,
-        _last_move: Move,
+        pv: &mut PrincipalVariation,
         tt: &TranspositionTable,
     ) -> (i16, T) {
         // check time and max nodes every 2048 nodes
@@ -817,6 +818,7 @@ impl Search {
                 .take(board.halfmove_clock() as usize)
                 .any(|&h| h == board.hash())
         {
+            pv.clear();
             return (DRAW_SCORE, T::default());
         }
 
@@ -830,6 +832,7 @@ impl Search {
                     || (entry.node_type == LowerBound && entry.score >= beta)
                     || (entry.node_type == UpperBound && entry.score <= alpha)
                 {
+                    pv.clear();
                     return (score_from_tt(entry.score, ply), T::default());
                 }
 
@@ -856,11 +859,14 @@ impl Search {
 
         // if the static eval is above beta, then the opponent won't play into this position
         if static_eval >= beta {
+            pv.clear();
             return (beta, best_trace);
         }
 
         // if the static eval is better than alpha, use it to prune moves instead
         alpha = alpha.max(static_eval);
+
+        let mut line = PrincipalVariation::new();
 
         // move ordering: try heuristically good moves first to reduce the AB search tree
         // quiescence search only looks at captures and promotions to ensure termination
@@ -909,12 +915,12 @@ impl Search {
             }
 
             let (mut score, trace) =
-                self.quiesce_impl::<T, M>(&new, -beta, -alpha, ply + 1, mv, tt);
+                self.quiesce_impl::<T, M>(&new, -beta, -alpha, ply + 1, &mut line, tt);
             score = -score;
 
             if score >= beta {
                 // beta cutoff, this move is too good and so the opponent won't go into this position
-
+                pv.clear();
                 // add the score to the TT
                 tt.set(
                     board.hash(),
@@ -932,6 +938,7 @@ impl Search {
                 best_move = mv;
                 best_trace = trace;
 
+                pv.update_from(best_move, &line);
                 // raise alpha so worse moves after this one will be pruned early
                 alpha = score;
             }
@@ -946,6 +953,7 @@ impl Search {
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 
             if !some_moves {
+                pv.clear();
                 if board.in_check() {
                     return (-(CHECKMATE_SCORE - (ply as i16)), T::default());
                 } else {

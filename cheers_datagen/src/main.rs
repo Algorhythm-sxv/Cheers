@@ -2,7 +2,7 @@ use std::{
     error::Error,
     fmt::Display,
     fs::OpenOptions,
-    io::{stdout, BufRead, BufReader, BufWriter, Write},
+    io::{stdout, BufRead, BufReader, BufWriter, Read, Write},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{channel, Sender},
@@ -21,6 +21,7 @@ use cheers_lib::{
 };
 use clap::Parser;
 use rand::prelude::*;
+use rayon::prelude::*;
 
 #[derive(Parser)]
 struct Args {
@@ -47,6 +48,10 @@ struct Args {
     /// Maximum number of data positions to generate
     #[arg(short, long, default_value_t = 10_000_000)]
     count: usize,
+
+    /// Post-process existing data
+    #[arg(short, long, default_value_t = false)]
+    postprocess: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -247,9 +252,90 @@ fn generator_thread(
     }
 }
 
+fn post_process(input_file_name: &str, output_file_name: &str, threads: usize) {
+    let input_file = BufReader::new(
+        OpenOptions::new()
+            .read(true)
+            .open(input_file_name)
+            .expect("Unable to open input file"),
+    );
+    let mut output_file = BufWriter::new(
+        OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(output_file_name)
+            .expect("Unable to open output file"),
+    );
+
+    let position_count = input_file.lines().count();
+    let mut processed_count = 0;
+    let (sender, receiver) = channel();
+    let mut input_file =
+        BufReader::new(OpenOptions::new().read(true).open(input_file_name).unwrap());
+    let mut input_string = String::new();
+    input_file.read_to_string(&mut input_string).unwrap();
+
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .build_global()
+        .unwrap();
+    let processor = thread::spawn(move || {
+        let tt = Arc::new(RwLock::new(TranspositionTable::new(256)));
+        input_string.par_lines().for_each_with(sender, |s, line| {
+            let mut split = line.split("|");
+            let fen = split.next().expect("Empty line in input file");
+            let outcome = split
+                .nth(1)
+                .expect("Missing outcome")
+                .parse::<f32>()
+                .expect("Invalid outcome");
+
+            let mut board =
+                Board::from_fen(fen).expect(&format!("Invalid FEN in input file: {}", fen));
+            let color = board.current_player();
+            let search = Search::new_with_tt(board, tt.clone(), 0).max_depth(Some(1));
+            let (score, pv) = search.search::<MainThread>(false);
+
+            for mv in pv.iter() {
+                board.make_move(*mv);
+            }
+            let result = s.send(format!(
+                "{}|{}|{}",
+                board.fen(),
+                score * if color == Color::Black { -1 } else { 1 },
+                outcome
+            ));
+            if result.is_err() {
+                panic!("{result:#?}");
+            }
+        });
+    });
+
+    while processed_count < position_count {
+        let result = receiver.recv().unwrap();
+        writeln!(output_file, "{result}").unwrap();
+        processed_count += 1;
+        if processed_count % 100 == 0 || processed_count == position_count {
+            print!(
+                "Processed {processed_count}/{position_count} ({}%)\r",
+                (processed_count * 100) / position_count
+            );
+            stdout().flush().unwrap();
+        }
+    }
+    processor.join().unwrap();
+    println!();
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
+    if args.postprocess {
+        let output = args.output_file.clone() + "_processed";
+        post_process(&args.output_file, &output, args.threads);
+        return Ok(());
+    }
     let existing_data = OpenOptions::new().read(true).open(&args.output_file);
     let mut positions = if let Ok(ref file) = existing_data {
         let reader = BufReader::new(file);

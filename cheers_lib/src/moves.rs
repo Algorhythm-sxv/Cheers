@@ -304,6 +304,9 @@ impl PrincipalVariation {
     pub fn clear(&mut self) {
         self.len = 0;
     }
+    pub fn iter(&self) -> std::slice::Iter<'_, Move> {
+        self.moves[..self.len].iter()
+    }
 }
 impl Display for PrincipalVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
