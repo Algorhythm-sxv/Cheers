@@ -585,6 +585,12 @@ impl Search {
                             && !in_check
                         {
                             r += LMR[(depth as usize).min(31)][move_index.min(31)];
+                            // reduce historically bad moves by more
+                            if move_score.abs_diff(QUIET_SCORE) < 20_000 {
+                                if move_score - QUIET_SCORE < -MAX_HISTORY as i32 / 2 {
+                                    r += 1;
+                                }
+                            }
                         }
 
                         r
