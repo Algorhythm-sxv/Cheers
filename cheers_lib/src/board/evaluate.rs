@@ -603,7 +603,7 @@ impl Board {
         phase += (self.white_rooks | self.black_rooks).count_ones() as i32 * rook_phase;
         phase += (self.white_queens | self.black_queens).count_ones() as i32 * queen_phase;
 
-        (256 * (total_phase - phase)) / total_phase
+        (256 * (total_phase - phase).max(0)) / total_phase
     }
 }
 
