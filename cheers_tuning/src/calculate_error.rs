@@ -113,7 +113,7 @@ pub fn epd_to_entry(epd: &str) -> TuningEntry {
         + trace.bishop_count.into_iter().sum::<i16>()
         + 2 * trace.rook_count.into_iter().sum::<i16>()
         + 4 * trace.queen_count.into_iter().sum::<i16>();
-    let phase = (256 * (24 - material)) / 24;
+    let phase = (256 * (24 - material).max(0)) / 24;
 
     TuningEntry {
         phase: phase as u16,
