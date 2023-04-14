@@ -745,6 +745,10 @@ impl Search {
             pv_node,
         );
 
+        if alpha == old_alpha {
+            // no move was found from this position, clear the PV
+            pv.clear();
+        }
         alpha
     }
 
@@ -785,6 +789,7 @@ impl Search {
 
         // check for abort
         if ABORT_SEARCH.load(Relaxed) || ply >= SEARCH_MAX_PLY {
+            pv.clear();
             return (0, T::default());
         }
 
@@ -801,24 +806,8 @@ impl Search {
         // increase the seldepth if this node is deeper
         self.seldepth = self.seldepth.max(ply);
 
-        // check 50 move and repetition draws
-        if board.halfmove_clock() >= 100
-            || self
-                .pre_history
-                .iter()
-                .rev()
-                .take(board.halfmove_clock() as usize)
-                .filter(|&&h| h == board.hash())
-                .count()
-                >= 2
-            || self
-                .search_history
-                .iter()
-                .rev()
-                .take(board.halfmove_clock() as usize)
-                .any(|&h| h == board.hash())
-        {
-            pv.clear();
+        // check 50 move draw
+        if board.halfmove_clock() >= 100 {
             return (DRAW_SCORE, T::default());
         }
 
@@ -973,6 +962,10 @@ impl Search {
             false,
         );
 
+        if alpha == old_alpha {
+            // no move was found from this position, clear the PV
+            pv.clear();
+        }
         (alpha, best_trace)
     }
 }

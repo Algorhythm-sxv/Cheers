@@ -115,7 +115,6 @@ dependencies = [
  "cheers_lib",
  "clap 4.2.1",
  "rand",
- "rayon",
 ]
 
 [[package]]
