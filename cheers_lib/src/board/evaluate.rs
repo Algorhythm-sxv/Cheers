@@ -123,7 +123,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     }
 
     #[inline]
-    pub fn evaluate_knights<W: TypeColor>(&mut self, _info: &EvalInfo) -> EvalScore {
+    pub fn evaluate_knights<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
         let knights = if W::WHITE {
@@ -145,12 +145,18 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.piece_tables[(Knight, relative_knight)];
             self.trace
                 .term(|t| t.knight_placement[relative_knight][color] += 1);
+
+            // mobility
+            let mobility =
+                (lookup_knight(knight) & info.mobility_area[color]).count_ones() as usize;
+            eval += EVAL_PARAMS.knight_mobility[mobility];
+            self.trace.term(|t| t.knight_mobility[mobility][color] += 1);
         }
         eval
     }
 
     #[inline]
-    pub fn evaluate_bishops<W: TypeColor>(&mut self, _info: &EvalInfo) -> EvalScore {
+    pub fn evaluate_bishops<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
         let bishops = if W::WHITE {
@@ -172,12 +178,18 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.piece_tables[(Bishop, relative_bishop)];
             self.trace
                 .term(|t| t.bishop_placement[relative_bishop][color] += 1);
+
+            // mobility
+            let mobility = (lookup_bishop(bishop, self.game.occupied) & info.mobility_area[color])
+                .count_ones() as usize;
+            eval += EVAL_PARAMS.bishop_mobility[mobility];
+            self.trace.term(|t| t.bishop_mobility[mobility][color] += 1);
         }
         eval
     }
 
     #[inline]
-    pub fn evaluate_rooks<W: TypeColor>(&mut self, _info: &EvalInfo) -> EvalScore {
+    pub fn evaluate_rooks<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
         let rooks = if W::WHITE {
@@ -199,12 +211,18 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.piece_tables[(Rook, relative_rook)];
             self.trace
                 .term(|t| t.rook_placement[relative_rook][color] += 1);
+
+            // mobility
+            let mobility = (lookup_rook(rook, self.game.occupied) & info.mobility_area[color])
+                .count_ones() as usize;
+            eval += EVAL_PARAMS.rook_mobility[mobility];
+            self.trace.term(|t| t.rook_mobility[mobility][color] += 1);
         }
         eval
     }
 
     #[inline]
-    pub fn evaluate_queens<W: TypeColor>(&mut self, _info: &EvalInfo) -> EvalScore {
+    pub fn evaluate_queens<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
         let queens = if W::WHITE {
@@ -224,6 +242,12 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.piece_tables[(Queen, relative_queen)];
             self.trace
                 .term(|t| t.queen_placement[relative_queen][color] += 1);
+
+            // mobility
+            let mobility = (lookup_queen(queen, self.game.occupied) & info.mobility_area[color])
+                .count_ones() as usize;
+            eval += EVAL_PARAMS.queen_mobility[mobility];
+            self.trace.term(|t| t.queen_mobility[mobility][color] += 1);
         }
         eval
     }
@@ -244,7 +268,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     }
 
     #[inline]
-    pub fn evaluate_pawns_only<W: TypeColor>(&mut self, _info: &mut EvalInfo) -> EvalScore {
+    pub fn evaluate_pawns_only<W: TypeColor>(&mut self, info: &mut EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
         let pawns = if W::WHITE {
@@ -271,7 +295,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval
     }
 
-    pub fn evaluate_passed_pawn_extras<W: TypeColor>(&mut self, _info: &EvalInfo) -> EvalScore {
+    pub fn evaluate_passed_pawn_extras<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let eval = EvalScore::zero();
 
         eval
@@ -281,14 +305,17 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 impl Board {
     #[inline]
     pub fn mobility_area<W: TypeColor>(&self) -> BitBoard {
-        let (blocked_pawns, king) = if W::WHITE {
-            (self.white_pawns & (self.black_pawns >> 8), self.white_king)
-        } else {
-            (self.black_pawns & (self.white_pawns << 8), self.black_king)
-        };
+        // let (blocked_pawns, king) = if W::WHITE {
+        //     (self.white_pawns & (self.black_pawns >> 8), self.white_king)
+        // } else {
+        //     (self.black_pawns & (self.white_pawns << 8), self.black_king)
+        // };
+        //
+        // // exclude squares attacked by enemy pawns, our blocked pawns and our king
+        // (self.pawn_attacks::<W::Other>() | blocked_pawns | king).inverse()
 
-        // exclude squares attacked by enemy pawns, our blocked pawns and our king
-        (self.pawn_attacks::<W::Other>() | blocked_pawns | king).inverse()
+        // basic mobility: count all attacked squares
+        FULL_BOARD
     }
 
     #[inline]
