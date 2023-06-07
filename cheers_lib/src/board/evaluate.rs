@@ -305,17 +305,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 impl Board {
     #[inline]
     pub fn mobility_area<W: TypeColor>(&self) -> BitBoard {
-        // let (blocked_pawns, king) = if W::WHITE {
-        //     (self.white_pawns & (self.black_pawns >> 8), self.white_king)
-        // } else {
-        //     (self.black_pawns & (self.white_pawns << 8), self.black_king)
-        // };
-        //
-        // // exclude squares attacked by enemy pawns, our blocked pawns and our king
-        // (self.pawn_attacks::<W::Other>() | blocked_pawns | king).inverse()
+        let (blocked_pawns, king) = if W::WHITE {
+            (self.white_pawns & (self.black_pawns >> 8), self.white_king)
+        } else {
+            (self.black_pawns & (self.white_pawns << 8), self.black_king)
+        };
 
-        // exclude squares attacked by enemy pawns
-        self.pawn_attacks::<W::Other>().inverse()
+        // exclude squares attacked by enemy pawns, our blocked pawns and our king
+        (self.pawn_attacks::<W::Other>() | blocked_pawns | king).inverse()
     }
 
     #[inline]
