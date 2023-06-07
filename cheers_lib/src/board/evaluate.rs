@@ -296,7 +296,19 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     }
 
     pub fn evaluate_passed_pawn_extras<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
-        let eval = EvalScore::zero();
+        let mut eval = EvalScore::zero();
+
+        let color = W::INDEX;
+
+        let passers = info.passed_pawns[color];
+
+        for passer in passers {
+            // placement
+            let relative_passer = relative_board_index::<W>(passer);
+            eval += EVAL_PARAMS.passed_pawn_table[relative_passer];
+            self.trace
+                .term(|t| t.passed_pawn_placement[relative_passer][color] += 1);
+        }
 
         eval
     }
