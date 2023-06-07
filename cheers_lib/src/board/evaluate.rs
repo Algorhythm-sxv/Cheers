@@ -314,8 +314,8 @@ impl Board {
         // // exclude squares attacked by enemy pawns, our blocked pawns and our king
         // (self.pawn_attacks::<W::Other>() | blocked_pawns | king).inverse()
 
-        // basic mobility: count all attacked squares
-        FULL_BOARD
+        // exclude squares attacked by enemy pawns
+        self.pawn_attacks::<W::Other>().inverse()
     }
 
     #[inline]
