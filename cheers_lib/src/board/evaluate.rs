@@ -301,6 +301,11 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let color = W::INDEX;
 
         let passers = info.passed_pawns[color];
+        let pawns = if W::WHITE {
+            self.game.white_pawns
+        } else {
+            self.game.black_pawns
+        };
 
         for passer in passers {
             // placement
@@ -308,6 +313,12 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.passed_pawn_table[relative_passer];
             self.trace
                 .term(|t| t.passed_pawn_placement[relative_passer][color] += 1);
+
+            // connected
+            let defended =
+                (self.game.pawn_attack::<W::Other>(passer) & pawns).is_not_empty() as i16;
+            eval += EVAL_PARAMS.passed_pawn_defended * defended;
+            self.trace.term(|t| t.passed_pawn_defended[color] += defended);
         }
 
         eval
