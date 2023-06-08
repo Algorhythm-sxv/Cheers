@@ -318,7 +318,21 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             let defended =
                 (self.game.pawn_attack::<W::Other>(passer) & pawns).is_not_empty() as i16;
             eval += EVAL_PARAMS.passed_pawn_defended * defended;
-            self.trace.term(|t| t.passed_pawn_defended[color] += defended);
+            self.trace
+                .term(|t| t.passed_pawn_defended[color] += defended);
+
+            // supported by friendly rook from behind
+            let rooks = if W::WHITE {
+                self.game.white_rooks
+            } else {
+                self.game.black_rooks
+            };
+            let supporting_rook = (lookup_rook(passer, self.game.occupied)
+                & Board::pawn_push_span::<W::Other>(passer)
+                & rooks)
+                .is_not_empty() as i16;
+            eval += EVAL_PARAMS.passed_pawn_friendly_rook * supporting_rook;
+            self.trace.term(|t| t.passed_pawn_friendly_rook[color] += supporting_rook);
         }
 
         eval
