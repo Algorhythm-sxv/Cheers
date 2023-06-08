@@ -290,6 +290,13 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.piece_tables[(Pawn, relative_pawn)];
             self.trace
                 .term(|t| t.pawn_placement[relative_pawn][color] += 1);
+
+            // connected
+            let connected_pawns =
+                (self.game.pawn_attack::<W::Other>(pawn) & pawns).count_ones() as usize;
+            eval += EVAL_PARAMS.pawn_connected[connected_pawns];
+            self.trace
+                .term(|t| t.pawn_connected[connected_pawns][color] += 1);
         }
 
         eval
