@@ -268,7 +268,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     }
 
     #[inline]
-    pub fn evaluate_pawns_only<W: TypeColor>(&mut self, info: &mut EvalInfo) -> EvalScore {
+    pub fn evaluate_pawns_only<W: TypeColor>(&mut self, _info: &mut EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
         let pawns = if W::WHITE {
@@ -297,6 +297,17 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.pawn_connected[connected_pawns];
             self.trace
                 .term(|t| t.pawn_connected[connected_pawns][color] += 1);
+
+            // phalanx
+            let phalanx_pawns = ((pawn.bitboard()
+                | ((pawn.bitboard() & NOT_H_FILE) << 1)
+                | ((pawn.bitboard() & NOT_A_FILE) >> 1))
+                & pawns)
+                .count_ones() as usize
+                - 1; // the pawn in question will always be included
+            eval += EVAL_PARAMS.pawn_phalanx[phalanx_pawns];
+            self.trace
+                .term(|t| t.pawn_phalanx[phalanx_pawns][color] += 1);
         }
 
         eval
