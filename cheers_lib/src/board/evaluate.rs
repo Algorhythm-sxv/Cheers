@@ -284,6 +284,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval += EVAL_PARAMS.piece_values[Pawn] * count;
         self.trace.term(|t| t.pawn_count[color] = count);
 
+        // doubled pawns per-file
+        for file in FILES {
+            let file_double_pawn_count = (pawns & file).count_ones().saturating_sub(1) as usize;
+            eval += EVAL_PARAMS.pawn_doubled[file_double_pawn_count];
+            self.trace
+                .term(|t| t.pawn_doubled[file_double_pawn_count][color] += 1);
+        }
+
         for pawn in pawns.clone() {
             // placement
             let relative_pawn = relative_board_index::<W>(pawn);
@@ -308,6 +316,12 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.pawn_phalanx[phalanx_pawns];
             self.trace
                 .term(|t| t.pawn_phalanx[phalanx_pawns][color] += 1);
+
+            // isolated
+            let pawn_isolated = (pawns & adjacent_files(pawn.file())).is_empty() as usize;
+            eval += EVAL_PARAMS.pawn_isolated[pawn_isolated];
+            self.trace
+                .term(|t| t.pawn_isolated[pawn_isolated][color] += 1);
         }
 
         eval
