@@ -271,10 +271,10 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     pub fn evaluate_pawns_only<W: TypeColor>(&mut self, _info: &mut EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
-        let pawns = if W::WHITE {
-            self.game.white_pawns
+        let (pawns, other_pawns) = if W::WHITE {
+            (self.game.white_pawns, self.game.black_pawns)
         } else {
-            self.game.black_pawns
+            (self.game.black_pawns, self.game.white_pawns)
         };
 
         let color = W::INDEX;
@@ -322,6 +322,18 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.pawn_isolated[pawn_isolated];
             self.trace
                 .term(|t| t.pawn_isolated[pawn_isolated][color] += 1);
+
+            // backward
+            let gatekeeper = if W::WHITE {
+                self.game.pawn_attack::<W>(pawn) << 8
+            } else {
+                self.game.pawn_attack::<W>(pawn) >> 8
+            } & other_pawns;
+            let backward = (self.game.pawn_adjacent_rear_span::<W>(pawn) & pawns).is_empty()
+                && gatekeeper.is_not_empty();
+            eval += EVAL_PARAMS.pawn_backward[backward as usize];
+            self.trace
+                .term(|t| t.pawn_backward[backward as usize][color] += 1)
         }
 
         eval

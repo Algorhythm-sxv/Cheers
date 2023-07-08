@@ -286,6 +286,22 @@ impl Board {
     }
 
     #[inline(always)]
+    pub fn pawn_adjacent_rear_span<T: TypeColor>(&self, square: Square) -> BitBoard {
+        let mut span = (square.bitboard() | square.bitboard() << 1 | square.bitboard() >> 1)
+            & adjacent_files(square.file());
+        if T::WHITE {
+            span |= span >> 8;
+            span |= span >> 16;
+            span |= span >> 32;
+        } else {
+            span |= span << 8;
+            span |= span << 16;
+            span |= span << 32;
+        }
+        span
+    }
+
+    #[inline(always)]
     pub fn pawn_attack_spans<T: TypeColor>(&self) -> BitBoard {
         let mut spans = self.pawn_attacks::<T>();
         if T::WHITE {
