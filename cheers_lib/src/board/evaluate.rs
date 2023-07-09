@@ -352,6 +352,29 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.passed_pawn_table[relative_passer];
             self.trace
                 .term(|t| t.passed_pawn_placement[relative_passer][color] += 1);
+
+            // friendly king distance
+            let king = info.king_square[color];
+            let friendly_distance = passer
+                .rank()
+                .abs_diff(king.rank())
+                .max(passer.file().abs_diff(king.file()))
+                .min(4)
+                - 1;
+            eval += EVAL_PARAMS.passed_pawn_friendly_king_distance[friendly_distance];
+            self.trace
+                .term(|t| t.passed_pawn_friendly_king_distance[friendly_distance][color] += 1);
+
+            let other_king = info.king_square[W::Other::INDEX];
+            let enemy_distance = passer
+                .rank()
+                .abs_diff(other_king.rank())
+                .max(passer.file().abs_diff(other_king.file()))
+                .min(4)
+                - 1;
+            eval += EVAL_PARAMS.passed_pawn_enemy_king_distance[enemy_distance];
+            self.trace
+                .term(|t| t.passed_pawn_enemy_king_distance[enemy_distance][color] += 1);
         }
 
         eval
