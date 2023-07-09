@@ -249,6 +249,21 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .count_ones() as usize;
             eval += EVAL_PARAMS.rook_mobility[mobility];
             self.trace.term(|t| t.rook_mobility[mobility][color] += 1);
+
+            // open files
+            let (friendly_pawns, enemy_pawns) = if W::WHITE {
+                (self.game.white_pawns, self.game.black_pawns)
+            } else {
+                (self.game.black_pawns, self.game.white_pawns)
+            };
+
+            let semi_open = (FILES[rook.file()] & friendly_pawns).is_empty() as usize;
+            let open = (FILES[rook.file()] & enemy_pawns).is_empty() as usize;
+            // normal - 0, semi-open - 1, open - 2
+            let open_score = semi_open + semi_open * open;
+            eval += EVAL_PARAMS.rook_on_open_file[open_score];
+            self.trace
+                .term(|t| t.rook_on_open_file[open_score][color] += 1);
         }
         eval
     }
