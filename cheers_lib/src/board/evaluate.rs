@@ -151,6 +151,22 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 (lookup_knight(knight) & info.mobility_area[color]).count_ones() as usize;
             eval += EVAL_PARAMS.knight_mobility[mobility];
             self.trace.term(|t| t.knight_mobility[mobility][color] += 1);
+
+            // outposts
+            let pawns = if W::WHITE {
+                self.game.white_pawns
+            } else {
+                self.game.black_pawns
+            };
+            let outpost =
+                (self.game.pawn_attack_spans::<W::Other>() & knight.bitboard()).is_empty() as usize;
+            let defended =
+                (self.game.pawn_attack::<W::Other>(knight) & pawns).is_not_empty() as usize;
+            // normal - 0, outpost - 1, defended outpost - 2
+            let outpost_score = outpost + defended * outpost;
+            eval += EVAL_PARAMS.knight_outpost[outpost_score];
+            self.trace
+                .term(|t| t.knight_outpost[outpost_score][color] += 1);
         }
         eval
     }
@@ -184,6 +200,22 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .count_ones() as usize;
             eval += EVAL_PARAMS.bishop_mobility[mobility];
             self.trace.term(|t| t.bishop_mobility[mobility][color] += 1);
+
+            // outposts
+            let pawns = if W::WHITE {
+                self.game.white_pawns
+            } else {
+                self.game.black_pawns
+            };
+            let outpost =
+                (self.game.pawn_attack_spans::<W::Other>() & bishop.bitboard()).is_empty() as usize;
+            let defended =
+                (self.game.pawn_attack::<W::Other>(bishop) & pawns).is_not_empty() as usize;
+            // normal - 0, outpost - 1, defended outpost - 2
+            let outpost_score = outpost + defended * outpost;
+            eval += EVAL_PARAMS.bishop_outpost[outpost_score];
+            self.trace
+                .term(|t| t.bishop_outpost[outpost_score][color] += 1);
         }
         eval
     }
