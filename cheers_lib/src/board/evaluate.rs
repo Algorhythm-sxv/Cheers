@@ -72,10 +72,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             ],
             seventh_rank: [SEVENTH_RANK, SECOND_RANK],
             king_square: [white_king_square, black_king_square],
-            king_area: [
-                white_king_attacks | (white_king_attacks << 8),
-                black_king_attacks | (black_king_attacks >> 8),
-            ],
+            king_area: [white_king_attacks, black_king_attacks],
             passed_pawns: [white_passers, black_passers],
         };
 
@@ -310,6 +307,18 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval += EVAL_PARAMS.piece_tables[(King, relative_king)];
         self.trace
             .term(|t| t.king_placement[relative_king][color] += 1);
+
+        // king ring attacks
+        let king_ring_attacks = ((self.game.knight_attacks::<W::Other>() & info.king_area[color])
+            .count_ones()
+            + (self.game.diagonal_attacks::<W::Other>(self.game.occupied) & info.king_area[color])
+                .count_ones()
+            + (self.game.orthogonal_attacks::<W::Other>(self.game.occupied)
+                & info.king_area[color])
+                .count_ones()).min(15) as usize;
+        eval += EVAL_PARAMS.king_ring_attacks[king_ring_attacks];
+        self.trace
+            .term(|t| t.king_ring_attacks[king_ring_attacks][color] += 1);
 
         eval
     }
