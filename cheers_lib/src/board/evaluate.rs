@@ -301,12 +301,26 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let mut eval = EvalScore::zero();
 
         let color = W::INDEX;
+        let king = info.king_square[color];
 
         // placement
         let relative_king = relative_board_index::<W>(info.king_square[color]);
         eval += EVAL_PARAMS.piece_tables[(King, relative_king)];
         self.trace
             .term(|t| t.king_placement[relative_king][color] += 1);
+
+        // open files
+        let (pawns, enemy_pawns) = if W::WHITE {
+            (self.game.white_pawns, self.game.black_pawns)
+        } else {
+            (self.game.black_pawns, self.game.white_pawns)
+        };
+        let semi_open = (FILES[king.file()] & pawns).is_empty() as usize;
+        let open = (FILES[king.file()] & enemy_pawns).is_empty() as usize;
+
+        eval += EVAL_PARAMS.king_on_open_file[semi_open + semi_open * open];
+        self.trace
+            .term(|t| t.king_on_open_file[semi_open + semi_open * open][color] += 1);
 
         // king ring attacks
         let king_ring_attacks = ((self.game.knight_attacks::<W::Other>() & info.king_area[color])
@@ -315,7 +329,8 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .count_ones()
             + (self.game.orthogonal_attacks::<W::Other>(self.game.occupied)
                 & info.king_area[color])
-                .count_ones()).min(15) as usize;
+                .count_ones())
+        .min(15) as usize;
         eval += EVAL_PARAMS.king_ring_attacks[king_ring_attacks];
         self.trace
             .term(|t| t.king_ring_attacks[king_ring_attacks][color] += 1);
