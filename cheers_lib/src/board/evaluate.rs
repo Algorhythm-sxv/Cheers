@@ -335,6 +335,13 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         self.trace
             .term(|t| t.king_ring_attacks[king_ring_attacks][color] += 1);
 
+        // king virtual mobility
+        let mobility = (lookup_queen(king, self.game.occupied) & info.mobility_area[color])
+            .count_ones() as usize;
+        eval += EVAL_PARAMS.king_virtual_mobility[mobility];
+        self.trace
+            .term(|t| t.king_virtual_mobility[mobility][color] += 1);
+
         eval
     }
 
