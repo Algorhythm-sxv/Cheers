@@ -292,6 +292,11 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .count_ones() as usize;
             eval += EVAL_PARAMS.queen_mobility[mobility];
             self.trace.term(|t| t.queen_mobility[mobility][color] += 1);
+
+            // discovery risk
+            let discoveries = self.game.discovered_attacks::<W>(queen).is_not_empty() as i16;
+            eval += EVAL_PARAMS.queen_discovery_risk * discoveries;
+            self.trace.term(|t| t.queen_discovery_risk[color] += 1);
         }
         eval
     }
