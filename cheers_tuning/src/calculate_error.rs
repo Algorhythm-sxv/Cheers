@@ -171,7 +171,7 @@ pub fn calculate_gradient(
             |mut a: Box<[f64; EvalParams::LEN]>, b: &TuningEntry| {
                 let eval = linear_evaluation(b, eval_params);
                 let s = sigmoid(eval as f64, k);
-                let base = (b.result.into_f64() - s) * s * (1.0 - s);
+                let base = (b.result.into_f64() - s) * s * (s - 1.0);
 
                 for tuple in &b.tuples {
                     let i = tuple.index;

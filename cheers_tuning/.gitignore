@@ -2,3 +2,4 @@ best_parameters.txt
 *.fen
 *.epd
 *.pgn
+*.mf*

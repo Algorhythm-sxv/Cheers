@@ -30,6 +30,15 @@ struct Args {
     /// learning rate step iterations
     #[clap(short, long, default_value_t = 1000)]
     rate_step_iters: usize,
+    /// initial learning rate
+    #[clap(short = 'l', long, default_value_t = 0.1)]
+    initial_lr: f64,
+    /// ADAM first moment parameter
+    #[clap(short = 'b', long, default_value_t = 0.9)]
+    beta1: f64,
+    /// ADAM second moment parameter
+    #[clap(short = 'B', long, default_value_t = 0.999)]
+    beta2: f64,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -91,31 +100,31 @@ fn main() -> Result<(), Box<dyn Error>> {
         .open("best_parameters.txt")?;
     let mut eval_params = EVAL_PARAMS.clone().to_array().map(|x| x as f64);
 
-    let mut adagrad = [0f64; EvalParams::LEN];
-    let mut rate = 1024.0;
-    let drop_rate = 2.0;
-
+    let mut alpha = args.initial_lr;
+    let mut first_moment = [0f64; EvalParams::LEN];
+    let mut second_moment = [0f64; EvalParams::LEN];
     for iter in 0..args.max_iters {
         let gradient = calculate_gradient(&data, &eval_params, best_k);
 
-        for i in (0..adagrad.len()).step_by(2) {
-            adagrad[i] += (2.0 * gradient[i] / args.count as f64).powf(2.0);
-            adagrad[i + 1] += (2.0 * gradient[i + 1] / args.count as f64).powf(2.0);
+        for ((x, &g), (m, v)) in eval_params
+            .iter_mut()
+            .zip(gradient.iter())
+            .zip(first_moment.iter_mut().zip(second_moment.iter_mut()))
+        {
+            *m = args.beta1 * *m + (1.0 - args.beta1) * g;
+            *v = args.beta2 * *v + (1.0 - args.beta2) * g * g;
+            let mhat = *m / (1.0 - args.beta1.powi(iter as i32 + 1));
+            let vhat = *v / (1.0 - args.beta2.powi(iter as i32 + 1));
 
-            eval_params[i] += (best_k / (200.0 * args.count as f64))
-                * gradient[i]
-                * (rate / (1e-8 + adagrad[i]).sqrt());
-            eval_params[i + 1] += (best_k / (200.0 * args.count as f64))
-                * gradient[i + 1]
-                * (rate / (1e-8 + adagrad[i + 1]).sqrt());
+            *x = *x - alpha * mhat / (vhat.sqrt() + 1e-8);
         }
         let error = calculate_error(&data, &eval_params, best_k, args.count);
-        if iter != 0 && iter % args.rate_step_iters == 0 {
-            rate /= drop_rate;
-        }
-        print!("\rIter [{iter}] Error = [{error:.10}], Rate = [{rate:.10}]");
+        print!("\rIter [{iter}] Error = [{error:.10}], Rate = [{alpha:.10}]");
         stdout().flush()?;
 
+        if (iter + 1) % args.rate_step_iters == 0 {
+            alpha /= 2.0;
+        }
         // clear the file
         output_file.set_len(0)?;
         output_file.rewind()?;
@@ -123,5 +132,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let params = EvalParams::from_array(eval_params.map(|x| x as i16));
         output_file.write_all(format!("{params:?}").as_bytes())?;
     }
+
+    println!();
     Ok(())
 }
