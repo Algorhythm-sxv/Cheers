@@ -261,6 +261,12 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.rook_on_open_file[open_score];
             self.trace
                 .term(|t| t.rook_on_open_file[open_score][color] += 1);
+
+            // on a file with any queen
+            let queens = self.game.white_queens | self.game.black_queens;
+            let queen_file = (FILES[rook.file()] & queens).is_not_empty() as i16;
+            eval += EVAL_PARAMS.rook_queen_file * queen_file;
+            self.trace.term(|t| t.rook_queen_file[color] += queen_file);
         }
         eval
     }
