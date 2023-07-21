@@ -382,7 +382,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
         // doubled pawns per-file
         for file in FILES {
-            let file_double_pawn_count = (pawns & file).count_ones().min(5) as usize;
+            let file_double_pawn_count = (pawns & file).count_ones().min(4) as usize;
             eval += EVAL_PARAMS.pawn_doubled[file_double_pawn_count];
             self.trace
                 .term(|t| t.pawn_doubled[file_double_pawn_count][color] += 1);
