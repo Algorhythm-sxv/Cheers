@@ -175,6 +175,13 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.knight_outpost[outpost_score];
             self.trace
                 .term(|t| t.knight_outpost[outpost_score][color] += 1);
+
+            // king ring attacks
+            let king_ring_attacks =
+                (lookup_knight(knight) & info.king_area[W::Other::INDEX]).count_ones() as i16;
+            eval += EVAL_PARAMS.king_ring_knight_attacks * king_ring_attacks;
+            self.trace
+                .term(|t| t.king_ring_knight_attacks[color] += king_ring_attacks);
         }
         eval
     }
@@ -240,6 +247,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.bishop_outpost[outpost_score];
             self.trace
                 .term(|t| t.bishop_outpost[outpost_score][color] += 1);
+
+            // king ring attacks
+            let king_ring_attacks = (lookup_bishop(bishop, self.game.occupied)
+                & info.king_area[W::Other::INDEX])
+                .count_ones() as i16;
+            eval += EVAL_PARAMS.king_ring_bishop_attacks * king_ring_attacks;
+            self.trace
+                .term(|t| t.king_ring_bishop_attacks[color] += king_ring_attacks);
         }
         eval
     }
@@ -294,6 +309,13 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             let queen_file = (FILES[rook.file()] & queens).is_not_empty() as i16;
             eval += EVAL_PARAMS.rook_queen_file * queen_file;
             self.trace.term(|t| t.rook_queen_file[color] += queen_file);
+
+            // king ring attacks
+            let king_ring_attacks = (lookup_rook(rook, self.game.occupied) & info.king_area[W::Other::INDEX])
+                .count_ones() as i16;
+            eval += EVAL_PARAMS.king_ring_rook_attacks * king_ring_attacks;
+            self.trace
+                .term(|t| t.king_ring_rook_attacks[color] += king_ring_attacks);
         }
         eval
     }
@@ -331,6 +353,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.queen_discovery_risk * discoveries;
             self.trace
                 .term(|t| t.queen_discovery_risk[color] += discoveries);
+
+            // king ring attacks
+            let king_ring_attacks = (lookup_queen(queen, self.game.occupied)
+                & info.king_area[W::Other::INDEX])
+                .count_ones() as i16;
+            eval += EVAL_PARAMS.king_ring_queen_attacks * king_ring_attacks;
+            self.trace
+                .term(|t| t.king_ring_queen_attacks[color] += king_ring_attacks);
         }
         eval
     }
@@ -360,19 +390,6 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval += EVAL_PARAMS.king_on_open_file[semi_open + semi_open * open];
         self.trace
             .term(|t| t.king_on_open_file[semi_open + semi_open * open][color] += 1);
-
-        // king ring attacks
-        let king_ring_attacks = ((self.game.knight_attacks::<W::Other>() & info.king_area[color])
-            .count_ones()
-            + (self.game.diagonal_attacks::<W::Other>(self.game.occupied) & info.king_area[color])
-                .count_ones()
-            + (self.game.orthogonal_attacks::<W::Other>(self.game.occupied)
-                & info.king_area[color])
-                .count_ones())
-        .min(15) as usize;
-        eval += EVAL_PARAMS.king_ring_attacks[king_ring_attacks];
-        self.trace
-            .term(|t| t.king_ring_attacks[king_ring_attacks][color] += 1);
 
         // king virtual mobility
         let mobility = (lookup_queen(king, self.game.occupied) & info.mobility_area[color])
