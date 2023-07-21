@@ -136,6 +136,17 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval += EVAL_PARAMS.piece_values[Knight] * count;
         self.trace.term(|t| t.knight_count[color as usize] = count);
 
+        // knights behind pawns
+        let behind_pawns = if W::WHITE {
+            self.game.white_pawns >> 8
+        } else {
+            self.game.black_pawns << 8
+        };
+        let knights_behind_pawns = (knights & behind_pawns).count_ones() as i16;
+        eval += EVAL_PARAMS.knight_behind_pawn * knights_behind_pawns;
+        self.trace
+            .term(|t| t.knight_beind_pawn[color] += knights_behind_pawns);
+
         for knight in knights {
             let relative_knight = relative_board_index::<W>(knight);
             // placement
@@ -184,6 +195,22 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let count = bishops.count_ones() as i16;
         eval += EVAL_PARAMS.piece_values[Bishop] * count;
         self.trace.term(|t| t.bishop_count[color] = count);
+
+        // bishops behind pawns
+        let behind_pawns = if W::WHITE {
+            self.game.white_pawns >> 8
+        } else {
+            self.game.black_pawns << 8
+        };
+        let bishops_behind_pawns = (bishops & behind_pawns).count_ones() as i16;
+        eval += EVAL_PARAMS.bishop_behind_pawn * bishops_behind_pawns;
+        self.trace
+            .term(|t| t.bishop_beind_pawn[color] += bishops_behind_pawns);
+
+        // bishop pair
+        let bishop_pair = (bishops.count_ones() > 1) as i16;
+        eval += EVAL_PARAMS.bishop_pair * bishop_pair;
+        self.trace.term(|t| t.bishop_pair[color] += bishop_pair);
 
         for bishop in bishops {
             // placement
