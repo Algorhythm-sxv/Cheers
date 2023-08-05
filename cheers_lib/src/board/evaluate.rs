@@ -175,6 +175,16 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.knight_outpost[outpost_score];
             self.trace
                 .term(|t| t.knight_outpost[outpost_score][color] += 1);
+
+            // threats
+            let other_pieces = if W::WHITE {
+                self.game.black_pieces
+            } else {
+                self.game.white_pieces
+            };
+            let threats = (lookup_knight(knight) & other_pieces).count_ones() as i16;
+            eval += EVAL_PARAMS.knight_threat * threats;
+            self.trace.term(|t| t.knight_threat[color] += threats);
         }
         eval
     }
@@ -240,6 +250,17 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             eval += EVAL_PARAMS.bishop_outpost[outpost_score];
             self.trace
                 .term(|t| t.bishop_outpost[outpost_score][color] += 1);
+
+            // threats
+            let other_pieces = if W::WHITE {
+                self.game.black_pieces
+            } else {
+                self.game.white_pieces
+            };
+            let threats =
+                (lookup_bishop(bishop, self.game.occupied) & other_pieces).count_ones() as i16;
+            eval += EVAL_PARAMS.bishop_threat * threats;
+            self.trace.term(|t| t.bishop_threat[color] += threats);
         }
         eval
     }
@@ -394,10 +415,18 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     pub fn evaluate_pawns_only<W: TypeColor>(&mut self, _info: &mut EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
-        let (pawns, other_pawns) = if W::WHITE {
-            (self.game.white_pawns, self.game.black_pawns)
+        let (pawns, other_pawns, other_pieces) = if W::WHITE {
+            (
+                self.game.white_pawns,
+                self.game.black_pawns,
+                self.game.black_pieces & self.game.black_pawns.inverse(),
+            )
         } else {
-            (self.game.black_pawns, self.game.white_pawns)
+            (
+                self.game.black_pawns,
+                self.game.white_pawns,
+                self.game.white_pieces & self.game.white_pawns.inverse(),
+            )
         };
 
         let color = W::INDEX;
@@ -414,6 +443,20 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             self.trace
                 .term(|t| t.pawn_doubled[file_double_pawn_count][color] += 1);
         }
+
+        // safe pawn threats
+        // safe pawns are either defended or not attacked
+        // let safe_pawns = pawns
+        //     & (self.game.all_enemy_attacks::<W::Other>(self.game.occupied)
+        //         | self
+        //             .game
+        //             .all_enemy_attacks::<W>(self.game.occupied)
+        //             .inverse());
+        // let safe_pawn_threats =
+        //     (self.game.pawn_attacks_from::<W>(safe_pawns) & other_pieces).count_ones() as i16;
+        // eval += EVAL_PARAMS.pawn_safe_threat * safe_pawn_threats;
+        // self.trace
+        //     .term(|t| t.pawn_safe_threat[color] += safe_pawn_threats);
 
         for pawn in pawns.clone() {
             // placement

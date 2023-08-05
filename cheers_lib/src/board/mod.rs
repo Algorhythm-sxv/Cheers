@@ -353,6 +353,15 @@ impl Board {
     }
 
     #[inline(always)]
+    pub fn pawn_attacks_from<T: TypeColor>(&self, mask: BitBoard) -> BitBoard {
+        if T::WHITE {
+            ((mask & A_FILE.inverse()) << 7) | ((mask & H_FILE.inverse()) << 9)
+        } else {
+            ((mask & A_FILE.inverse()) >> 9) | ((mask & H_FILE.inverse()) >> 7)
+        }
+    }
+
+    #[inline(always)]
     pub fn knight_attacks<T: TypeColor>(&self) -> BitBoard {
         let knights = if T::WHITE {
             self.white_knights
