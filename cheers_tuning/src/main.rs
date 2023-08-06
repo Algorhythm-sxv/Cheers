@@ -125,12 +125,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         if (iter + 1) % args.rate_step_iters == 0 {
             alpha /= 2.0;
         }
-        // clear the file
-        output_file.set_len(0)?;
-        output_file.rewind()?;
+        if iter % 100 == 0 || iter == args.max_iters {
+            // clear the file
+            output_file.set_len(0)?;
+            output_file.rewind()?;
 
-        let params = EvalParams::from_array(eval_params.map(|x| x as i16));
-        output_file.write_all(format!("{params:?}").as_bytes())?;
+            let params = EvalParams::from_array(eval_params.map(|x| x as i16));
+            output_file.write_all(format!("{params:?}").as_bytes())?;
+        }
     }
 
     println!();
