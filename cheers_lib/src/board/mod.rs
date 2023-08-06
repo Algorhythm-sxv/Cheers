@@ -452,6 +452,28 @@ impl Board {
     }
 
     #[inline(always)]
+    pub fn pieces<W: TypeColor>(&self) -> [BitBoard; 6] {
+        if W::WHITE {
+            [
+                self.white_pawns,
+                self.white_knights,
+                self.white_bishops,
+                self.white_rooks,
+                self.white_queens,
+                self.white_king,
+            ]
+        } else {
+            [
+                self.black_pawns,
+                self.black_knights,
+                self.black_bishops,
+                self.black_rooks,
+                self.black_queens,
+                self.black_king,
+            ]
+        }
+    }
+    #[inline(always)]
     pub fn xor_piece<T: TypeColor>(&mut self, piece: Piece, square: Square) {
         select_colored_pieces!(self, piece, board, pieces);
         let mask = square.bitboard();

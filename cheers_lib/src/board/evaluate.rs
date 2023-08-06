@@ -177,14 +177,16 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .term(|t| t.knight_outpost[outpost_score][color] += 1);
 
             // threats
-            let other_pieces = if W::WHITE {
-                self.game.black_pieces
-            } else {
-                self.game.white_pieces
-            };
-            let threats = (lookup_knight(knight) & other_pieces).count_ones() as i16;
-            eval += EVAL_PARAMS.knight_threat * threats;
-            self.trace.term(|t| t.knight_threat[color] += threats);
+            let attacks = lookup_knight(knight);
+            self.game
+                .pieces::<W::Other>()
+                .iter()
+                .enumerate()
+                .for_each(|(i, &p)| {
+                    let threats = (p & attacks).count_ones() as i16;
+                    eval += EVAL_PARAMS.knight_threats[i] * threats;
+                    self.trace.term(|t| t.knight_threats[i][color] += threats)
+                });
         }
         eval
     }
@@ -252,15 +254,16 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .term(|t| t.bishop_outpost[outpost_score][color] += 1);
 
             // threats
-            let other_pieces = if W::WHITE {
-                self.game.black_pieces
-            } else {
-                self.game.white_pieces
-            };
-            let threats =
-                (lookup_bishop(bishop, self.game.occupied) & other_pieces).count_ones() as i16;
-            eval += EVAL_PARAMS.bishop_threat * threats;
-            self.trace.term(|t| t.bishop_threat[color] += threats);
+            let attacks = lookup_bishop(bishop, self.game.occupied);
+            self.game
+                .pieces::<W::Other>()
+                .iter()
+                .enumerate()
+                .for_each(|(i, &p)| {
+                    let threats = (p & attacks).count_ones() as i16;
+                    eval += EVAL_PARAMS.bishop_threats[i] * threats;
+                    self.trace.term(|t| t.bishop_threats[i][color] += threats)
+                });
         }
         eval
     }
@@ -415,18 +418,10 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     pub fn evaluate_pawns_only<W: TypeColor>(&mut self, _info: &mut EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
-        let (pawns, other_pawns, other_pieces) = if W::WHITE {
-            (
-                self.game.white_pawns,
-                self.game.black_pawns,
-                self.game.black_pieces & self.game.black_pawns.inverse(),
-            )
+        let (pawns, other_pawns) = if W::WHITE {
+            (self.game.white_pawns, self.game.black_pawns)
         } else {
-            (
-                self.game.black_pawns,
-                self.game.white_pawns,
-                self.game.white_pieces & self.game.white_pawns.inverse(),
-            )
+            (self.game.black_pawns, self.game.white_pawns)
         };
 
         let color = W::INDEX;
