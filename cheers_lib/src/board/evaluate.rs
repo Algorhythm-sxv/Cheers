@@ -318,6 +318,18 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             let queen_file = (FILES[rook.file()] & queens).is_not_empty() as i16;
             eval += EVAL_PARAMS.rook_queen_file * queen_file;
             self.trace.term(|t| t.rook_queen_file[color] += queen_file);
+
+            // threats
+            let attacks = lookup_rook(rook, self.game.occupied);
+            self.game
+                .pieces::<W::Other>()
+                .iter()
+                .enumerate()
+                .for_each(|(i, &p)| {
+                    let threats = (p & attacks).count_ones() as i16;
+                    eval += EVAL_PARAMS.rook_threats[i] * threats;
+                    self.trace.term(|t| t.rook_threats[i][color] += threats)
+                });
         }
         eval
     }
