@@ -451,19 +451,17 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .term(|t| t.pawn_doubled[file_double_pawn_count][color] += 1);
         }
 
-        // safe pawn threats
-        // safe pawns are either defended or not attacked
-        // let safe_pawns = pawns
-        //     & (self.game.all_enemy_attacks::<W::Other>(self.game.occupied)
-        //         | self
-        //             .game
-        //             .all_enemy_attacks::<W>(self.game.occupied)
-        //             .inverse());
-        // let safe_pawn_threats =
-        //     (self.game.pawn_attacks_from::<W>(safe_pawns) & other_pieces).count_ones() as i16;
-        // eval += EVAL_PARAMS.pawn_safe_threat * safe_pawn_threats;
-        // self.trace
-        //     .term(|t| t.pawn_safe_threat[color] += safe_pawn_threats);
+        // pawn threats
+        let attacks = self.game.pawn_attacks::<W>();
+        self.game
+            .pieces::<W::Other>()
+            .iter()
+            .enumerate()
+            .for_each(|(i, &p)| {
+                let threats = (p & attacks).count_ones() as i16;
+                eval += EVAL_PARAMS.pawn_threats[i] * threats;
+                self.trace.term(|t| t.pawn_threats[i][color] += threats)
+            });
 
         for pawn in pawns.clone() {
             // placement
