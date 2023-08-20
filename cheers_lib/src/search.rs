@@ -61,6 +61,7 @@ pub struct Search {
     pub abort_time_ms: Option<usize>,
     start_time: Instant,
     output: bool,
+    chess_960: bool,
     options: SearchOptions,
     pub local_nodes: usize,
 }
@@ -83,6 +84,7 @@ impl Search {
             abort_time_ms: None,
             start_time: Instant::now(),
             output: false,
+            chess_960: false,
             options: SearchOptions::default(),
             local_nodes: 0,
         }
@@ -105,6 +107,7 @@ impl Search {
             abort_time_ms: None,
             start_time: Instant::now(),
             output: false,
+            chess_960: false,
             options: SearchOptions::default(),
             local_nodes: 0,
         }
@@ -136,6 +139,11 @@ impl Search {
 
     pub fn output(mut self, output: bool) -> Self {
         self.output = output;
+        self
+    }
+
+    pub fn chess_960(mut self, chess_960: bool) -> Self {
+        self.chess_960 = chess_960;
         self
     }
 
@@ -201,7 +209,7 @@ impl Search {
                 )
             };
 
-            let mut pv = PrincipalVariation::new();
+            let mut pv = PrincipalVariation::new().chess_960(self.chess_960);
 
             // repeat failed searches with wider windows until a search succeeds
             let score = loop {

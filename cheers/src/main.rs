@@ -19,6 +19,7 @@ mod uci;
 fn main() -> Result<(), Box<dyn Error>> {
     let mut position = Board::new();
     let mut options = SearchOptions::default();
+    let mut chess_960 = false;
 
     let mut tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
     let mut pre_history = Vec::new();
@@ -71,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     tt.write().unwrap().set_size(mb);
                 }
                 uci::UciOption::Threads(n) => options.threads = n,
-                uci::UciOption::UCI_Chess960(_) => {}
+                uci::UciOption::UCI_Chess960(x) => chess_960 = x,
                 uci::UciOption::NmpDepth(n) => options.nmp_depth = n,
                 uci::UciOption::NmpConstReduction(n) => options.nmp_const_reduction = n,
                 uci::UciOption::NmpLinearDivisor(n) => options.nmp_linear_divisor = n,
@@ -151,7 +152,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .max_nodes(nodes)
                     .max_depth(depth)
                     .options(options)
-                    .output(true);
+                    .output(true)
+                    .chess_960(chess_960);
                 search.max_time_ms = movetime;
 
                 let _ = thread::spawn(move || engine_thread(search).unwrap());

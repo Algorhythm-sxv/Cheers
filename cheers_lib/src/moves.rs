@@ -46,8 +46,19 @@ impl Move {
         }
     }
 
-    pub fn coords(&self) -> String {
+    pub fn coords_960(&self) -> String {
         format!("{self}")
+    }
+
+    pub fn coords(&self) -> String {
+        let coords = format!("{self}");
+        match (self.piece, coords.as_str()) {
+            (King, "e1h1") => String::from("e1g1"),
+            (King, "e1a1") => String::from("e1c1"),
+            (King, "e8h8") => String::from("e8g8"),
+            (King, "e8a8") => String::from("e8g8"),
+            _ => coords,
+        }
     }
 
     pub fn null() -> Self {
@@ -289,6 +300,7 @@ pub const PV_MAX_LEN: usize = 16;
 pub struct PrincipalVariation {
     len: usize,
     moves: [Move; PV_MAX_LEN],
+    chess_960: bool,
 }
 
 impl PrincipalVariation {
@@ -307,14 +319,23 @@ impl PrincipalVariation {
     pub fn iter(&self) -> std::slice::Iter<'_, Move> {
         self.moves[..self.len].iter()
     }
+    pub fn chess_960(mut self, chess_960: bool) -> Self {
+        self.chess_960 = chess_960;
+        self
+    }
 }
 impl Display for PrincipalVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, m) in self.moves.iter().take(self.len).enumerate() {
-            if i == 0 {
-                write!(f, "{}", m.coords())?;
+            let coords = if self.chess_960 {
+                m.coords_960()
             } else {
-                write!(f, " {}", m.coords())?;
+                m.coords()
+            };
+            if i == 0 {
+                write!(f, "{}", coords)?;
+            } else {
+                write!(f, " {}", coords)?;
             }
         }
         Ok(())
