@@ -9,7 +9,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
 
-use crate::calculate_error::{calculate_error, calculate_gradient, epd_to_entry, TuningEntry};
+use crate::calculate_error::{book_to_entry, calculate_error, calculate_gradient, TuningEntry};
 use crate::k_tuning::tune_k;
 
 mod calculate_error;
@@ -22,14 +22,17 @@ struct Args {
     #[clap(short, long)]
     data: Option<PathBuf>,
     /// number of positions to analyse
-    #[clap(short, long, default_value_t = 1_000_000)]
-    count: usize,
+    #[clap(short, long)]
+    count: Option<usize>,
     /// maximum tuning iterations
     #[clap(short, long, default_value_t = 1_000_000)]
     max_iters: usize,
     /// learning rate step iterations
     #[clap(short, long, default_value_t = 1000)]
     rate_step_iters: usize,
+    /// number of threads to use
+    #[clap(short, long, default_value_t = 10)]
+    threads: usize,
     /// initial learning rate
     #[clap(short = 'l', long, default_value_t = 0.1)]
     initial_lr: f64,
@@ -56,7 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Commencing tuning");
 
     ThreadPoolBuilder::new()
-        .num_threads(6)
+        .num_threads(args.threads)
         .build_global()
         .unwrap();
 
@@ -67,8 +70,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let len = data_string.lines().count();
     let data_string = data_string
         .lines()
-        .step_by(len / args.count)
-        .take(args.count)
+        .step_by(if let Some(count) = args.count {
+            len / count
+        } else {
+            1
+        })
+        .take(args.count.unwrap_or(len))
         .fold(String::new(), |a, b| a + b + "\n");
 
     println!("done");
@@ -83,14 +90,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .par_lines()
         .map(|l| {
             entries_bar.clone().inc(1);
-            epd_to_entry(l)
+            book_to_entry(l)
         })
         .collect::<Vec<TuningEntry>>();
     entries_bar.finish();
     drop(data_string);
 
     println!("Optimising sigmoid K parameter...");
-    let best_k = tune_k(&data, args.count);
+    let best_k = tune_k(&data, args.count.unwrap_or(len));
     println!("Best K: {best_k}");
 
     let mut output_file = OpenOptions::new()
@@ -118,7 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             *x = *x - alpha * mhat / (vhat.sqrt() + 1e-8);
         }
-        let error = calculate_error(&data, &eval_params, best_k, args.count);
+        let error = calculate_error(&data, &eval_params, best_k, args.count.unwrap_or(len));
         print!("\rIter [{iter}] Error = [{error:.10}], Rate = [{alpha:.10}]");
         stdout().flush()?;
 
