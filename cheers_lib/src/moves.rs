@@ -295,7 +295,7 @@ impl<const N: usize> Default for KillerMoves<N> {
     }
 }
 
-pub const PV_MAX_LEN: usize = 16;
+pub const PV_MAX_LEN: usize = 32;
 #[derive(Copy, Clone, Default, Debug)]
 pub struct PrincipalVariation {
     len: usize,
