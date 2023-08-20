@@ -177,14 +177,16 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .term(|t| t.knight_outpost[outpost_score][color] += 1);
 
             // threats
-            let other_pieces = if W::WHITE {
-                self.game.black_pieces
-            } else {
-                self.game.white_pieces
-            };
-            let threats = (lookup_knight(knight) & other_pieces).count_ones() as i16;
-            eval += EVAL_PARAMS.knight_threat * threats;
-            self.trace.term(|t| t.knight_threat[color] += threats);
+            let attacks = lookup_knight(knight);
+            self.game
+                .pieces::<W::Other>()
+                .iter()
+                .enumerate()
+                .for_each(|(i, &p)| {
+                    let threats = (p & attacks).count_ones() as i16;
+                    eval += EVAL_PARAMS.knight_threats[i] * threats;
+                    self.trace.term(|t| t.knight_threats[i][color] += threats)
+                });
         }
         eval
     }
@@ -252,15 +254,16 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .term(|t| t.bishop_outpost[outpost_score][color] += 1);
 
             // threats
-            let other_pieces = if W::WHITE {
-                self.game.black_pieces
-            } else {
-                self.game.white_pieces
-            };
-            let threats =
-                (lookup_bishop(bishop, self.game.occupied) & other_pieces).count_ones() as i16;
-            eval += EVAL_PARAMS.bishop_threat * threats;
-            self.trace.term(|t| t.bishop_threat[color] += threats);
+            let attacks = lookup_bishop(bishop, self.game.occupied);
+            self.game
+                .pieces::<W::Other>()
+                .iter()
+                .enumerate()
+                .for_each(|(i, &p)| {
+                    let threats = (p & attacks).count_ones() as i16;
+                    eval += EVAL_PARAMS.bishop_threats[i] * threats;
+                    self.trace.term(|t| t.bishop_threats[i][color] += threats)
+                });
         }
         eval
     }
@@ -315,6 +318,18 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             let queen_file = (FILES[rook.file()] & queens).is_not_empty() as i16;
             eval += EVAL_PARAMS.rook_queen_file * queen_file;
             self.trace.term(|t| t.rook_queen_file[color] += queen_file);
+
+            // threats
+            let attacks = lookup_rook(rook, self.game.occupied);
+            self.game
+                .pieces::<W::Other>()
+                .iter()
+                .enumerate()
+                .for_each(|(i, &p)| {
+                    let threats = (p & attacks).count_ones() as i16;
+                    eval += EVAL_PARAMS.rook_threats[i] * threats;
+                    self.trace.term(|t| t.rook_threats[i][color] += threats)
+                });
         }
         eval
     }
@@ -415,18 +430,10 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
     pub fn evaluate_pawns_only<W: TypeColor>(&mut self, _info: &mut EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
-        let (pawns, other_pawns, other_pieces) = if W::WHITE {
-            (
-                self.game.white_pawns,
-                self.game.black_pawns,
-                self.game.black_pieces & self.game.black_pawns.inverse(),
-            )
+        let (pawns, other_pawns) = if W::WHITE {
+            (self.game.white_pawns, self.game.black_pawns)
         } else {
-            (
-                self.game.black_pawns,
-                self.game.white_pawns,
-                self.game.white_pieces & self.game.white_pawns.inverse(),
-            )
+            (self.game.black_pawns, self.game.white_pawns)
         };
 
         let color = W::INDEX;
@@ -444,19 +451,17 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .term(|t| t.pawn_doubled[file_double_pawn_count][color] += 1);
         }
 
-        // safe pawn threats
-        // safe pawns are either defended or not attacked
-        // let safe_pawns = pawns
-        //     & (self.game.all_enemy_attacks::<W::Other>(self.game.occupied)
-        //         | self
-        //             .game
-        //             .all_enemy_attacks::<W>(self.game.occupied)
-        //             .inverse());
-        // let safe_pawn_threats =
-        //     (self.game.pawn_attacks_from::<W>(safe_pawns) & other_pieces).count_ones() as i16;
-        // eval += EVAL_PARAMS.pawn_safe_threat * safe_pawn_threats;
-        // self.trace
-        //     .term(|t| t.pawn_safe_threat[color] += safe_pawn_threats);
+        // pawn threats
+        let attacks = self.game.pawn_attacks::<W>();
+        self.game
+            .pieces::<W::Other>()
+            .iter()
+            .enumerate()
+            .for_each(|(i, &p)| {
+                let threats = (p & attacks).count_ones() as i16;
+                eval += EVAL_PARAMS.pawn_threats[i] * threats;
+                self.trace.term(|t| t.pawn_threats[i][color] += threats)
+            });
 
         for pawn in pawns.clone() {
             // placement
