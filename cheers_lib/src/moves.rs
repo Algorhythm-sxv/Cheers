@@ -56,7 +56,7 @@ impl Move {
             (King, "e1h1") => String::from("e1g1"),
             (King, "e1a1") => String::from("e1c1"),
             (King, "e8h8") => String::from("e8g8"),
-            (King, "e8a8") => String::from("e8g8"),
+            (King, "e8a8") => String::from("e8c8"),
             _ => coords,
         }
     }

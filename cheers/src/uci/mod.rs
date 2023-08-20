@@ -324,7 +324,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                     if test
                                         .legal_move_list()
                                         .iter()
-                                        .map(|m| m.coords())
+                                        .map(|m| m.coords_960())
                                         .find(|m| m == &move_string)
                                         .is_some()
                                     {
