@@ -19,19 +19,19 @@ pub struct SearchOptions {
 }
 
 pub const NMP_DEPTH: i8 = 1;
-pub const NMP_CONST_REDUCTION: i8 = 3;
-pub const NMP_LINEAR_DIVISOR: i8 = 3;
-pub const SEE_PRUNING_DEPTH: i8 = 8;
-pub const SEE_CAPTURE_MARGIN: i16 = -46;
-pub const SEE_QUIET_MARGIN: i16 = -95;
-pub const PVS_FULLDEPTH: i8 = 2;
-pub const DELTA_PRUNING_MARGIN: i16 = 120;
-pub const FP_MARGIN_1: i16 = 154;
-pub const FP_MARGIN_2: i16 = 334;
-pub const FP_MARGIN_3: i16 = 633;
-pub const RFP_MARGIN: i16 = 142;
-pub const LMP_DEPTH: i8 = 7;
-pub const IIR_DEPTH: i8 = 5;
+pub const NMP_CONST_REDUCTION: i8 = 2;
+pub const NMP_LINEAR_DIVISOR: i8 = 2;
+pub const SEE_PRUNING_DEPTH: i8 = 10;
+pub const SEE_CAPTURE_MARGIN: i16 = -45;
+pub const SEE_QUIET_MARGIN: i16 = -50;
+pub const PVS_FULLDEPTH: i8 = 1;
+pub const DELTA_PRUNING_MARGIN: i16 = 185;
+pub const FP_MARGIN_1: i16 = 100;
+pub const FP_MARGIN_2: i16 = 313;
+pub const FP_MARGIN_3: i16 = 547;
+pub const RFP_MARGIN: i16 = 205;
+pub const LMP_DEPTH: i8 = 10;
+pub const IIR_DEPTH: i8 = 7;
 
 impl Default for SearchOptions {
     fn default() -> Self {
