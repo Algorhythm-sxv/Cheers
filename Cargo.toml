@@ -14,3 +14,10 @@ lto = true
 
 [profile.release]
 lto = true
+
+[profile.production]
+inherits = "release"
+lto = true
+codegen-units = 1
+strip = "symbols"
+
