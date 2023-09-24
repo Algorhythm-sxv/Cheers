@@ -93,7 +93,7 @@ Currently supported options are:
 Cheers currently uses a hand-crafted evaluation function with Texel-tuned parameters. NNUE is planned for the future.
 ### General
 - Tapered Evaluation
-- Pawn Hash Table (8MB)
+- Pawn Hash Table
 
 ### Pawns
 - Material
@@ -101,47 +101,46 @@ Cheers currently uses a hand-crafted evaluation function with Texel-tuned parame
 - Doubled Pawn
 - Isolated Pawn
 - Connected Pawn
-- Passed Pawn
-- Passed Pawn Rank
-- Passed Pawn Blocked
-- Passed Pawn Connected
-- Passed Pawn Supported by Rook
-- Passed Pawn Uncatchable by enemy King
+- Phalanx Pawn
+- Passed Pawn Piece-Square Table
+- Passed Pawn Distance to Friendly King
+- Passed Pawn Distance from Enemy King
 
 ### Knights
 - Material
 - Piece-Square Tables
 - Mobility
 - Knight behind Pawn
-- Knight distance from friendly King
-- Knight on (defended) outpost
+- Knight Threats
+- Knight on (defended) Outpost
 
 ### Bishops
 - Material
 - Piece-Square Tables
 - Mobility
 - Bishop behind Pawn
-- Bishop distance from friendly King
-- Bishop on (defended) outpost
+- Bishop on (defended) Outpost
 - Bishop Pair
-- Bishop on long diagonal
+- Bishop Threats
 
 ### Rooks
 - Material
 - Piece-Square Tables
 - Mobility
 - Rook on (semi) open file
-- Rook on seventh rank
-- Rook trapped by friendly King
+- Rook on Queen File
+- Rook Threats
 
 ### Queens
 - Material
 - Piece-Square Tables
 - Mobility
-- Risk of discovered attack
+- Risk of Discovered Attack
 
 ### Kings
 - Piece-Square Tables
 - Mobility
-- Minor piece defenders
-- King on open file
+- Virtual Mobility
+- King on (semi) open file
+- King Ring Attacks
+- Risk of Discoverd Attack
