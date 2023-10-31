@@ -771,9 +771,12 @@ impl Board {
                 }
             };
 
-            // move the king and the rook
-            self.move_piece::<T>(King, mv.from, king_target);
-            self.move_piece::<T>(Rook, mv.to, rook_target);
+            // move the king and the rook, seperately to avoid problems with
+            // rooks on C and G files
+            self.xor_piece::<T>(King, mv.from);
+            self.xor_piece::<T>(Rook, mv.to);
+            self.xor_piece::<T>(King, king_target);
+            self.xor_piece::<T>(Rook, rook_target);
 
             // clear castling rights
             self.hash ^= zobrist_castling(self.castling_rights);
