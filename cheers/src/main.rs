@@ -87,6 +87,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                 uci::UciOption::RfpMargin(n) => options.rfp_margin = n,
                 uci::UciOption::LmpDepth(n) => options.lmp_depth = n,
                 uci::UciOption::IirDepth(n) => options.iir_depth = n,
+                uci::UciOption::NmpImprovingReduction(n) => options.nmp_improving_reduction = n,
+                uci::UciOption::RfpImprovingMargin(n) => options.rfp_improving_margin = n,
+                uci::UciOption::LmpConst(n) => options.lmp_const = n as f32 / 100.0,
+                uci::UciOption::LmpConstScale(n) => options.lmp_const_scale = n as f32 / 100.0,
+                uci::UciOption::LmpImproving(n) => options.lmp_improving = n as f32 / 100.0,
+                uci::UciOption::LmpImprovingScale(n) => options.lmp_improving_scale = n as f32 / 100.0,
+                uci::UciOption::LmrConst(n) => options.lmr_const = n as f32 / 100.0,
+                uci::UciOption::LmrDivisor(n) => options.lmr_const_divisor = n as f32 / 100.0,
+                uci::UciOption::LmrImprovingConst(n) => options.lmr_improving = n as f32 / 100.0,
+                uci::UciOption::LmrImprovingDivisor(n) => options.lmr_improving_divisor = n as f32 / 100.0,
             },
             uci::UciCommand::UciNewGame => {
                 position = Board::new();
