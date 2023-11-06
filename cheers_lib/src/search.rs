@@ -29,7 +29,7 @@ pub const MAX_HISTORY: i16 = 4096;
 
 #[derive(Clone)]
 pub struct SearchStackEntry {
-    pub eval: i16,
+    pub eval: Option<i16>,
     pub move_list: MoveList,
     pub killer_moves: KillerMoves<NUM_KILLER_MOVES>,
 }
@@ -37,7 +37,7 @@ pub struct SearchStackEntry {
 impl SearchStackEntry {
     pub fn new() -> Self {
         Self {
-            eval: MINUS_INF,
+            eval: None,
             move_list: MoveList::default(),
             killer_moves: KillerMoves::default(),
         }
@@ -460,11 +460,15 @@ impl Search {
         };
 
         // store the current 'static' eval to use with heuristics
-        self.search_stack[ply].eval = eval;
+        self.search_stack[ply].eval = if !in_check { Some(eval) } else { None };
 
         // Improving: if the current eval is better than 2 plies ago we prune/reduce differently
-        let improving =
-            ply >= 2 && !in_check && self.search_stack[ply].eval > self.search_stack[ply - 2].eval;
+        let improving = ply >= 2
+            && !in_check
+            && match self.search_stack[ply - 2].eval {
+                Some(old_eval) => eval > old_eval,
+                _ => false,
+            };
 
         // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
         if !pv_node
@@ -611,57 +615,55 @@ impl Search {
 
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
-            let full_depth_null_window = if depth > self.options.pvs_fulldepth
-                && move_index > 0
-                && !R::ROOT
-            {
-                // reducing certain moves to same time, avoided for tactical and killer/counter moves
-                let reduction = {
-                    let mut r = 0;
+            let full_depth_null_window =
+                if depth > self.options.pvs_fulldepth && move_index > 0 && !R::ROOT {
+                    // reducing certain moves to same time, avoided for tactical and killer/counter moves
+                    let reduction = {
+                        let mut r = 0;
 
-                    // Late Move Reduction: moves that are sorted later are likely to fail low
-                    if !capture
-                        && !(move_score >= COUNTERMOVE_SCORE
-                            && move_score < KILLER_MOVE_SCORE + 50_000)
-                        && mv.promotion != Queen
-                        && !in_check
-                    {
-                        // (1.5 + (depth as f32).ln() * (played as f32).ln() / 1.75) as i8;
-                        let lmr = if !improving {
-                            self.options.lmr_const
-                                + (depth.min(31) as f32).ln() * (move_index.min(31) as f32).ln()
-                                    / self.options.lmr_const_divisor
-                        } else {
-                            self.options.lmr_improving
-                                + (depth.min(31) as f32).ln() * (move_index.min(31) as f32).ln()
-                                    / self.options.lmr_improving_divisor
-                        } as i8;
-                        r += lmr;
-                        // r += LMR[(depth as usize).min(31)][move_index.min(31)];
-                    }
+                        // Late Move Reduction: moves that are sorted later are likely to fail low
+                        if !capture
+                            && !(move_score >= COUNTERMOVE_SCORE
+                                && move_score < KILLER_MOVE_SCORE + 50_000)
+                            && mv.promotion != Queen
+                            && !in_check
+                        {
+                            // (1.5 + (depth as f32).ln() * (played as f32).ln() / 1.75) as i8;
+                            let lmr = if !improving {
+                                self.options.lmr_const
+                                    + (depth.min(31) as f32).ln() * (move_index.min(31) as f32).ln()
+                                        / self.options.lmr_const_divisor
+                            } else {
+                                self.options.lmr_improving
+                                    + (depth.min(31) as f32).ln() * (move_index.min(31) as f32).ln()
+                                        / self.options.lmr_improving_divisor
+                            } as i8;
+                            r += lmr;
+                            // r += LMR[(depth as usize).min(31)][move_index.min(31)];
+                        }
 
-                    r
+                        r
+                    };
+
+                    // perform a cheap reduced, null-window search in the hope it fails low immediately
+                    let reduced_depth = (depth - 1 - reduction).max(0);
+                    score = -self.negamax::<NotRoot, M>(
+                        &new,
+                        -alpha - 1,
+                        -alpha,
+                        reduced_depth,
+                        ply + 1,
+                        mv,
+                        &mut line,
+                        tt,
+                    );
+
+                    // perform a full-depth null-window search if the reduced search improves alpha and the move was actually reduced
+                    score > alpha && reduction > 0
+                } else {
+                    // if the first condition fails, perform the full depth null window search in non-pv nodes or later moves in PVS
+                    !pv_node || move_index > 0
                 };
-
-                // perform a cheap reduced, null-window search in the hope it fails low immediately
-                let reduced_depth = (depth - 1 - reduction).max(0);
-                score = -self.negamax::<NotRoot, M>(
-                    &new,
-                    -alpha - 1,
-                    -alpha,
-                    reduced_depth,
-                    ply + 1,
-                    mv,
-                    &mut line,
-                    tt,
-                );
-
-                // perform a full-depth null-window search if the reduced search improves alpha and the move was actually reduced
-                score > alpha && reduction > 0
-            } else {
-                // if the first condition fails, perform the full depth null window search in non-pv nodes or later moves in PVS
-                !pv_node || move_index > 0
-            };
 
             // perform a full-depth null-window search on reduced moves that improve alpha, later moves or in non-pv nodes
             // we can't expand the window in non-pv nodes as alpha = beta-1
