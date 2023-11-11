@@ -29,7 +29,7 @@ pub struct SearchOptions {
 }
 
 pub const NMP_DEPTH: i8 = 1;
-pub const NMP_CONST_REDUCTION: i8 = 3;
+pub const NMP_CONST_REDUCTION: i8 = 2;
 pub const NMP_IMPROVING_REDUCTION: i8 = 0;
 pub const NMP_LINEAR_DIVISOR: i8 = 3;
 pub const SEE_PRUNING_DEPTH: i8 = 10;
@@ -40,17 +40,17 @@ pub const DELTA_PRUNING_MARGIN: i16 = 185;
 pub const FP_MARGIN_1: i16 = 100;
 pub const FP_MARGIN_2: i16 = 313;
 pub const FP_MARGIN_3: i16 = 547;
-pub const RFP_MARGIN: i16 = 83;
-pub const RFP_IMPROVING_MARGIN: i16 = 14;
+pub const RFP_MARGIN: i16 = 82;
+pub const RFP_IMPROVING_MARGIN: i16 = 20;
 pub const LMP_DEPTH: i8 = 10;
-pub const LMP_CONST: f32 = 3.35;
-pub const LMP_CONST_SCALE: f32 = 1.56;
-pub const LMP_IMPROVING: f32 = 4.19;
-pub const LMP_IMPROVING_SCALE: f32 = 2.07;
-pub const LMR_CONST: f32 = 1.79;
-pub const LMR_DIVISOR: f32 = 2.31;
-pub const LMR_IMPROVING_CONST: f32 = 1.20;
-pub const LMR_IMPROVING_DIVISOR: f32 = 1.79;
+pub const LMP_CONST: f32 = 2.92;
+pub const LMP_CONST_SCALE: f32 = 0.78;
+pub const LMP_IMPROVING: f32 = 4.14;
+pub const LMP_IMPROVING_SCALE: f32 = 2.55;
+pub const LMR_CONST: f32 = 1.67;
+pub const LMR_DIVISOR: f32 = 2.18;
+pub const LMR_IMPROVING_CONST: f32 = 0.97;
+pub const LMR_IMPROVING_DIVISOR: f32 = 1.62;
 pub const IIR_DEPTH: i8 = 7;
 
 impl Default for SearchOptions {
