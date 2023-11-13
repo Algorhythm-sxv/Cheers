@@ -611,6 +611,10 @@ impl Search {
                             && !in_check
                         {
                             r += LMR[(depth as usize).min(31)][move_index.min(31)];
+
+                            // reduce more in less important and bad-looking nodes
+                            r += !pv_node as i8;
+                            r += !improving as i8;
                         }
 
                         r
