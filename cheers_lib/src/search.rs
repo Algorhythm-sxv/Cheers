@@ -464,7 +464,7 @@ impl Search {
 
         // Improving: if the current eval is better than 2 plies ago we prune/reduce differently
         let improving =
-            ply >= 2 && !in_check && self.search_stack[ply].eval > self.search_stack[ply - 2].eval;
+            ply >= 2 && !in_check && self.search_stack[ply].eval >= self.search_stack[ply - 2].eval;
 
         // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
         if !pv_node
