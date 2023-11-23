@@ -480,6 +480,7 @@ impl Search {
             && !in_check
             && !last_move.is_null()
             && depth >= self.options.nmp_depth
+            && eval.saturating_sub(20 * depth as i16) >= beta
             && board.has_non_pawn_material(current_player)
         {
             // reduce by at least 1
