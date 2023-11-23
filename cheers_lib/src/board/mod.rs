@@ -156,11 +156,11 @@ impl Board {
     #[inline(always)]
     pub fn is_capture(&self, mv: Move) -> bool {
         if self.black_to_move {
-            (mv.to.bitboard() & self.white_pieces).is_not_empty()
-                || (mv.piece == Pawn && mv.to.bitboard() == self.ep_mask)
+            (mv.to().bitboard() & self.white_pieces).is_not_empty()
+                || (mv.piece() == Pawn && mv.to().bitboard() == self.ep_mask)
         } else {
-            (mv.to.bitboard() & self.black_pieces).is_not_empty()
-                || (mv.piece == Pawn && mv.to.bitboard() == self.ep_mask)
+            (mv.to().bitboard() & self.black_pieces).is_not_empty()
+                || (mv.piece() == Pawn && mv.to().bitboard() == self.ep_mask)
         }
     }
 
@@ -565,7 +565,7 @@ impl Board {
         }
 
         // moving wrong piece
-        if Some(mv.piece) != self.piece_on(mv.from) {
+        if Some(mv.piece()) != self.piece_on(mv.from()) {
             return false;
         }
 
@@ -575,8 +575,8 @@ impl Board {
             (self.black_pieces, self.white_pieces)
         };
 
-        let from = mv.from.bitboard();
-        let to = mv.to.bitboard();
+        let from = mv.from().bitboard();
+        let to = mv.to().bitboard();
 
         // moving from a square without a friendly piece
         if (from & pieces).is_empty() {
@@ -584,12 +584,12 @@ impl Board {
         }
 
         // capturing a friendly piece (while not castling)
-        if mv.piece != King && (to & pieces).is_not_empty() {
+        if mv.piece() != King && (to & pieces).is_not_empty() {
             return false;
         }
 
         // piece special cases
-        match mv.piece {
+        match mv.piece() {
             King => {
                 // castling
                 let rights = if T::WHITE {
@@ -605,28 +605,28 @@ impl Board {
             }
             Pawn => {
                 // erroneous promotions
-                if mv.promotion != Pawn && (to & (FIRST_RANK | EIGHTH_RANK)).is_empty() {
+                if mv.promotion() != Pawn && (to & (FIRST_RANK | EIGHTH_RANK)).is_empty() {
                     return false;
                 }
                 // pushes
-                if matches!((mv.to).abs_diff(*mv.from), 8 | 16) {
-                    return (self.pawn_pushes::<T>(mv.from) & to).is_not_empty();
+                if matches!((mv.to()).abs_diff(*mv.from()), 8 | 16) {
+                    return (self.pawn_pushes::<T>(mv.from()) & to).is_not_empty();
                 } else {
                     // captures
-                    return (self.pawn_attack::<T>(mv.from) & to & (enemy_pieces | self.ep_mask))
+                    return (self.pawn_attack::<T>(mv.from()) & to & (enemy_pieces | self.ep_mask))
                         .is_not_empty();
                 }
             }
             _ => {}
         }
 
-        let piece_attacks = match mv.piece {
+        let piece_attacks = match mv.piece() {
             Pawn => unreachable!(),
-            Knight => lookup_knight(mv.from),
-            Bishop => lookup_bishop(mv.from, self.occupied),
-            Rook => lookup_rook(mv.from, self.occupied),
-            Queen => lookup_queen(mv.from, self.occupied),
-            King => lookup_king(mv.from),
+            Knight => lookup_knight(mv.from()),
+            Bishop => lookup_bishop(mv.from(), self.occupied),
+            Rook => lookup_rook(mv.from(), self.occupied),
+            Queen => lookup_queen(mv.from(), self.occupied),
+            King => lookup_king(mv.from()),
         };
 
         (to & piece_attacks & pieces.inverse()).is_not_empty()
@@ -735,10 +735,10 @@ impl Board {
     }
 
     fn make_move_for<T: TypeColor>(&mut self, mv: Move) {
-        let piece = mv.piece;
-        let start_mask = mv.from.bitboard();
-        let target_mask = mv.to.bitboard();
-        let capture = self.piece_on(mv.to);
+        let piece = mv.piece();
+        let start_mask = mv.from().bitboard();
+        let target_mask = mv.to().bitboard();
+        let capture = self.piece_on(mv.to());
         let (color, other_color) = (self.black_to_move as usize, !self.black_to_move as usize);
         let other_king = if T::WHITE {
             self.black_king.first_square()
@@ -747,7 +747,7 @@ impl Board {
         };
 
         // castling is encoded as king captures friendly rook
-        let castling = (self.color::<T>() & mv.to.bitboard()).is_not_empty();
+        let castling = (self.color::<T>() & mv.to().bitboard()).is_not_empty();
 
         self.diagonal_pin_mask = BitBoard::empty();
         self.orthogonal_pin_mask = BitBoard::empty();
@@ -758,13 +758,13 @@ impl Board {
         if castling {
             // select the target squares for king and rook
             let (king_target, rook_target) = if T::WHITE {
-                if mv.from.file() < mv.to.file() {
+                if mv.from().file() < mv.to().file() {
                     (Square::G1, Square::F1)
                 } else {
                     (Square::C1, Square::D1)
                 }
             } else {
-                if mv.from.file() < mv.to.file() {
+                if mv.from().file() < mv.to().file() {
                     (Square::G8, Square::F8)
                 } else {
                     (Square::C8, Square::D8)
@@ -773,8 +773,8 @@ impl Board {
 
             // move the king and the rook, seperately to avoid problems with
             // rooks on C and G files
-            self.xor_piece::<T>(King, mv.from);
-            self.xor_piece::<T>(Rook, mv.to);
+            self.xor_piece::<T>(King, mv.from());
+            self.xor_piece::<T>(Rook, mv.to());
             self.xor_piece::<T>(King, king_target);
             self.xor_piece::<T>(Rook, rook_target);
 
@@ -788,11 +788,11 @@ impl Board {
                 self.halfmove_clock = 0;
 
                 // remove a captured piece from the target square
-                self.xor_piece::<T::Other>(capture, mv.to);
+                self.xor_piece::<T::Other>(capture, mv.to());
 
                 // update pawn hash if a pawn was taken
                 if capture == Pawn {
-                    self.pawn_hash ^= zobrist_piece::<T::Other>(Pawn, mv.to);
+                    self.pawn_hash ^= zobrist_piece::<T::Other>(Pawn, mv.to());
                 }
 
                 // update castling rights for captured rooks
@@ -807,7 +807,7 @@ impl Board {
                 }
             }
             // move the moving piece
-            self.move_piece::<T>(piece, mv.from, mv.to);
+            self.move_piece::<T>(piece, mv.from(), mv.to());
         }
 
         let mut new_ep_mask = BitBoard::empty();
@@ -824,24 +824,24 @@ impl Board {
                 self.halfmove_clock = 0;
 
                 // update the pawn hash
-                self.pawn_hash ^= zobrist_piece::<T>(Pawn, mv.from);
-                self.pawn_hash ^= zobrist_piece::<T>(Pawn, mv.to);
+                self.pawn_hash ^= zobrist_piece::<T>(Pawn, mv.from());
+                self.pawn_hash ^= zobrist_piece::<T>(Pawn, mv.to());
 
-                if mv.promotion != Pawn {
+                if mv.promotion() != Pawn {
                     // remove the pawn and place the promoted piece
-                    self.xor_piece::<T>(Pawn, mv.to);
-                    self.pawn_hash ^= zobrist_piece::<T>(Pawn, mv.to);
-                    self.xor_piece::<T>(mv.promotion, mv.to);
+                    self.xor_piece::<T>(Pawn, mv.to());
+                    self.pawn_hash ^= zobrist_piece::<T>(Pawn, mv.to());
+                    self.xor_piece::<T>(mv.promotion(), mv.to());
 
                     // update check mask for knight promotions
-                    if mv.promotion == Knight {
+                    if mv.promotion() == Knight {
                         let new_checkers = lookup_knight(other_king) & target_mask;
                         if new_checkers.is_not_empty() {
                             self.check_mask = new_checkers;
                         }
                     }
                 } else {
-                    if mv.to.abs_diff(*mv.from) == 16 {
+                    if mv.to().abs_diff(*mv.from()) == 16 {
                         // double push
                         new_ep_mask = self.forward::<T::Other>(target_mask);
                     } else if target_mask == self.ep_mask {

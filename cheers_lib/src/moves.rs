@@ -6,12 +6,7 @@ use Piece::*;
 use cheers_bitboards::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Move {
-    pub piece: Piece,
-    pub from: Square,
-    pub to: Square,
-    pub promotion: Piece,
-}
+pub struct Move(u32);
 
 impl Move {
     pub fn from_pair<T: AsRef<str>>(board: &Board, pair: T) -> Self {
@@ -38,12 +33,7 @@ impl Move {
             }
         }
 
-        Self {
-            piece,
-            from,
-            to,
-            promotion,
-        }
+        Self::new(piece, from, to, promotion)
     }
 
     pub fn coords_960(&self) -> String {
@@ -52,7 +42,7 @@ impl Move {
 
     pub fn coords(&self) -> String {
         let coords = format!("{self}");
-        match (self.piece, coords.as_str()) {
+        match (self.piece(), coords.as_str()) {
             (King, "e1h1") => String::from("e1g1"),
             (King, "e1a1") => String::from("e1c1"),
             (King, "e8h8") => String::from("e8g8"),
@@ -62,29 +52,41 @@ impl Move {
     }
 
     pub fn null() -> Self {
-        Self {
-            piece: Pawn,
-            from: Square::A1,
-            to: Square::A1,
-            promotion: Pawn,
-        }
+        Self(0)
     }
 
     pub fn is_null(&self) -> bool {
-        self.from == self.to
+        self.0 == 0
+    }
+    pub fn new(piece: Piece, from: Square, to: Square, promotion: Piece) -> Self {
+        Self(
+            piece as u32 | ((*from as u32) << 3) | ((*to as u32) << 9) | ((promotion as u32) << 15),
+        )
+    }
+    pub fn piece(&self) -> Piece {
+        Piece::from_u8(self.0 as u8 & 0b111)
+    }
+    pub fn from(&self) -> Square {
+        Square::from((self.0 >> 3) as u8 & 0b111111)
+    }
+    pub fn to(&self) -> Square {
+        Square::from((self.0 >> 9) as u8 & 0b111111)
+    }
+    pub fn promotion(&self) -> Piece {
+        Piece::from_u8((self.0 >> 15) as u8 & 0b111)
     }
 }
 
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let promo = match self.promotion {
+        let promo = match self.promotion() {
             Knight => "n",
             Bishop => "b",
             Rook => "r",
             Queen => "q",
             _ => "",
         };
-        write!(f, "{}", self.from.coord() + &self.to.coord() + promo)
+        write!(f, "{}", self.from().coord() + &self.to().coord() + promo)
     }
 }
 
@@ -150,20 +152,10 @@ impl Iterator for MoveMaskIter {
                 self.promotion_counter = 0;
                 self.moves.moves ^= target.bitboard();
             }
-            Some(Move {
-                piece: Pawn,
-                from: self.moves.start,
-                to: target,
-                promotion,
-            })
+            Some(Move::new(Pawn, self.moves.start, target, promotion))
         } else {
             self.moves.moves ^= target.bitboard();
-            Some(Move {
-                piece: self.moves.piece,
-                from: self.moves.start,
-                to: target,
-                promotion: Pawn,
-            })
+            Some(Move::new(self.moves.piece, self.moves.start, target, Pawn))
         }
     }
 }

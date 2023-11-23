@@ -69,7 +69,7 @@ impl<M: TypeMoveGen> MoveSorter<M> {
             } else {
                 board.generate_legal_moves_into(&mut search_stack_entry.move_list);
                 for m in search_stack_entry.move_list.inner_mut() {
-                    if m.mv.promotion != Pawn || board.is_capture(m.mv) {
+                    if m.mv.promotion() != Pawn || board.is_capture(m.mv) {
                         m.score = score_capture(board, m.mv);
                     } else {
                         m.score = score_quiet(
@@ -108,20 +108,20 @@ impl<M: TypeMoveGen> MoveSorter<M> {
 
 fn score_capture(board: &Board, mv: Move) -> i32 {
     // filter out underpromotions
-    if matches!(mv.promotion, Knight | Bishop | Rook) {
-        return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion] as i32);
+    if matches!(mv.promotion(), Knight | Bishop | Rook) {
+        return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion()] as i32);
     }
-    let mvv_lva = if mv.promotion == Queen {
+    let mvv_lva = if mv.promotion() == Queen {
         MVV_LVA[Queen][Pawn]
     } else {
-        MVV_LVA[board.piece_on(mv.to).unwrap_or(Pawn)][mv.piece]
+        MVV_LVA[board.piece_on(mv.to()).unwrap_or(Pawn)][mv.piece()]
     };
     let relative_square = if board.current_player() == Color::White {
-        relative_board_index::<White>(mv.to)
+        relative_board_index::<White>(mv.to())
     } else {
-        relative_board_index::<Black>(mv.to)
+        relative_board_index::<Black>(mv.to())
     };
-    let psqt_score = EVAL_PARAMS.piece_tables[(mv.piece, relative_square)].mg() as i32 / 16;
+    let psqt_score = EVAL_PARAMS.piece_tables[(mv.piece(), relative_square)].mg() as i32 / 16;
 
     // sort all captures before quiets
     WINNING_CAPTURE_SCORE + 1000 * (mvv_lva as i32) + psqt_score
@@ -138,10 +138,10 @@ fn score_quiet(
     let current_player = board.current_player();
     if killers.contains(&mv) {
         // there can be more than 1 killer move, so sort them by their respective histories
-        KILLER_MOVE_SCORE + (history[current_player][mv.piece][mv.to] as i32)
-    } else if counters[current_player][last_move.piece][last_move.to] == mv {
+        KILLER_MOVE_SCORE + (history[current_player][mv.piece()][mv.to()] as i32)
+    } else if counters[current_player][last_move.piece()][last_move.to()] == mv {
         COUNTERMOVE_SCORE
     } else {
-        QUIET_SCORE + (history[current_player][mv.piece][mv.to] as i32)
+        QUIET_SCORE + (history[current_player][mv.piece()][mv.to()] as i32)
     }
 }

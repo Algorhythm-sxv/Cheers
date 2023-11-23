@@ -29,7 +29,7 @@ impl Board {
         list.reset();
         self.generate_legal_moves(|mvs| {
             for mv in mvs {
-                if mv.promotion != Pawn || self.is_capture(mv) {
+                if mv.promotion() != Pawn || self.is_capture(mv) {
                     list.push(SortingMove::new(mv))
                 }
             }

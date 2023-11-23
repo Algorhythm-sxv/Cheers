@@ -25,11 +25,11 @@ pub const MVV_LVA: [[i16; 6]; 6] = [
 
 impl Board {
     pub fn see(&self, mv: Move) -> i16 {
-        let target = mv.to;
+        let target = mv.to();
         let mut swap_list = [0i16; 32];
 
-        let mut current_attacker = mv.piece;
-        let mut attacker_mask = mv.from.bitboard();
+        let mut current_attacker = mv.piece();
+        let mut attacker_mask = mv.from().bitboard();
 
         let bishops =
             self.white_bishops | self.black_bishops | self.white_queens | self.black_queens;
@@ -45,7 +45,7 @@ impl Board {
         let mut color = !self.black_to_move;
 
         // correct for en passent capture
-        if mv.piece == Pawn && mv.to.bitboard() == self.ep_mask {
+        if mv.piece() == Pawn && mv.to().bitboard() == self.ep_mask {
             // shift the pawn back to the normal square for en passent
             occupied ^= self.ep_mask | (self.ep_mask >> 8 << 16 * (self.black_to_move as u8));
             swap_list[0] = SEE_PIECE_VALUES[Pawn];
@@ -120,10 +120,10 @@ impl Board {
 
     pub fn see_beats_threshold(&self, mv: Move, threshold: i16) -> bool {
         // correct for ep capture
-        let mut value = if mv.piece == Pawn && mv.to.bitboard() == self.ep_mask {
+        let mut value = if mv.piece() == Pawn && mv.to().bitboard() == self.ep_mask {
             SEE_PIECE_VALUES[Pawn] - threshold
         } else {
-            self.piece_on(mv.to)
+            self.piece_on(mv.to())
                 .map(|p| SEE_PIECE_VALUES[p])
                 .unwrap_or(0)
                 - threshold
@@ -135,19 +135,19 @@ impl Board {
             return false;
         }
 
-        value -= SEE_PIECE_VALUES[mv.piece];
+        value -= SEE_PIECE_VALUES[mv.piece()];
 
         // if we still beat the threshold after the first recapture we succeed early
         if value >= 0 {
             return true;
         }
 
-        let mut occupied = self.occupied ^ mv.from.bitboard();
+        let mut occupied = self.occupied ^ mv.from().bitboard();
         // remove ep pawn
-        if mv.piece == Pawn && mv.to.bitboard() == self.ep_mask {
+        if mv.piece() == Pawn && mv.to().bitboard() == self.ep_mask {
             occupied &= ((self.ep_mask << 8) | (self.ep_mask >> 8)).inverse();
         }
-        let mut attackers = self.all_attacks_on(mv.to, occupied);
+        let mut attackers = self.all_attacks_on(mv.to(), occupied);
 
         let bishops =
             self.white_bishops | self.black_bishops | self.white_queens | self.black_queens;
@@ -202,11 +202,11 @@ impl Board {
 
             // add discovered attacks from behind sliders
             if matches!(piece, Pawn | Bishop | Queen) {
-                attackers |= lookup_bishop(mv.to, occupied) & bishops;
+                attackers |= lookup_bishop(mv.to(), occupied) & bishops;
             }
 
             if matches!(piece, Rook | Queen) {
-                attackers |= lookup_rook(mv.to, occupied) & rooks;
+                attackers |= lookup_rook(mv.to(), occupied) & rooks;
             }
         }
 

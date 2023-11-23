@@ -440,12 +440,7 @@ impl Search {
             if matches!(entry.node_type, LowerBound | Exact) {
                 tt_score = score_from_tt(entry.score, ply);
             }
-            tt_move = Move {
-                piece: entry.piece,
-                from: entry.move_from,
-                to: entry.move_to,
-                promotion: entry.promotion,
-            };
+            tt_move = Move::new(entry.piece, entry.move_from, entry.move_to, entry.promotion);
         }
 
         // IIR: reduce the search depth if no TT move is present
@@ -607,7 +602,7 @@ impl Search {
                         if !capture
                             && !(move_score >= COUNTERMOVE_SCORE
                                 && move_score < KILLER_MOVE_SCORE + 50_000)
-                            && mv.promotion != Queen
+                            && mv.promotion() != Queen
                             && !in_check
                         {
                             r += LMR[(depth as usize).min(31)][move_index.min(31)];
@@ -689,18 +684,18 @@ impl Search {
                 // update killer, countermove and history tables for good quiets
                 if !capture {
                     self.search_stack[ply].killer_moves.push(mv);
-                    self.countermove_tables[current_player][last_move.piece][last_move.to] = mv;
+                    self.countermove_tables[current_player][last_move.piece()][last_move.to()] = mv;
 
                     let delta = depth as i16 * depth as i16;
-                    let history = self.history_tables[current_player][mv.piece][mv.to];
-                    self.history_tables[current_player][mv.piece][mv.to] +=
+                    let history = self.history_tables[current_player][mv.piece()][mv.to()];
+                    self.history_tables[current_player][mv.piece()][mv.to()] +=
                         delta - ((delta as i32 * history as i32) / MAX_HISTORY as i32) as i16;
 
                     // punish quiets that were played but didn't cause a beta cutoff
                     for smv in quiets_tried.inner().iter() {
                         let mv = smv.mv;
-                        let history = self.history_tables[current_player][mv.piece][mv.to];
-                        self.history_tables[current_player][mv.piece][mv.to] -=
+                        let history = self.history_tables[current_player][mv.piece()][mv.to()];
+                        self.history_tables[current_player][mv.piece()][mv.to()] -=
                             delta + ((delta as i32 * history as i32) / MAX_HISTORY as i32) as i16;
                     }
                 }
@@ -838,12 +833,7 @@ impl Search {
                 if matches!(entry.node_type, LowerBound | Exact) {
                     tt_score = score_from_tt(entry.score, ply);
                 }
-                tt_move = Move {
-                    piece: entry.piece,
-                    from: entry.move_from,
-                    to: entry.move_to,
-                    promotion: entry.promotion,
-                };
+                tt_move = Move::new(entry.piece, entry.move_from, entry.move_to, entry.promotion);
             }
         }
 
@@ -886,7 +876,7 @@ impl Search {
             if static_eval
                 .saturating_add(
                     board
-                        .piece_on(mv.to)
+                        .piece_on(mv.to())
                         .map(|p| SEE_PIECE_VALUES[p])
                         .unwrap_or(0),
                 )

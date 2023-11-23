@@ -70,10 +70,10 @@ fn data_into_u64(key: u16, score: i16, depth: i8, best_move: Move, node_type: No
     data |= key as u64; // bits 0:15
     data |= ((score as u16) as u64) << 16; // bits 16:31
     data |= ((depth as u8) as u64) << (16 + 16); // bits 32:39
-    data |= (*best_move.from as u64) << (16 + 16 + 8); // bits 40:47
-    data |= (*best_move.to as u64) << (16 + 16 + 8 + 8); // bits 48:55
-    data |= (best_move.piece as u64) << (16 + 16 + 8 + 8 + 8); // bits 56:58
-    data |= (best_move.promotion as u64) << (16 + 16 + 8 + 8 + 8 + 3); // bits 59:62
+    data |= (*best_move.from() as u64) << (16 + 16 + 8); // bits 40:47
+    data |= (*best_move.to() as u64) << (16 + 16 + 8 + 8); // bits 48:55
+    data |= (best_move.piece() as u64) << (16 + 16 + 8 + 8 + 8); // bits 56:58
+    data |= (best_move.promotion() as u64) << (16 + 16 + 8 + 8 + 8 + 3); // bits 59:62
     data |= (node_type as u64) << (16 + 16 + 8 + 8 + 8 + 3 + 3); // bits 62:63
     data
 }
@@ -300,12 +300,7 @@ mod tests {
             Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
                 .unwrap();
         let score = 30000;
-        let best_move = Move {
-            piece: Piece::King,
-            from: Square::E1,
-            to: Square::A1,
-            promotion: Piece::Pawn,
-        };
+        let best_move = Move::new(Piece::King, Square::E1, Square::A1, Piece::Pawn);
         let node_type = NodeType::Exact;
         let depth = 7;
 
