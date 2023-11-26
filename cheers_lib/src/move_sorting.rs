@@ -122,7 +122,9 @@ pub fn score_quiet(
     board: &Board,
     killer_moves: &KillerMoves<NUM_KILLER_MOVES>,
     history_tables: &[HistoryTable; 2],
+    conthist_tables: &[[[HistoryTable; 64]; 6]; 2],
     countermove_tables: &[CounterMoveTable; 2],
+    conthist_move: Move,
     last_move: Move,
     mv: Move,
 ) -> i32 {
@@ -133,6 +135,9 @@ pub fn score_quiet(
     } else if countermove_tables[current_player][last_move] == mv {
         COUNTERMOVE_SCORE
     } else {
-        QUIET_SCORE + (history_tables[current_player][mv] as i32)
+        QUIET_SCORE
+            + (history_tables[current_player][mv] as i32)
+            + (conthist_tables[current_player][conthist_move.piece()][conthist_move.to()][mv])
+                as i32
     }
 }

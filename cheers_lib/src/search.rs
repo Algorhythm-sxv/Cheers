@@ -468,6 +468,7 @@ impl Search {
             self.search_history.push(board.hash());
             let mut new = board.clone();
             new.make_null_move();
+            self.thread_data.search_stack[ply].mv = Move::null();
             let score = -self.negamax::<NotRoot, M>(
                 &new,
                 -beta,
@@ -559,6 +560,7 @@ impl Search {
             // make the move on a copy of the board
             let mut new = board.clone();
             new.make_move(mv);
+            self.thread_data.search_stack[ply].mv = mv;
 
             // legality check for the TT move, which is only verified as pseudolegal
             if mv == tt_move && new.illegal_position() {
@@ -663,8 +665,13 @@ impl Search {
                     self.thread_data.countermove_tables[current_player][last_move] = mv;
 
                     let delta = depth as i16 * depth as i16;
-                    self.thread_data
-                        .update_histories(current_player, delta, mv, &quiets_tried);
+                    self.thread_data.update_history_tables(
+                        current_player,
+                        delta,
+                        ply,
+                        mv,
+                        &quiets_tried,
+                    );
                 }
 
                 // remove this position from the history
@@ -832,7 +839,8 @@ impl Search {
         self.search_history.push(board.hash());
 
         let mut best_move = Move::null();
-        while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply, Move::null()) {
+        while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply, Move::null())
+        {
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
                 .saturating_add(
@@ -855,6 +863,7 @@ impl Search {
             // make the move on a copy of the board
             let mut new = board.clone();
             new.make_move(mv);
+            self.thread_data.search_stack[ply].mv = mv;
 
             // legality check for the TT move, which is only verified as pseudolegal
             if mv == tt_move && new.illegal_position() {

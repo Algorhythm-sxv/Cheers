@@ -12,6 +12,7 @@ pub struct SearchStackEntry {
     pub eval: i16,
     pub move_list: MoveList,
     pub killer_moves: KillerMoves<NUM_KILLER_MOVES>,
+    pub mv: Move,
 }
 impl Default for SearchStackEntry {
     fn default() -> Self {
@@ -19,6 +20,7 @@ impl Default for SearchStackEntry {
             eval: MINUS_INF,
             move_list: MoveList::default(),
             killer_moves: KillerMoves::default(),
+            mv: Move::null(),
         }
     }
 }
@@ -27,6 +29,7 @@ impl Default for SearchStackEntry {
 pub struct ThreadData {
     pub search_stack: Box<[SearchStackEntry; SEARCH_MAX_PLY]>,
     pub history_tables: Box<[HistoryTable; 2]>,
+    pub conthist_tables: Box<[[[HistoryTable; 64]; 6]; 2]>,
     pub countermove_tables: Box<[CounterMoveTable; 2]>,
 }
 
@@ -35,19 +38,28 @@ impl ThreadData {
         Self {
             search_stack: Box::new(std::array::from_fn(|_| SearchStackEntry::default())),
             history_tables: Box::new([HistoryTable::default(); 2]),
+            conthist_tables: Box::new([[[HistoryTable::default(); 64]; 6]; 2]),
             countermove_tables: Box::new([CounterMoveTable::default(); 2]),
         }
     }
 
-    pub fn update_histories(
+    pub fn update_history_tables(
         &mut self,
         player: Color,
         delta: i16,
+        ply: usize,
         bonus_quiet: Move,
         malus_quiets: &MoveList,
     ) {
         // reward quiets that produce a beta cutoff
         apply_history_bonus(&mut self.history_tables[player][bonus_quiet], delta);
+        if ply >= 2 {
+            let prev = self.search_stack[ply - 2].mv;
+            apply_history_bonus(
+                &mut self.conthist_tables[player][prev.piece()][prev.to()][bonus_quiet],
+                delta,
+            )
+        }
 
         // punish quiets that were played but didn't cause a beta cutoff
         for smv in malus_quiets.inner().iter() {
@@ -58,6 +70,11 @@ impl ThreadData {
     }
 
     pub fn score_moves(&mut self, board: &Board, ply: usize, last_move: Move) {
+        let conthist_move = self
+            .search_stack
+            .get(ply - 2)
+            .map(|ss| ss.mv)
+            .unwrap_or(Move::null());
         for m in self.search_stack[ply].move_list.inner_mut() {
             if m.mv.promotion() != Piece::Pawn || board.is_capture(m.mv) {
                 m.score = score_capture(board, m.mv);
@@ -66,7 +83,9 @@ impl ThreadData {
                     board,
                     &self.search_stack[ply].killer_moves,
                     &self.history_tables,
+                    &self.conthist_tables,
                     &self.countermove_tables,
+                    conthist_move,
                     last_move,
                     m.mv,
                 )
