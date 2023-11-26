@@ -66,6 +66,11 @@ impl ThreadData {
             let malus_quiet = smv.mv;
             debug_assert!(malus_quiet != bonus_quiet);
             apply_history_malus(&mut self.history_tables[player][malus_quiet], delta);
+
+            if ply >= 2 {
+                let prev = self.search_stack[ply - 2].mv;
+                self.conthist_tables[player][prev.piece()][prev.to()][malus_quiet] = 0;
+            }
         }
     }
 
