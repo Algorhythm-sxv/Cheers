@@ -6,7 +6,7 @@ use crate::{
         see::{MVV_LVA, SEE_PIECE_VALUES},
         Board,
     },
-    history_tables::HistoryTable,
+    history_tables::{CounterMoveTable, HistoryTable},
     moves::*,
     search::SearchStackEntry,
     types::{Black, Color, Piece::*, TypeMoveGen, White},
@@ -45,7 +45,7 @@ impl<M: TypeMoveGen> MoveSorter<M> {
         &mut self,
         board: &Board,
         search_stack_entry: &mut SearchStackEntry,
-        counters: &[[[Move; 64]; 6]; 2],
+        counters: &[CounterMoveTable; 2],
         history: &[HistoryTable; 2],
         last_move: Move,
     ) -> Option<(Move, i32)> {
@@ -131,7 +131,7 @@ fn score_capture(board: &Board, mv: Move) -> i32 {
 fn score_quiet(
     board: &Board,
     killers: &KillerMoves<NUM_KILLER_MOVES>,
-    counters: &[[[Move; 64]; 6]; 2],
+    counters: &[CounterMoveTable; 2],
     history: &[HistoryTable; 2],
     last_move: Move,
     mv: Move,
@@ -140,7 +140,7 @@ fn score_quiet(
     if killers.contains(&mv) {
         // there can be more than 1 killer move, so sort them by their respective histories
         KILLER_MOVE_SCORE + (history[current_player][mv] as i32)
-    } else if counters[current_player][last_move.piece()][last_move.to()] == mv {
+    } else if counters[current_player][last_move] == mv {
         COUNTERMOVE_SCORE
     } else {
         QUIET_SCORE + (history[current_player][mv] as i32)

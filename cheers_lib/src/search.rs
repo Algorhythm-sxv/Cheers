@@ -7,7 +7,9 @@ use cheers_pregen::{LMP_MARGINS, LMR};
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
 use crate::board::see::SEE_PIECE_VALUES;
-use crate::history_tables::{apply_history_bonus, apply_history_malus, HistoryTable};
+use crate::history_tables::{
+    apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable,
+};
 use crate::moves::*;
 use crate::types::{HelperThread, MainThread, TypeMainThread};
 use crate::{
@@ -55,7 +57,7 @@ pub struct Search {
     transposition_table: Arc<RwLock<TranspositionTable>>,
     pawn_hash_table: PawnHashTable,
     pub history_tables: [HistoryTable; 2],
-    pub countermove_tables: [[[Move; 64]; 6]; 2],
+    pub countermove_tables: [CounterMoveTable; 2],
     pub max_depth: Option<usize>,
     pub max_nodes: Option<usize>,
     pub max_time_ms: Option<(usize, usize)>,
@@ -78,7 +80,7 @@ impl Search {
             transposition_table: Arc::new(RwLock::new(TranspositionTable::new(0))),
             pawn_hash_table: PawnHashTable::new(0),
             history_tables: [HistoryTable::default(); 2],
-            countermove_tables: [[[Move::null(); 64]; 6]; 2],
+            countermove_tables: [CounterMoveTable::default(); 2],
             max_depth: None,
             max_nodes: None,
             max_time_ms: None,
@@ -101,7 +103,7 @@ impl Search {
             transposition_table: tt,
             pawn_hash_table: PawnHashTable::new(pawn_hash),
             history_tables: [HistoryTable::default(); 2],
-            countermove_tables: [[[Move::null(); 64]; 6]; 2],
+            countermove_tables: [CounterMoveTable::default(); 2],
             max_depth: None,
             max_nodes: None,
             max_time_ms: None,
@@ -685,7 +687,7 @@ impl Search {
                 // update killer, countermove and history tables for good quiets
                 if !capture {
                     self.search_stack[ply].killer_moves.push(mv);
-                    self.countermove_tables[current_player][last_move.piece()][last_move.to()] = mv;
+                    self.countermove_tables[current_player][last_move] = mv;
 
                     let delta = depth as i16 * depth as i16;
                     apply_history_bonus(&mut self.history_tables[current_player][mv], delta);
