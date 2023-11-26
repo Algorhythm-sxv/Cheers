@@ -1,6 +1,7 @@
 pub mod board;
 pub mod move_sorting;
 pub mod hash_tables;
+pub mod history_tables;
 pub mod lookup_tables;
 pub mod moves;
 pub mod options;

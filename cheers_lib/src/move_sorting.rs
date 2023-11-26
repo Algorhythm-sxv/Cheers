@@ -6,6 +6,7 @@ use crate::{
         see::{MVV_LVA, SEE_PIECE_VALUES},
         Board,
     },
+    history_tables::HistoryTable,
     moves::*,
     search::SearchStackEntry,
     types::{Black, Color, Piece::*, TypeMoveGen, White},
@@ -45,7 +46,7 @@ impl<M: TypeMoveGen> MoveSorter<M> {
         board: &Board,
         search_stack_entry: &mut SearchStackEntry,
         counters: &[[[Move; 64]; 6]; 2],
-        history: &[[[i16; 64]; 6]; 2],
+        history: &[HistoryTable; 2],
         last_move: Move,
     ) -> Option<(Move, i32)> {
         // return the TT move first if it is pseudolegal and pray that there is no hash collision
@@ -131,17 +132,17 @@ fn score_quiet(
     board: &Board,
     killers: &KillerMoves<NUM_KILLER_MOVES>,
     counters: &[[[Move; 64]; 6]; 2],
-    history: &[[[i16; 64]; 6]; 2],
+    history: &[HistoryTable; 2],
     last_move: Move,
     mv: Move,
 ) -> i32 {
     let current_player = board.current_player();
     if killers.contains(&mv) {
         // there can be more than 1 killer move, so sort them by their respective histories
-        KILLER_MOVE_SCORE + (history[current_player][mv.piece()][mv.to()] as i32)
+        KILLER_MOVE_SCORE + (history[current_player][mv] as i32)
     } else if counters[current_player][last_move.piece()][last_move.to()] == mv {
         COUNTERMOVE_SCORE
     } else {
-        QUIET_SCORE + (history[current_player][mv.piece()][mv.to()] as i32)
+        QUIET_SCORE + (history[current_player][mv] as i32)
     }
 }
