@@ -8,7 +8,7 @@ use crate::{
     },
     history_tables::{CounterMoveTable, HistoryTable},
     moves::*,
-    search::SearchStackEntry,
+    thread_data::ThreadData,
     types::{Black, Color, Piece::*, TypeMoveGen, White},
 };
 
@@ -30,7 +30,7 @@ pub struct MoveSorter<M: TypeMoveGen> {
 impl<M: TypeMoveGen> MoveSorter<M> {
     pub fn new(tt_move: Move) -> Self {
         Self {
-            stage: if tt_move != Move::null() {
+            stage: if !tt_move.is_null() {
                 Stage::TTMove
             } else {
                 Stage::GenerateMoves
@@ -44,9 +44,8 @@ impl<M: TypeMoveGen> MoveSorter<M> {
     pub fn next(
         &mut self,
         board: &Board,
-        search_stack_entry: &mut SearchStackEntry,
-        counters: &[CounterMoveTable; 2],
-        history: &[HistoryTable; 2],
+        thread_data: &mut ThreadData,
+        ply: usize,
         last_move: Move,
     ) -> Option<(Move, i32)> {
         // return the TT move first if it is pseudolegal and pray that there is no hash collision
@@ -63,38 +62,29 @@ impl<M: TypeMoveGen> MoveSorter<M> {
         if self.stage == Stage::GenerateMoves {
             self.stage = Stage::SortMoves;
             if M::CAPTURES {
-                board.generate_legal_captures_into(&mut search_stack_entry.move_list);
-                for m in search_stack_entry.move_list.inner_mut() {
+                board.generate_legal_captures_into(&mut thread_data.search_stack[ply].move_list);
+                for m in thread_data.search_stack[ply].move_list.inner_mut() {
                     m.score = score_capture(board, m.mv);
                 }
             } else {
-                board.generate_legal_moves_into(&mut search_stack_entry.move_list);
-                for m in search_stack_entry.move_list.inner_mut() {
-                    if m.mv.promotion() != Pawn || board.is_capture(m.mv) {
-                        m.score = score_capture(board, m.mv);
-                    } else {
-                        m.score = score_quiet(
-                            board,
-                            &search_stack_entry.killer_moves,
-                            counters,
-                            history,
-                            last_move,
-                            m.mv,
-                        );
-                    }
-                }
+                board.generate_legal_moves_into(&mut thread_data.search_stack[ply].move_list);
+                thread_data.score_moves(board, ply, last_move);
             }
         }
 
         // find the move with the next highest sort score
         // or return None if the end of the list has been reached
-        if self.index < search_stack_entry.move_list.len() {
-            let (mut mv, mut score) = search_stack_entry.move_list.pick_move(self.index);
+        if self.index < thread_data.search_stack[ply].move_list.len() {
+            let (mut mv, mut score) = thread_data.search_stack[ply]
+                .move_list
+                .pick_move(self.index);
             // tt move has already been reported
             if mv == self.tt_move {
                 self.index += 1;
-                if self.index < search_stack_entry.move_list.len() {
-                    (mv, score) = search_stack_entry.move_list.pick_move(self.index);
+                if self.index < thread_data.search_stack[ply].move_list.len() {
+                    (mv, score) = thread_data.search_stack[ply]
+                        .move_list
+                        .pick_move(self.index);
                 } else {
                     return None;
                 }
@@ -107,7 +97,7 @@ impl<M: TypeMoveGen> MoveSorter<M> {
     }
 }
 
-fn score_capture(board: &Board, mv: Move) -> i32 {
+pub fn score_capture(board: &Board, mv: Move) -> i32 {
     // filter out underpromotions
     if matches!(mv.promotion(), Knight | Bishop | Rook) {
         return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion()] as i32);
@@ -128,21 +118,21 @@ fn score_capture(board: &Board, mv: Move) -> i32 {
     WINNING_CAPTURE_SCORE + 1000 * (mvv_lva as i32) + psqt_score
 }
 
-fn score_quiet(
+pub fn score_quiet(
     board: &Board,
-    killers: &KillerMoves<NUM_KILLER_MOVES>,
-    counters: &[CounterMoveTable; 2],
-    history: &[HistoryTable; 2],
+    killer_moves: &KillerMoves<NUM_KILLER_MOVES>,
+    history_tables: &[HistoryTable; 2],
+    countermove_tables: &[CounterMoveTable; 2],
     last_move: Move,
     mv: Move,
 ) -> i32 {
     let current_player = board.current_player();
-    if killers.contains(&mv) {
+    if killer_moves.contains(&mv) {
         // there can be more than 1 killer move, so sort them by their respective histories
-        KILLER_MOVE_SCORE + (history[current_player][mv] as i32)
-    } else if counters[current_player][last_move] == mv {
+        KILLER_MOVE_SCORE + (history_tables[current_player][mv] as i32)
+    } else if countermove_tables[current_player][last_move] == mv {
         COUNTERMOVE_SCORE
     } else {
-        QUIET_SCORE + (history[current_player][mv] as i32)
+        QUIET_SCORE + (history_tables[current_player][mv] as i32)
     }
 }

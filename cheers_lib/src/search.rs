@@ -7,10 +7,8 @@ use cheers_pregen::{LMP_MARGINS, LMR};
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
 use crate::board::see::SEE_PIECE_VALUES;
-use crate::history_tables::{
-    apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable,
-};
 use crate::moves::*;
+use crate::thread_data::ThreadData;
 use crate::types::{HelperThread, MainThread, TypeMainThread};
 use crate::{
     board::{eval_types::TraceTarget, *},
@@ -31,33 +29,14 @@ pub const SEARCH_MAX_PLY: usize = 128;
 pub const MAX_HISTORY: i16 = 4096;
 
 #[derive(Clone)]
-pub struct SearchStackEntry {
-    pub eval: i16,
-    pub move_list: MoveList,
-    pub killer_moves: KillerMoves<NUM_KILLER_MOVES>,
-}
-
-impl SearchStackEntry {
-    pub fn new() -> Self {
-        Self {
-            eval: MINUS_INF,
-            move_list: MoveList::default(),
-            killer_moves: KillerMoves::default(),
-        }
-    }
-}
-
-#[derive(Clone)]
 pub struct Search {
     pub game: Board,
     pub search_history: Vec<u64>,
     pub pre_history: Vec<u64>,
-    pub search_stack: Vec<SearchStackEntry>,
     pub seldepth: usize,
     transposition_table: Arc<RwLock<TranspositionTable>>,
     pawn_hash_table: PawnHashTable,
-    pub history_tables: [HistoryTable; 2],
-    pub countermove_tables: [CounterMoveTable; 2],
+    pub thread_data: ThreadData,
     pub max_depth: Option<usize>,
     pub max_nodes: Option<usize>,
     pub max_time_ms: Option<(usize, usize)>,
@@ -75,12 +54,10 @@ impl Search {
             game,
             search_history: Vec::new(),
             pre_history: Vec::new(),
-            search_stack: vec![SearchStackEntry::new(); SEARCH_MAX_PLY],
             seldepth: 0,
             transposition_table: Arc::new(RwLock::new(TranspositionTable::new(0))),
             pawn_hash_table: PawnHashTable::new(0),
-            history_tables: [HistoryTable::default(); 2],
-            countermove_tables: [CounterMoveTable::default(); 2],
+            thread_data: ThreadData::new(),
             max_depth: None,
             max_nodes: None,
             max_time_ms: None,
@@ -98,12 +75,10 @@ impl Search {
             game,
             search_history: Vec::new(),
             pre_history: Vec::new(),
-            search_stack: vec![SearchStackEntry::new(); SEARCH_MAX_PLY],
             seldepth: 0,
             transposition_table: tt,
             pawn_hash_table: PawnHashTable::new(pawn_hash),
-            history_tables: [HistoryTable::default(); 2],
-            countermove_tables: [CounterMoveTable::default(); 2],
+            thread_data: ThreadData::new(),
             max_depth: None,
             max_nodes: None,
             max_time_ms: None,
@@ -458,11 +433,13 @@ impl Search {
         };
 
         // store the current 'static' eval to use with heuristics
-        self.search_stack[ply].eval = eval;
+        self.thread_data.search_stack[ply].eval = eval;
 
         // Improving: if the current eval is better than 2 plies ago we prune/reduce differently
-        let improving =
-            ply >= 2 && !in_check && self.search_stack[ply].eval > self.search_stack[ply - 2].eval;
+        let improving = ply >= 2
+            && !in_check
+            && self.thread_data.search_stack[ply].eval
+                > self.thread_data.search_stack[ply - 2].eval;
 
         // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
         if !pv_node
@@ -535,13 +512,9 @@ impl Search {
 
         let mut move_index = 0;
         let mut quiets_tried = MoveList::new();
-        while let Some((mv, move_score)) = move_sorter.next(
-            board,
-            &mut self.search_stack[ply],
-            &self.countermove_tables,
-            &self.history_tables,
-            last_move,
-        ) {
+        while let Some((mv, move_score)) =
+            move_sorter.next(board, &mut self.thread_data, ply, last_move)
+        {
             let capture = board.is_capture(mv);
 
             // Futility Pruning: skip quiets on nodes with bad static eval
@@ -686,17 +659,12 @@ impl Search {
 
                 // update killer, countermove and history tables for good quiets
                 if !capture {
-                    self.search_stack[ply].killer_moves.push(mv);
-                    self.countermove_tables[current_player][last_move] = mv;
+                    self.thread_data.search_stack[ply].killer_moves.push(mv);
+                    self.thread_data.countermove_tables[current_player][last_move] = mv;
 
                     let delta = depth as i16 * depth as i16;
-                    apply_history_bonus(&mut self.history_tables[current_player][mv], delta);
-
-                    // punish quiets that were played but didn't cause a beta cutoff
-                    for smv in quiets_tried.inner().iter() {
-                        let mv = smv.mv;
-                        apply_history_malus(&mut self.history_tables[current_player][mv], delta);
-                    }
+                    self.thread_data
+                        .update_histories(current_player, delta, mv, &quiets_tried);
                 }
 
                 // remove this position from the history
@@ -723,7 +691,7 @@ impl Search {
         self.search_history.pop();
 
         // check for checkmate and stalemate
-        if self.search_stack[ply].move_list.len() == 0 {
+        if self.thread_data.search_stack[ply].move_list.len() == 0 {
             if in_check {
                 // checkmate, preferring shorter mating sequences
                 pv.clear();
@@ -864,13 +832,7 @@ impl Search {
         self.search_history.push(board.hash());
 
         let mut best_move = Move::null();
-        while let Some((mv, _)) = move_sorter.next(
-            board,
-            &mut self.search_stack[ply],
-            &self.countermove_tables,
-            &self.history_tables,
-            Move::null(),
-        ) {
+        while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply, Move::null()) {
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
                 .saturating_add(
@@ -934,7 +896,7 @@ impl Search {
 
         // if there are no legal captures, check for checkmate/stalemate
         // disable when tracing to avoid empty traces
-        if !T::TRACING && self.search_stack[ply].move_list.len() == 0 {
+        if !T::TRACING && self.thread_data.search_stack[ply].move_list.len() == 0 {
             let mut some_moves = false;
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 
