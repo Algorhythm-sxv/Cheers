@@ -69,7 +69,10 @@ impl ThreadData {
 
             if ply >= 2 {
                 let prev = self.search_stack[ply - 2].mv;
-                self.conthist_tables[player][prev.piece()][prev.to()][malus_quiet] = 0;
+                apply_history_malus(
+                    &mut self.conthist_tables[player][prev.piece()][prev.to()][malus_quiet],
+                    delta,
+                );
             }
         }
     }
