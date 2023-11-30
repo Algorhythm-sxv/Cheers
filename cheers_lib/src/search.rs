@@ -464,6 +464,7 @@ impl Search {
                 .nmp_const_reduction
                 .saturating_add(depth / self.options.nmp_linear_divisor)
                 .saturating_add(((eval - beta) / 200).min(3) as i8))
+                .saturating_add(improving as i8)
             .max(1);
             self.search_history.push(board.hash());
             let mut new = board.clone();
@@ -832,7 +833,8 @@ impl Search {
         self.search_history.push(board.hash());
 
         let mut best_move = Move::null();
-        while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply, Move::null()) {
+        while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply, Move::null())
+        {
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
                 .saturating_add(
