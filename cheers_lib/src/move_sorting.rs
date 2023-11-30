@@ -107,15 +107,9 @@ pub fn score_capture(board: &Board, mv: Move) -> i32 {
     } else {
         MVV_LVA[board.piece_on(mv.to()).unwrap_or(Pawn)][mv.piece()]
     };
-    let relative_square = if board.current_player() == Color::White {
-        relative_board_index::<White>(mv.to())
-    } else {
-        relative_board_index::<Black>(mv.to())
-    };
-    let psqt_score = EVAL_PARAMS.piece_tables[(mv.piece(), relative_square)].mg() as i32 / 16;
 
     // sort all captures before quiets
-    WINNING_CAPTURE_SCORE + 1000 * (mvv_lva as i32) + psqt_score
+    WINNING_CAPTURE_SCORE + 1000 * (mvv_lva as i32)
 }
 
 pub fn score_quiet(
