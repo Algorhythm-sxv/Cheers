@@ -428,8 +428,11 @@ impl Search {
 
         let eval = if tt_score != MINUS_INF {
             tt_score
-        } else {
+        } else if !in_check {
             board.evaluate(&mut self.pawn_hash_table)
+        } else {
+            // static eval isn't valid when in check
+            MINUS_INF
         };
 
         // store the current 'static' eval to use with heuristics
@@ -832,7 +835,8 @@ impl Search {
         self.search_history.push(board.hash());
 
         let mut best_move = Move::null();
-        while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply, Move::null()) {
+        while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply, Move::null())
+        {
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
                 .saturating_add(
