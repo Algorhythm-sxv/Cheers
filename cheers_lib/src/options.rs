@@ -31,9 +31,9 @@ pub const DELTA_PRUNING_MARGIN: i16 = 185;
 pub const FP_MARGIN_1: i16 = 100;
 pub const FP_MARGIN_2: i16 = 313;
 pub const FP_MARGIN_3: i16 = 547;
-pub const RFP_DEPTH: i8 = 8;
-pub const RFP_MARGIN: i16 = 112;
-pub const RFP_IMPROVING_MARGIN: i16 = 30;
+pub const RFP_DEPTH: i8 = 13;
+pub const RFP_MARGIN: i16 = 185;
+pub const RFP_IMPROVING_MARGIN: i16 = -79;
 pub const LMP_DEPTH: i8 = 10;
 pub const IIR_DEPTH: i8 = 7;
 
