@@ -26,6 +26,7 @@ uci_options![
     FpMargin1(Spin<i16> { default: FP_MARGIN_1, min: 0, max: 300 }),
     FpMargin2(Spin<i16> { default: FP_MARGIN_2, min: 0, max: 700 }),
     FpMargin3(Spin<i16> { default: FP_MARGIN_3, min: 500, max: 1000 }),
+    RfpDepth(Spin<i8> { default: RFP_DEPTH, min: 0, max: 15 }),
     RfpMargin(Spin<i16> { default: RFP_MARGIN, min: 0, max: 300 }),
     RfpImprovingMargin(Spin<i16> { default: RFP_IMPROVING_MARGIN, min: -100, max: 100 }),
     LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
