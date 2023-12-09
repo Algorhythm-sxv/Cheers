@@ -38,8 +38,8 @@ pub const RFP_MARGIN: i16 = 185;
 pub const RFP_IMPROVING_MARGIN: i16 = -79;
 pub const LMP_DEPTH: i8 = 10;
 pub const IIR_DEPTH: i8 = 7;
-pub const RAZORING_CONST_MARGIN: i16 = 400;
-pub const RAZORING_DEPTH_MARGIN: i16 = 300;
+pub const RAZORING_CONST_MARGIN: i16 = 515;
+pub const RAZORING_DEPTH_MARGIN: i16 = 6;
 
 impl Default for SearchOptions {
     fn default() -> Self {
