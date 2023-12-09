@@ -444,53 +444,53 @@ impl Search {
             && self.thread_data.search_stack[ply].eval
                 > self.thread_data.search_stack[ply - 2].eval;
 
-        // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
-        if !pv_node
-            && !R::ROOT
-            && depth <= self.options.rfp_depth
-            && eval.saturating_sub(
-                depth as i16 * self.options.rfp_margin
-                    + improving as i16 * self.options.rfp_improving_margin,
-            ) >= beta
-        {
-            return eval
-                - (depth as i16 * self.options.rfp_margin
-                    + improving as i16 * self.options.rfp_improving_margin);
-        }
+        // Whole-node pruning techniques: these techniques will prune a whole node before move
+        // generation and search is performed
+        if !R::ROOT && !pv_node && !in_check {
+            //Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
+            if depth <= self.options.rfp_depth
+                && eval.saturating_sub(
+                    depth as i16 * self.options.rfp_margin
+                        + improving as i16 * self.options.rfp_improving_margin,
+                ) >= beta
+            {
+                return eval
+                    - (depth as i16 * self.options.rfp_margin
+                        + improving as i16 * self.options.rfp_improving_margin);
+            }
 
-        // Null Move Pruning
-        // if the opponent gets two moves in a row and the position is still good then prune
-        if !pv_node
-            && !in_check
-            && !last_move.is_null()
-            && depth >= self.options.nmp_depth
-            && eval >= beta
-            && board.has_non_pawn_material(current_player)
-        {
-            // reduce by at least 1
-            let reduction = (self
-                .options
-                .nmp_const_reduction
-                .saturating_add(depth / self.options.nmp_linear_divisor)
-                .saturating_add(((eval - beta) / 200).min(3) as i8))
-            .max(1);
-            self.search_history.push(board.hash());
-            let mut new = board.clone();
-            new.make_null_move();
-            let score = -self.negamax::<NotRoot, M>(
-                &new,
-                -beta,
-                -beta + 1,
-                (depth - reduction).max(0),
-                ply + 1,
-                Move::null(),
-                &mut line,
-                tt,
-            );
-            self.search_history.pop();
+            // Null Move Pruning
+            // if the opponent gets two moves in a row and the position is still good then prune
+            if !last_move.is_null()
+                && depth >= self.options.nmp_depth
+                && eval >= beta
+                && board.has_non_pawn_material(current_player)
+            {
+                // reduce by at least 1
+                let reduction = (self
+                    .options
+                    .nmp_const_reduction
+                    .saturating_add(depth / self.options.nmp_linear_divisor)
+                    .saturating_add(((eval - beta) / 200).min(3) as i8))
+                .max(1);
+                self.search_history.push(board.hash());
+                let mut new = board.clone();
+                new.make_null_move();
+                let score = -self.negamax::<NotRoot, M>(
+                    &new,
+                    -beta,
+                    -beta + 1,
+                    (depth - reduction).max(0),
+                    ply + 1,
+                    Move::null(),
+                    &mut line,
+                    tt,
+                );
+                self.search_history.pop();
 
-            if score >= beta {
-                return score;
+                if score >= beta {
+                    return score;
+                }
             }
         }
 
