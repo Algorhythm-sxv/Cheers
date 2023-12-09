@@ -449,7 +449,12 @@ impl Search {
         if !R::ROOT && !pv_node && !in_check {
             // Razoring: if the static eval is too low then see if qsearch will also be lower then
             // alpha, then prune
-            if eval <= alpha.saturating_sub(self.options.razoring_const_margin) {
+            if eval
+                <= alpha.saturating_sub(
+                    self.options.razoring_const_margin
+                        + depth as i16 * depth as i16 * self.options.razoring_depth_margin,
+                )
+            {
                 let qscore = self.quiesce::<M>(board, alpha - 1, alpha, ply, pv, tt);
                 if qscore <= alpha {
                     return qscore;

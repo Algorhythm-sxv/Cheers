@@ -32,6 +32,7 @@ uci_options![
     LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
     IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 10 }),
     RazoringConstMargin(Spin<i16> { default: RAZORING_CONST_MARGIN, min: 0, max: 1000 }),
+    RazoringDepthMargin(Spin<i16> { default: RAZORING_DEPTH_MARGIN, min: 0, max: 1000 }),
 ];
 
 pub enum UciCommand {
