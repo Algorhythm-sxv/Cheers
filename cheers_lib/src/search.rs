@@ -447,7 +447,15 @@ impl Search {
         // Whole-node pruning techniques: these techniques will prune a whole node before move
         // generation and search is performed
         if !R::ROOT && !pv_node && !in_check {
-            //Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
+            // Razoring: if the static eval is too low then see if qsearch will also be lower then
+            // alpha, then prune
+            if eval <= alpha.saturating_sub(self.options.razoring_const_margin) {
+                let qscore = self.quiesce::<M>(board, alpha - 1, alpha, ply, pv, tt);
+                if qscore <= alpha {
+                    return qscore;
+                }
+            }
+            // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
             if depth <= self.options.rfp_depth
                 && eval.saturating_sub(
                     depth as i16 * self.options.rfp_margin
