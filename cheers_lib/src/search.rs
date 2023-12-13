@@ -593,7 +593,7 @@ impl Search {
 
                             // reduce less with good history, more with bad
                             r -= (self.thread_data.history_tables[current_player][mv]
-                                / (HISTORY_MAX / 2)) as i8;
+                                / (HISTORY_MAX / 2)).min(0) as i8;
                         }
 
                         r
