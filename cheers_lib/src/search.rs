@@ -7,6 +7,7 @@ use cheers_pregen::{LMP_MARGINS, LMR};
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
 use crate::board::see::SEE_PIECE_VALUES;
+use crate::history_tables::HISTORY_MAX;
 use crate::moves::*;
 use crate::thread_data::ThreadData;
 use crate::types::{HelperThread, MainThread, TypeMainThread};
@@ -25,8 +26,6 @@ pub const INF: i16 = i16::MAX;
 pub const MINUS_INF: i16 = -INF;
 
 pub const SEARCH_MAX_PLY: usize = 128;
-
-pub const MAX_HISTORY: i16 = 4096;
 
 #[derive(Clone)]
 pub struct Search {
@@ -591,6 +590,10 @@ impl Search {
                             && !in_check
                         {
                             r += LMR[(depth as usize).min(31)][move_index.min(31)];
+
+                            // reduce less with good history, more with bad
+                            r -= (self.thread_data.history_tables[current_player][mv]
+                                / (HISTORY_MAX / 2)) as i8;
                         }
 
                         r
