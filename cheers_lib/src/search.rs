@@ -7,7 +7,6 @@ use cheers_pregen::{LMP_MARGINS, LMR};
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
 
 use crate::board::see::SEE_PIECE_VALUES;
-use crate::history_tables::HISTORY_MAX;
 use crate::moves::*;
 use crate::thread_data::ThreadData;
 use crate::types::{HelperThread, MainThread, TypeMainThread};
@@ -593,7 +592,8 @@ impl Search {
 
                             // reduce less with good history, more with bad
                             r -= (self.thread_data.history_tables[current_player][mv]
-                                / (HISTORY_MAX / 4)) as i8;
+                                / self.options.history_lmr_divisor)
+                                as i8;
                         }
 
                         r

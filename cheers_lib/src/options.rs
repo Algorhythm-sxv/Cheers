@@ -18,6 +18,7 @@ pub struct SearchOptions {
     pub rfp_improving_margin: i16,
     pub lmp_depth: i8,
     pub iir_depth: i8,
+    pub history_lmr_divisor: i16,
 }
 
 pub const NMP_DEPTH: i8 = 1;
@@ -36,6 +37,7 @@ pub const RFP_MARGIN: i16 = 185;
 pub const RFP_IMPROVING_MARGIN: i16 = -79;
 pub const LMP_DEPTH: i8 = 10;
 pub const IIR_DEPTH: i8 = 7;
+pub const HISTORY_LMR_DIVISOR: i16 = 1540;
 
 impl Default for SearchOptions {
     fn default() -> Self {
@@ -58,6 +60,7 @@ impl Default for SearchOptions {
             rfp_improving_margin: RFP_IMPROVING_MARGIN,
             lmp_depth: LMP_DEPTH,
             iir_depth: IIR_DEPTH,
+            history_lmr_divisor: HISTORY_LMR_DIVISOR,
         }
     }
 }
