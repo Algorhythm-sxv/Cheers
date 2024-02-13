@@ -61,3 +61,34 @@ impl IndexMut<Move> for CounterMoveTable {
         &mut self.0[mv.piece()][mv.to()]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::history_tables::{apply_history_bonus, apply_history_malus, HISTORY_MAX};
+
+    #[test]
+    fn test_history_bonus() {
+        let mut score = 0;
+        apply_history_bonus(&mut score, 16);
+        assert_eq!(score, 16);
+        score = HISTORY_MAX;
+        apply_history_bonus(&mut score, 16);
+        assert_eq!(score, HISTORY_MAX);
+        score = -HISTORY_MAX;
+        apply_history_bonus(&mut score, 16);
+        assert_eq!(score, -HISTORY_MAX + 32);
+    }
+
+    #[test]
+    fn test_history_malus() {
+        let mut score = 0;
+        apply_history_malus(&mut score, 16);
+        assert_eq!(score, -16);
+        score = HISTORY_MAX;
+        apply_history_malus(&mut score, 16);
+        assert_eq!(score, HISTORY_MAX - 32);
+        score = -HISTORY_MAX;
+        apply_history_malus(&mut score, 16);
+        assert_eq!(score, -HISTORY_MAX);
+    }
+}

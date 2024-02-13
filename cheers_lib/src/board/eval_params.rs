@@ -54,7 +54,7 @@ impl EvalParams {
         let array = &mut bytemuck::cast::<EvalParams, [i16; Self::LEN]>(*self);
         array
             .chunks_exact_mut(2)
-            .for_each(|p| EvalScore::convert(p));
+            .for_each(EvalScore::convert);
         *array
     }
     pub fn as_array(&self) -> &[i16; Self::LEN] {
@@ -148,7 +148,7 @@ impl Default for EvalTrace {
 // static assert that eval params and trace are the same length (plus 1 for turn in trace)
 #[cfg(feature = "eval-tracing")]
 const _PARAMS_TRACE_LEN_EQ: () = if EvalParams::LEN + 1 == EvalTrace::LEN {
-    ()
+    
 } else {
     panic!("Eval parameters and trace are not equal length!")
 };

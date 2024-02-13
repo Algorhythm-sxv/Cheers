@@ -47,7 +47,7 @@ impl Board {
         // correct for en passent capture
         if mv.piece() == Pawn && mv.to().bitboard() == self.ep_mask {
             // shift the pawn back to the normal square for en passent
-            occupied ^= self.ep_mask | (self.ep_mask >> 8 << 16 * (self.black_to_move as u8));
+            occupied ^= self.ep_mask | (self.ep_mask >> 8 << (16 * (self.black_to_move as u8)));
             swap_list[0] = SEE_PIECE_VALUES[Pawn];
         }
 

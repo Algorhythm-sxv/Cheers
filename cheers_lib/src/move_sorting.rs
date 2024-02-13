@@ -37,7 +37,7 @@ impl<M: TypeMoveGen> MoveSorter<M> {
             },
             tt_move,
             index: 0,
-            _captures: PhantomData::default(),
+            _captures: PhantomData,
         }
     }
 
@@ -46,7 +46,6 @@ impl<M: TypeMoveGen> MoveSorter<M> {
         board: &Board,
         thread_data: &mut ThreadData,
         ply: usize,
-        last_move: Move,
     ) -> Option<(Move, i32)> {
         // return the TT move first if it is pseudolegal and pray that there is no hash collision
         // a beta cutoff here could skip movegen altogether
@@ -68,7 +67,7 @@ impl<M: TypeMoveGen> MoveSorter<M> {
                 }
             } else {
                 board.generate_legal_moves_into(&mut thread_data.search_stack[ply].move_list);
-                thread_data.score_moves(board, ply, last_move);
+                thread_data.score_moves(board, ply);
             }
         }
 

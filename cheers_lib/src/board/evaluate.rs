@@ -134,7 +134,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         // material value
         let count = knights.count_ones() as i16;
         eval += EVAL_PARAMS.piece_values[Knight] * count;
-        self.trace.term(|t| t.knight_count[color as usize] = count);
+        self.trace.term(|t| t.knight_count[color] = count);
 
         // knights behind pawns
         let behind_pawns = if W::WHITE {
@@ -283,7 +283,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         // material value
         let count = rooks.count_ones() as i16;
         eval += EVAL_PARAMS.piece_values[Rook] * count;
-        self.trace.term(|t| t.rook_count[color as usize] = count);
+        self.trace.term(|t| t.rook_count[color] = count);
 
         for rook in rooks {
             // placement
@@ -463,7 +463,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 self.trace.term(|t| t.pawn_threats[i][color] += threats)
             });
 
-        for pawn in pawns.clone() {
+        for pawn in pawns {
             // placement
             let relative_pawn = relative_board_index::<W>(pawn);
             eval += EVAL_PARAMS.piece_tables[(Pawn, relative_pawn)];

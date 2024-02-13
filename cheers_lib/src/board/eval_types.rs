@@ -86,7 +86,7 @@ impl Sub<Self> for EvalScore {
 
 impl SubAssign<Self> for EvalScore {
     fn sub_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
+        *self = *self - rhs;
     }
 }
 
@@ -177,5 +177,29 @@ impl std::ops::Index<Piece> for PieceValues {
     type Output = EvalScore;
     fn index(&self, index: Piece) -> &Self::Output {
         &self.0[index as usize]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EvalScore, s};
+    #[test]
+    fn test_eval_score_ops() {
+        let score = s!(0, 0) + s!(1000, 0);
+        assert_eq!((score.mg(), score.eg()), (1000, 0));
+        let score = s!(0, 0) + s!(0, 1000);
+        assert_eq!((score.mg(), score.eg()), (0, 1000));
+        let score = s!(0, 0) - s!(1000, 0);
+        assert_eq!((score.mg(), score.eg()), (-1000, 0));
+        let score = s!(0, 0) - s!(0, 1000);
+        assert_eq!((score.mg(), score.eg()), (0, -1000));
+
+        let mut score = s!(0, 0);
+        score += s!(100, 200) - s!(200, 100);
+        score += s!(1000, 300) - s!(300, 100);
+        score += s!(-200, 200) - s!(200, -200);
+        score += s!(0, 0) - s!(0, 100);
+        score -= s!(100, 100);
+        assert_eq!((score.mg(), score.eg()), (100, 500))
     }
 }

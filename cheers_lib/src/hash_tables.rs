@@ -310,13 +310,13 @@ mod tests {
 
         let entry = tt.get(board.hash()).ok_or("TT entry not found!")?;
         assert!(entry.score == score, "Scores not equal!");
-        assert!(entry.move_from == best_move.from, "Move from not equal!");
-        assert!(entry.move_to == best_move.to, "Move to not equal!");
+        assert!(entry.move_from == best_move.from(), "Move from not equal!");
+        assert!(entry.move_to == best_move.to(), "Move to not equal!");
         assert!(entry.depth == depth, "depth not equal!");
         assert!(entry.node_type == node_type, "Node type not equal!");
-        assert!(entry.piece == best_move.piece, "Piece not equal!");
+        assert!(entry.piece == best_move.piece(), "Piece not equal!");
         assert!(
-            entry.promotion == best_move.promotion,
+            entry.promotion == best_move.promotion(),
             "Promotion not equal!"
         );
 

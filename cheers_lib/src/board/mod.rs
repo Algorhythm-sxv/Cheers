@@ -530,23 +530,22 @@ impl Board {
             } else {
                 Some(King)
             }
-        } else {
-            if ((self.black_pawns | self.black_knights | self.black_bishops) & mask).is_not_empty()
-            {
-                if (self.black_pawns & mask).is_not_empty() {
-                    Some(Pawn)
-                } else if (self.black_knights & mask).is_not_empty() {
-                    Some(Knight)
-                } else {
-                    Some(Bishop)
-                }
-            } else if (self.black_rooks & mask).is_not_empty() {
-                Some(Rook)
-            } else if (self.black_queens & mask).is_not_empty() {
-                Some(Queen)
+        } else if ((self.black_pawns | self.black_knights | self.black_bishops) & mask)
+            .is_not_empty()
+        {
+            if (self.black_pawns & mask).is_not_empty() {
+                Some(Pawn)
+            } else if (self.black_knights & mask).is_not_empty() {
+                Some(Knight)
             } else {
-                Some(King)
+                Some(Bishop)
             }
+        } else if (self.black_rooks & mask).is_not_empty() {
+            Some(Rook)
+        } else if (self.black_queens & mask).is_not_empty() {
+            Some(Queen)
+        } else {
+            Some(King)
         }
     }
 
@@ -763,12 +762,10 @@ impl Board {
                 } else {
                     (Square::C1, Square::D1)
                 }
+            } else if mv.from().file() < mv.to().file() {
+                (Square::G8, Square::F8)
             } else {
-                if mv.from().file() < mv.to().file() {
-                    (Square::G8, Square::F8)
-                } else {
-                    (Square::C8, Square::D8)
-                }
+                (Square::C8, Square::D8)
             };
 
             // move the king and the rook, seperately to avoid problems with
@@ -840,16 +837,14 @@ impl Board {
                             self.check_mask = new_checkers;
                         }
                     }
-                } else {
-                    if mv.to().abs_diff(*mv.from()) == 16 {
-                        // double push
-                        new_ep_mask = self.forward::<T::Other>(target_mask);
-                    } else if target_mask == self.ep_mask {
-                        let target_square = self.forward::<T::Other>(target_mask).first_square();
-                        // remove en passent captured pawn
-                        self.xor_piece::<T::Other>(Pawn, target_square);
-                        self.pawn_hash ^= zobrist_piece::<T::Other>(Pawn, target_square)
-                    }
+                } else if mv.to().abs_diff(*mv.from()) == 16 {
+                    // double push
+                    new_ep_mask = self.forward::<T::Other>(target_mask);
+                } else if target_mask == self.ep_mask {
+                    let target_square = self.forward::<T::Other>(target_mask).first_square();
+                    // remove en passent captured pawn
+                    self.xor_piece::<T::Other>(Pawn, target_square);
+                    self.pawn_hash ^= zobrist_piece::<T::Other>(Pawn, target_square)
                 }
                 // update check mask
                 let new_checkers = self.pawn_attack::<T::Other>(other_king) & target_mask;
@@ -1273,7 +1268,7 @@ impl Board {
             }
 
             if rank != 0 {
-                fen.push_str("/");
+                fen.push('/');
             }
         }
 
@@ -1376,5 +1371,11 @@ impl Board {
         println!("Check Mask:\n{}\n", self.check_mask);
         println!("EP mask:\n{}\n", self.ep_mask);
         println!("WTM: {}", !self.black_to_move);
+    }
+}
+
+impl Default for Board {
+    fn default() -> Self {
+        Self::new()
     }
 }

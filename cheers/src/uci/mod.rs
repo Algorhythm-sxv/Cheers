@@ -134,7 +134,7 @@ impl ValidateOption for Combo {
             + self
                 .vars
                 .iter()
-                .map(|&v| format!(" var ") + v)
+                .map(|&v| " var ".to_string() + v)
                 .collect::<String>()
                 .trim_end()
     }
@@ -216,11 +216,11 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                 "uci" => Ok(Uci),
                 "isready" => Ok(IsReady),
                 "setoption" => {
-                    let name = match words.get(1).map(|w| *w) {
-                        Some("name") => match words.get(2).map(|w| *w) {
-                            Some(name) => name,
-                            None => "Missing token in UCI setoption command: no name specified",
-                        },
+                    let name = match words.get(1).copied() {
+                        Some("name") => words
+                            .get(2)
+                            .copied()
+                            .unwrap_or("Missing token in UCI setoption command: no name specified"),
                         Some(other) => {
                             return Err(UciParseError::Other(format!(
                             "Unexpected token in UCI setoption command: expected 'name', found {}",
@@ -228,16 +228,16 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                         )))
                         }
                         None => {
-                            return Err(UciParseError::Other(format!(
+                            return Err(UciParseError::Other(
                                 "Missing token in UCI setoption command: 'name' not found"
-                            )))
+                                    .to_string(),
+                            ))
                         }
                     };
-                    let value = match words.get(3).map(|w| *w) {
-                        Some("value") => match words.get(4).map(|w| *w) {
-                            Some(name) => name,
-                            None => "Missing token in UCI setoption command: no value specified",
-                        },
+                    let value = match words.get(3).copied() {
+                        Some("value") => words.get(4).copied().unwrap_or(
+                            "Missing token in UCI setoption command: no value specified",
+                        ),
                         Some(other) => {
                             return Err(UciParseError::Other(format!(
                             "Unexpected token in UCI setoption command: expected 'value', found {}",
@@ -245,12 +245,13 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                         )))
                         }
                         None => {
-                            return Err(UciParseError::Other(format!(
+                            return Err(UciParseError::Other(
                                 "Missing token in UCI setoption command: 'value' not found"
-                            )))
+                                    .to_string(),
+                            ))
                         }
                     };
-                    UciOption::parse(name, value).map(|opt| UciCommand::SetOption(opt))
+                    UciOption::parse(name, value).map(UciCommand::SetOption)
                 }
                 "ucinewgame" => Ok(UciNewGame),
                 "position" => {
@@ -269,7 +270,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                     (false, Some(fen))
                                 }
                                 None => {
-                                    return Err(UciParseError::Other(format!("Incomplete or missing FEN string in UCI position command")))
+                                    return Err(UciParseError::Other("Incomplete or missing FEN string in UCI position command".to_string()))
                                 }
                             }
 
@@ -278,8 +279,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                     "Invalid argument in UCI position command: {}\n\t \
                                     Valid arguments are: 'startpos', 'fen [FEN]'", p))),
                         None => return Err(
-                            UciParseError::Other(format!(
-                                    "Missing arguments in UCI position command, expected 'startpos' or 'fen'")))
+                            UciParseError::Other("Missing arguments in UCI position command, expected 'startpos' or 'fen'".to_string()))
                     };
                     let moves_index = if startpos { 2 } else { 8 };
                     let moves = match words.get(moves_index) {
@@ -295,7 +295,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                         let kingside = test.castling_rights()[0][0]
                                             .first_square()
                                             .file_letter();
-                                        move_string.replace("g", kingside)
+                                        move_string.replace('g', kingside)
                                     } else if *move_string == "e8g8"
                                         && test.current_player() == Color::Black
                                         && test.piece_on(Square::E8) == Some(Piece::King)
@@ -303,7 +303,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                         let kingside = test.castling_rights()[1][0]
                                             .first_square()
                                             .file_letter();
-                                        move_string.replace("g", kingside)
+                                        move_string.replace('g', kingside)
                                     } else if *move_string == "e1c1"
                                         && test.current_player() == Color::White
                                         && test.piece_on(Square::E1) == Some(Piece::King)
@@ -311,7 +311,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                         let queenside = test.castling_rights()[0][1]
                                             .first_square()
                                             .file_letter();
-                                        move_string.to_string().replace("c", queenside)
+                                        move_string.to_string().replace('c', queenside)
                                     } else if *move_string == "e8c8"
                                         && test.current_player() == Color::Black
                                         && test.piece_on(Square::E8) == Some(Piece::King)
@@ -319,7 +319,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                         let queenside = test.castling_rights()[1][1]
                                             .first_square()
                                             .file_letter();
-                                        move_string.replace("c", queenside)
+                                        move_string.replace('c', queenside)
                                     } else {
                                         move_string.to_string()
                                     };
@@ -327,8 +327,7 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                         .legal_move_list()
                                         .iter()
                                         .map(|m| m.coords_960())
-                                        .find(|m| m == &move_string)
-                                        .is_some()
+                                        .any(|m| m == move_string)
                                     {
                                         let checked_move = Move::from_pair(&test, move_string);
                                         test.make_move(checked_move);
@@ -346,9 +345,9 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                                 });
                             }
                             None => {
-                                return Err(UciParseError::Other(format!(
-                                    "Missing move list in UCI position command"
-                                )))
+                                return Err(UciParseError::Other(
+                                    "Missing move list in UCI position command".to_string(),
+                                ))
                             }
                         },
                         Some(other) => {
@@ -375,22 +374,21 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                     parse_uci_go_value!(words, perft, usize);
 
                     let infinite = words.iter().find(|&&s| s == "infinite");
-                    if infinite.is_some() {
-                        if wtime.is_some()
+                    if infinite.is_some()
+                        && (wtime.is_some()
                             || btime.is_some()
                             || winc.is_some()
                             || binc.is_some()
                             || movestogo.is_some()
                             || depth.is_some()
                             || nodes.is_some()
-                            || movetime.is_some()
-                        {
-                            return Err(UciParseError::Other(format!("Error in UCI go command: 'infinite' specified along with other search directives")));
-                        }
+                            || movetime.is_some())
+                    {
+                        return Err(UciParseError::Other("Error in UCI go command: 'infinite' specified along with other search directives".to_string()));
                     }
 
-                    if perft.is_some() {
-                        if wtime.is_some()
+                    if perft.is_some()
+                        && (wtime.is_some()
                             || btime.is_some()
                             || winc.is_some()
                             || binc.is_some()
@@ -398,10 +396,9 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                             || depth.is_some()
                             || nodes.is_some()
                             || movetime.is_some()
-                            || infinite.is_some()
-                        {
-                            return Err(UciParseError::Other(format!("Error in UCI go command: 'perft' specified along with other directives")));
-                        }
+                            || infinite.is_some())
+                    {
+                        return Err(UciParseError::Other("Error in UCI go command: 'perft' specified along with other directives".to_string()));
                     }
 
                     Ok(Go {

@@ -138,7 +138,7 @@ impl Search {
 
         // Lazy SMP: start all threads at the same depth, communicating only
         // via the shared TT
-        let _ = thread::scope(|s| {
+        thread::scope(|s| {
             // main thread: this is the only thread that reports back over UCI
             let _main_thread = s.spawn(|| {
                 let search = self.clone();
@@ -404,7 +404,7 @@ impl Search {
         if let Some(entry) = tt.get(board.hash()) {
             // TT pruning when the bounds are correct, but not at in the PV
             if !pv_node
-                && entry.depth >= depth as i8
+                && entry.depth >= depth
                 && (entry.node_type == Exact
                     || (entry.node_type == LowerBound && entry.score >= beta)
                     || (entry.node_type == UpperBound && entry.score <= alpha))
@@ -474,7 +474,8 @@ impl Search {
                     .saturating_add(((eval - beta) / 200).min(3) as i8))
                 .max(1);
                 self.search_history.push(board.hash());
-                let mut new = board.clone();
+                self.thread_data.search_stack[ply].current_move = Move::null();
+                let mut new = *board;
                 new.make_null_move();
                 let score = -self.negamax::<NotRoot, M>(
                     &new,
@@ -521,15 +522,13 @@ impl Search {
 
         let mut move_index = 0;
         let mut quiets_tried = MoveList::new();
-        while let Some((mv, move_score)) =
-            move_sorter.next(board, &mut self.thread_data, ply, last_move)
-        {
+        while let Some((mv, move_score)) = move_sorter.next(board, &mut self.thread_data, ply) {
             let capture = board.is_capture(mv);
 
             // Futility Pruning: skip quiets on nodes with bad static eval
             if futility_pruning
                 && !capture
-                && !(move_score >= COUNTERMOVE_SCORE && move_score < KILLER_MOVE_SCORE + 50_000)
+                && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
             {
                 quiets_tried.push(SortingMove::new(mv));
                 move_index += 1;
@@ -566,7 +565,8 @@ impl Search {
             }
 
             // make the move on a copy of the board
-            let mut new = board.clone();
+            self.thread_data.search_stack[ply].current_move = mv;
+            let mut new = *board;
             new.make_move(mv);
 
             // legality check for the TT move, which is only verified as pseudolegal
@@ -585,8 +585,8 @@ impl Search {
 
                         // Late Move Reduction: moves that are sorted later are likely to fail low
                         if !capture
-                            && !(move_score >= COUNTERMOVE_SCORE
-                                && move_score < KILLER_MOVE_SCORE + 50_000)
+                            && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000)
+                                .contains(&move_score)
                             && mv.promotion() != Queen
                             && !in_check
                         {
@@ -660,7 +660,7 @@ impl Search {
                 tt.set(
                     board.hash(),
                     mv,
-                    depth as i8,
+                    depth,
                     score_into_tt(score, ply),
                     LowerBound,
                     pv_node,
@@ -672,15 +672,21 @@ impl Search {
                     self.thread_data.countermove_tables[current_player][last_move] = mv;
 
                     let delta = depth as i16 * depth as i16;
-                    self.thread_data
-                        .update_histories(current_player, delta, mv, &quiets_tried);
+                    self.thread_data.update_histories(
+                        current_player,
+                        delta,
+                        mv,
+                        &quiets_tried,
+                        ply,
+                    );
                 }
 
                 // remove this position from the history
                 self.search_history.pop();
 
                 return score;
-            } else if score > alpha {
+            }
+            if score > alpha {
                 // a score between alpha and beta represents a new best move
                 best_move = mv;
 
@@ -700,7 +706,7 @@ impl Search {
         self.search_history.pop();
 
         // check for checkmate and stalemate
-        if self.thread_data.search_stack[ply].move_list.len() == 0 {
+        if self.thread_data.search_stack[ply].move_list.is_empty() {
             if in_check {
                 // checkmate, preferring shorter mating sequences
                 pv.clear();
@@ -718,7 +724,7 @@ impl Search {
         tt.set(
             board.hash(),
             best_move,
-            depth as i8,
+            depth,
             score_into_tt(alpha, ply),
             if alpha > old_alpha { Exact } else { UpperBound },
             pv_node,
@@ -841,8 +847,7 @@ impl Search {
         self.search_history.push(board.hash());
 
         let mut best_move = Move::null();
-        while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply, Move::null())
-        {
+        while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply) {
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
                 .saturating_add(
@@ -863,7 +868,7 @@ impl Search {
             }
 
             // make the move on a copy of the board
-            let mut new = board.clone();
+            let mut new = *board;
             new.make_move(mv);
 
             // legality check for the TT move, which is only verified as pseudolegal
@@ -906,7 +911,7 @@ impl Search {
 
         // if there are no legal captures, check for checkmate/stalemate
         // disable when tracing to avoid empty traces
-        if !T::TRACING && self.thread_data.search_stack[ply].move_list.len() == 0 {
+        if !T::TRACING && self.thread_data.search_stack[ply].move_list.is_empty() {
             let mut some_moves = false;
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 

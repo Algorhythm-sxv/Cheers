@@ -27,10 +27,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     if std::env::args().nth(1) == Some(String::from("bench")) {
         let depth = std::env::args()
             .nth(2)
-            .map(|n| n.parse::<usize>().ok())
-            .flatten()
+            .and_then(|n| n.parse::<usize>().ok())
             .unwrap_or(15);
-        let bench_game = position.clone();
+        let bench_game = position;
         let search = Search::new(bench_game)
             .max_depth(Some(depth))
             .tt_size_mb(options.tt_size_mb, options.tt_size_mb / 8)
@@ -148,7 +147,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 };
 
-                let mut search = Search::new_with_tt(position.clone(), tt.clone(), 0)
+                let mut search = Search::new_with_tt(position, tt.clone(), 0)
                     .tt_size_mb(options.tt_size_mb, options.tt_size_mb / 8)
                     .pre_history(pre_history.clone())
                     .max_nodes(nodes)

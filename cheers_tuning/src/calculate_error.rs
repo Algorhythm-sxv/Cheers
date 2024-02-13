@@ -32,20 +32,20 @@ fn sigmoid(s: f64, k: f64) -> f64 {
 
 #[allow(dead_code)]
 pub fn mf_to_entry(mf: &str) -> TuningEntry {
-    let mut split = mf.split("|");
+    let mut split = mf.split('|');
     let fen = split.next().expect("Empty line in MF data");
     let _eval_text = split
         .next()
-        .expect(&format!("Incomplete line in MF data: {mf}"));
+        .unwrap_or_else(|| panic!("Incomplete line in MF data: {mf}"));
     let result_text = split
         .next()
-        .expect(&format!("Incomplete line in MF data: {mf}"));
+        .unwrap_or_else(|| panic!("Incomplete line in MF data: {mf}"));
 
-    let game = Board::from_fen(fen).expect(&format!("Invalid FEN extracted from MF data: {mf}"));
+    let game = Board::from_fen(fen).unwrap_or_else(|| panic!("Invalid FEN extracted from MF data: {mf}"));
 
     let result = result_text
         .parse::<f64>()
-        .expect(&format!("Invalid result in MF data: {mf}"));
+        .unwrap_or_else(|_| panic!("Invalid result in MF data: {mf}"));
 
     let mut pawn_hash_table = PawnHashTable::new(0);
 
@@ -81,7 +81,7 @@ pub fn book_to_entry(book: &str) -> TuningEntry {
     let mut split = book.split(" [");
     let fen = split.next().expect("Empty line in book");
     let result_text = split.next().expect("Result missing in book");
-    let game = Board::from_fen(fen).expect(&format!("Invalid FEN extracted: {fen}"));
+    let game = Board::from_fen(fen).unwrap_or_else(|| panic!("Invalid FEN extracted: {fen}"));
     let result = match result_text {
         "1.0]" => 1.0,
         "0.5]" => 0.5,
@@ -124,11 +124,11 @@ pub fn epd_to_entry(epd: &str) -> TuningEntry {
     let almost_fen = split.next().expect("Empty line in EPD");
     let result_text = split
         .next()
-        .expect(&format!("Result missing in EPD: {epd}"));
+        .unwrap_or_else(|| panic!("Result missing in EPD: {epd}"));
 
     let mut fen = String::from(almost_fen);
     fen += " 0 1"; // add the move counters to the end of the FEN
-    let game = Board::from_fen(&fen).expect(&format!("Invalid FEN extracted: {fen}"));
+    let game = Board::from_fen(&fen).unwrap_or_else(|| panic!("Invalid FEN extracted: {fen}"));
 
     let result = match result_text {
         "\"1-0\";" => 1.0,
@@ -189,7 +189,7 @@ pub fn calculate_error(
         .take(count)
         .map(|entry| {
             let eval = linear_evaluation(entry, eval_params);
-            (entry.result.into_f64() - sigmoid(eval as f64, k)).powf(2.0)
+            (entry.result.into_f64() - sigmoid(eval, k)).powf(2.0)
         })
         .sum::<f64>()
         / count as f64
@@ -214,7 +214,7 @@ pub fn calculate_gradient(
             || Box::new([0f64; EvalParams::LEN]),
             |mut a: Box<[f64; EvalParams::LEN]>, b: &TuningEntry| {
                 let eval = linear_evaluation(b, eval_params);
-                let s = sigmoid(eval as f64, k);
+                let s = sigmoid(eval, k);
                 let base = (b.result.into_f64() - s) * s * (s - 1.0);
 
                 for tuple in &b.tuples {

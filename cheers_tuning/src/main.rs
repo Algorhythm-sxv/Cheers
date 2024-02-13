@@ -123,7 +123,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mhat = *m / (1.0 - args.beta1.powi(iter as i32 + 1));
             let vhat = *v / (1.0 - args.beta2.powi(iter as i32 + 1));
 
-            *x = *x - alpha * mhat / (vhat.sqrt() + 1e-8);
+            *x -= alpha * mhat / (vhat.sqrt() + 1e-8);
         }
         let error = calculate_error(&data, &eval_params, best_k, args.count.unwrap_or(len));
         print!("\rIter [{iter}] Error = [{error:.10}], Rate = [{alpha:.10}]");

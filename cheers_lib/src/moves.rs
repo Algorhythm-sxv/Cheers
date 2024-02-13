@@ -111,6 +111,11 @@ impl MoveMask {
         };
         len as usize
     }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 impl IntoIterator for MoveMask {
     type Item = Move;
@@ -217,6 +222,10 @@ impl MoveList {
 
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+
+    pub fn score(&mut self, idx: usize) -> &mut i32 {
+        &mut self.inner[idx].score
     }
 
     #[inline(always)]
