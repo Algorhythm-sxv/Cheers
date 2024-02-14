@@ -1,13 +1,13 @@
 use crate::{
-    board::Board,
-    history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
-    move_sorting::score_capture,
-    moves::{
-        KillerMoves, Move, MoveList, COUNTERMOVE_SCORE, KILLER_MOVE_SCORE, NUM_KILLER_MOVES,
-        QUIET_SCORE,
+    board::{
+        evaluate::{relative_board_index, EVAL_PARAMS},
+        see::{MVV_LVA, SEE_PIECE_VALUES},
+        Board,
     },
+    history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
+    moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
-    types::{Color, Piece},
+    types::{Black, Color, Piece, White},
 };
 
 #[derive(Clone)]
@@ -90,13 +90,35 @@ impl ThreadData {
             let mv = self.search_stack[ply].move_list[i];
 
             let score = if mv.promotion() != Piece::Pawn || board.is_capture(mv) {
-                score_capture(board, mv)
+                Self::score_capture(board, mv)
             } else {
                 self.score_quiet(board, ply, mv)
             };
 
             *self.search_stack[ply].move_list.score(i) = score
         }
+    }
+
+    pub fn score_capture(board: &Board, mv: Move) -> i32 {
+        use crate::types::Piece::*;
+        // filter out underpromotions
+        if matches!(mv.promotion(), Knight | Bishop | Rook) {
+            return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion()] as i32);
+        }
+        let mvv_lva = if mv.promotion() == Queen {
+            MVV_LVA[Queen][Pawn]
+        } else {
+            MVV_LVA[board.piece_on(mv.to()).unwrap_or(Pawn)][mv.piece()]
+        };
+        let relative_square = if board.current_player() == Color::White {
+            relative_board_index::<White>(mv.to())
+        } else {
+            relative_board_index::<Black>(mv.to())
+        };
+        let psqt_score = EVAL_PARAMS.piece_tables[(mv.piece(), relative_square)].mg() as i32 / 16;
+
+        // sort all captures before quiets
+        WINNING_CAPTURE_SCORE + 1000 * (mvv_lva as i32) + psqt_score
     }
 
     pub fn score_quiet(&self, board: &Board, ply: usize, mv: Move) -> i32 {
