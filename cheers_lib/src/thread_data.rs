@@ -85,22 +85,24 @@ impl ThreadData {
         }
     }
 
-    pub fn udpate_capture_history(
+    pub fn update_capture_history(
         &mut self,
         player: Color,
         delta: i16,
-        bonus_capture: Move,
+        bonus_capture: Option<Move>,
         malus_captures: &MoveList,
     ) {
-        apply_history_bonus(
-            &mut self.capture_history_tables[player][bonus_capture],
-            delta,
-        );
+        if let Some(bonus_capture) = bonus_capture {
+            apply_history_bonus(
+                &mut self.capture_history_tables[player][bonus_capture],
+                delta,
+            );
+        }
 
         // punish quiets that were played but didn't cause a beta cutoff
         for smv in malus_captures.inner().iter() {
             let malus_capture = smv.mv;
-            debug_assert!(malus_capture != bonus_capture);
+            debug_assert!(Some(malus_capture) != bonus_capture);
             apply_history_malus(
                 &mut self.capture_history_tables[player][malus_capture],
                 delta,

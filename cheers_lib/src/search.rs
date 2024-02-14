@@ -670,11 +670,11 @@ impl Search {
                 );
 
                 // update killer, countermove and history tables for good quiets
+                let delta = depth as i16 * depth as i16;
                 if !capture {
                     self.thread_data.search_stack[ply].killer_moves.push(mv);
                     self.thread_data.countermove_tables[current_player][last_move] = mv;
 
-                    let delta = depth as i16 * depth as i16;
                     self.thread_data.update_quiet_histories(
                         current_player,
                         delta,
@@ -682,16 +682,15 @@ impl Search {
                         &quiets_tried,
                         ply,
                     );
-                // update capture histories
-                } else {
-                    let delta = depth as i16 * depth as i16;
-                    self.thread_data.udpate_capture_history(
-                        current_player,
-                        delta,
-                        mv,
-                        &captures_tried,
-                    )
                 }
+                // update capture histories for all moves that cause a beta cutoff
+                self.thread_data.update_capture_history(
+                    current_player,
+                    delta,
+                    // provide the best move if it was a capture
+                    capture.then_some(mv),
+                    &captures_tried,
+                );
 
                 // remove this position from the history
                 self.search_history.pop();
