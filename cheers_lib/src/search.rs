@@ -684,7 +684,7 @@ impl Search {
                     );
                 }
                 // update capture histories for all moves that cause a beta cutoff
-                self.thread_data.update_capture_history(
+                self.thread_data.update_capture_histories(
                     current_player,
                     delta,
                     // provide the best move if it was a capture

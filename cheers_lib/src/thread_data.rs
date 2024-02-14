@@ -29,7 +29,7 @@ impl Default for SearchStackEntry {
 
 #[derive(Clone)]
 pub struct ThreadData {
-    pub search_stack: Box<[SearchStackEntry; SEARCH_MAX_PLY]>,
+    pub search_stack: Box<[SearchStackEntry]>,
     pub history_tables: Box<[HistoryTable; 2]>,
     pub capture_history_tables: Box<[HistoryTable; 2]>,
     pub countermove_history_tables: Box<[[[HistoryTable; 64]; 6]; 2]>,
@@ -39,7 +39,7 @@ pub struct ThreadData {
 impl ThreadData {
     pub fn new() -> Self {
         Self {
-            search_stack: Box::new(std::array::from_fn(|_| SearchStackEntry::default())),
+            search_stack: vec![SearchStackEntry::default(); SEARCH_MAX_PLY].into_boxed_slice(),
             history_tables: Box::new([HistoryTable::default(); 2]),
             capture_history_tables: Box::new([HistoryTable::default(); 2]),
             countermove_history_tables: Box::new([[[HistoryTable::default(); 64]; 6]; 2]),
@@ -85,7 +85,7 @@ impl ThreadData {
         }
     }
 
-    pub fn update_capture_history(
+    pub fn update_capture_histories(
         &mut self,
         player: Color,
         delta: i16,
@@ -150,7 +150,7 @@ impl ThreadData {
             KILLER_MOVE_SCORE + (self.history_tables[current_player][mv] as i32)
         } else if self.countermove_tables[current_player][self
             .search_stack
-            .get(ply - 1)
+            .get(ply.wrapping_sub(1))
             .map(|s| s.current_move)
             .unwrap_or(Move::null())]
             == mv
@@ -159,7 +159,7 @@ impl ThreadData {
             COUNTERMOVE_SCORE
         } else {
             let countermove_score =
-                if let Some(countermove) = self.search_stack.get(ply - 1).map(|s| s.current_move) {
+                if let Some(countermove) = self.search_stack.get(ply.wrapping_sub(1)).map(|s| s.current_move) {
                     self.countermove_history_tables[current_player][countermove.piece()]
                         [countermove.to()][mv] as i32
                 } else {
