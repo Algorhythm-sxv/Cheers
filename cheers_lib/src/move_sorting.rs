@@ -52,12 +52,10 @@ impl<M: TypeMoveGen> MoveSorter<M> {
             self.stage = Stage::SortMoves;
             if M::CAPTURES {
                 board.generate_legal_captures_into(&mut thread_data.search_stack[ply].move_list);
-                for m in thread_data.search_stack[ply].move_list.inner_mut() {
-                    m.score = ThreadData::score_capture(board, m.mv);
-                }
+                thread_data.score_moves(board, ply, true);
             } else {
                 board.generate_legal_moves_into(&mut thread_data.search_stack[ply].move_list);
-                thread_data.score_moves(board, ply);
+                thread_data.score_moves(board, ply, false);
             }
         }
 

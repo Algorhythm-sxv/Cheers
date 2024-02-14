@@ -522,6 +522,7 @@ impl Search {
 
         let mut move_index = 0;
         let mut quiets_tried = MoveList::new();
+        let mut captures_tried = MoveList::new();
         while let Some((mv, move_score)) = move_sorter.next(board, &mut self.thread_data, ply) {
             let capture = board.is_capture(mv);
 
@@ -558,6 +559,8 @@ impl Search {
                 if !board.see_beats_threshold(mv, threshold) {
                     if !capture {
                         quiets_tried.push(SortingMove::new(mv));
+                    } else {
+                        captures_tried.push(SortingMove::new(mv));
                     }
                     move_index += 1;
                     continue;
@@ -672,13 +675,22 @@ impl Search {
                     self.thread_data.countermove_tables[current_player][last_move] = mv;
 
                     let delta = depth as i16 * depth as i16;
-                    self.thread_data.update_histories(
+                    self.thread_data.update_quiet_histories(
                         current_player,
                         delta,
                         mv,
                         &quiets_tried,
                         ply,
                     );
+                // update capture histories
+                } else {
+                    let delta = depth as i16 * depth as i16;
+                    self.thread_data.udpate_capture_history(
+                        current_player,
+                        delta,
+                        mv,
+                        &captures_tried,
+                    )
                 }
 
                 // remove this position from the history
@@ -700,6 +712,8 @@ impl Search {
             move_index += 1;
             if !capture {
                 quiets_tried.push(SortingMove::new(mv));
+            } else {
+                captures_tried.push(SortingMove::new(mv));
             }
         }
         // remove this position from the history
@@ -707,15 +721,14 @@ impl Search {
 
         // check for checkmate and stalemate
         if self.thread_data.search_stack[ply].move_list.is_empty() {
-            if in_check {
+            pv.clear();
+            return if in_check {
                 // checkmate, preferring shorter mating sequences
-                pv.clear();
-                return -(CHECKMATE_SCORE - (ply as i16));
+                -(CHECKMATE_SCORE - (ply as i16))
             } else {
                 // stalemate
-                pv.clear();
-                return DRAW_SCORE;
-            }
+                DRAW_SCORE
+            };
         }
 
         // after all moves have been searched, alpha is either unchanged

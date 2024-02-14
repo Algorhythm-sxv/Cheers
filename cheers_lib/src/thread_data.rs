@@ -1,13 +1,12 @@
 use crate::{
     board::{
-        evaluate::{relative_board_index, EVAL_PARAMS},
         see::{MVV_LVA, SEE_PIECE_VALUES},
         Board,
     },
     history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
     moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
-    types::{Black, Color, Piece, White},
+    types::{Color, Piece},
 };
 
 #[derive(Clone)]
@@ -32,6 +31,7 @@ impl Default for SearchStackEntry {
 pub struct ThreadData {
     pub search_stack: Box<[SearchStackEntry; SEARCH_MAX_PLY]>,
     pub history_tables: Box<[HistoryTable; 2]>,
+    pub capture_history_tables: Box<[HistoryTable; 2]>,
     pub countermove_history_tables: Box<[[[HistoryTable; 64]; 6]; 2]>,
     pub countermove_tables: Box<[CounterMoveTable; 2]>,
 }
@@ -41,12 +41,13 @@ impl ThreadData {
         Self {
             search_stack: Box::new(std::array::from_fn(|_| SearchStackEntry::default())),
             history_tables: Box::new([HistoryTable::default(); 2]),
+            capture_history_tables: Box::new([HistoryTable::default(); 2]),
             countermove_history_tables: Box::new([[[HistoryTable::default(); 64]; 6]; 2]),
             countermove_tables: Box::new([CounterMoveTable::default(); 2]),
         }
     }
 
-    pub fn update_histories(
+    pub fn update_quiet_histories(
         &mut self,
         player: Color,
         delta: i16,
@@ -84,13 +85,36 @@ impl ThreadData {
         }
     }
 
-    pub fn score_moves(&mut self, board: &Board, ply: usize) {
+    pub fn udpate_capture_history(
+        &mut self,
+        player: Color,
+        delta: i16,
+        bonus_capture: Move,
+        malus_captures: &MoveList,
+    ) {
+        apply_history_bonus(
+            &mut self.capture_history_tables[player][bonus_capture],
+            delta,
+        );
+
+        // punish quiets that were played but didn't cause a beta cutoff
+        for smv in malus_captures.inner().iter() {
+            let malus_capture = smv.mv;
+            debug_assert!(malus_capture != bonus_capture);
+            apply_history_malus(
+                &mut self.capture_history_tables[player][malus_capture],
+                delta,
+            );
+        }
+    }
+
+    pub fn score_moves(&mut self, board: &Board, ply: usize, captures_only: bool) {
         // for m in self.search_stack[ply].move_list.inner_mut() {
         for i in 0..self.search_stack[ply].move_list.len() {
             let mv = self.search_stack[ply].move_list[i];
 
-            let score = if mv.promotion() != Piece::Pawn || board.is_capture(mv) {
-                Self::score_capture(board, mv)
+            let score = if captures_only || mv.promotion() != Piece::Pawn || board.is_capture(mv) {
+                self.score_capture(board, mv)
             } else {
                 self.score_quiet(board, ply, mv)
             };
@@ -99,7 +123,7 @@ impl ThreadData {
         }
     }
 
-    pub fn score_capture(board: &Board, mv: Move) -> i32 {
+    pub fn score_capture(&self, board: &Board, mv: Move) -> i32 {
         use crate::types::Piece::*;
         // filter out underpromotions
         if matches!(mv.promotion(), Knight | Bishop | Rook) {
@@ -109,16 +133,12 @@ impl ThreadData {
             MVV_LVA[Queen][Pawn]
         } else {
             MVV_LVA[board.piece_on(mv.to()).unwrap_or(Pawn)][mv.piece()]
-        };
-        let relative_square = if board.current_player() == Color::White {
-            relative_board_index::<White>(mv.to())
-        } else {
-            relative_board_index::<Black>(mv.to())
-        };
-        let psqt_score = EVAL_PARAMS.piece_tables[(mv.piece(), relative_square)].mg() as i32 / 16;
+        } as i32;
+
+        let capture_history = self.capture_history_tables[board.current_player()][mv] as i32;
 
         // sort all captures before quiets
-        WINNING_CAPTURE_SCORE + 1000 * (mvv_lva as i32) + psqt_score
+        WINNING_CAPTURE_SCORE + 50_000 + capture_history + mvv_lva
     }
 
     pub fn score_quiet(&self, board: &Board, ply: usize, mv: Move) -> i32 {
