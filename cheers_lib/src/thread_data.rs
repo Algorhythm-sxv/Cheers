@@ -133,7 +133,8 @@ impl ThreadData {
         // } else {
         //     MVV_LVA[board.piece_on(mv.to()).unwrap_or(Pawn)][mv.piece()]
         // } as i32;
-        let mvv_bonus = 2 * SEE_PIECE_VALUES[board.piece_on(mv.to()).unwrap_or(Pawn)] as i32;
+        let piece_bonuses = [0, 240, 240, 480, 960];
+        let mvv_bonus = 2 * piece_bonuses[board.piece_on(mv.to()).unwrap_or(Pawn)] as i32;
         let capture_history = self.capture_history_tables[board.current_player()][mv] as i32;
 
         // sort all captures before quiets
