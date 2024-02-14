@@ -131,16 +131,16 @@ impl ThreadData {
         if matches!(mv.promotion(), Knight | Bishop | Rook) {
             return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion()] as i32);
         }
-        let mvv_lva = if mv.promotion() == Queen {
-            MVV_LVA[Queen][Pawn]
-        } else {
-            MVV_LVA[board.piece_on(mv.to()).unwrap_or(Pawn)][mv.piece()]
-        } as i32;
-
+        // let mvv_lva = if mv.promotion() == Queen {
+        //     MVV_LVA[Queen][Pawn]
+        // } else {
+        //     MVV_LVA[board.piece_on(mv.to()).unwrap_or(Pawn)][mv.piece()]
+        // } as i32;
+        let mvv_bonus = 2 * SEE_PIECE_VALUES[board.piece_on(mv.to()).unwrap_or(Pawn)] as i32;
         let capture_history = self.capture_history_tables[board.current_player()][mv] as i32;
 
         // sort all captures before quiets
-        WINNING_CAPTURE_SCORE + 50_000 + capture_history + mvv_lva
+        WINNING_CAPTURE_SCORE + 50_000 + capture_history + mvv_bonus
     }
 
     pub fn score_quiet(&self, board: &Board, ply: usize, mv: Move) -> i32 {
@@ -155,16 +155,18 @@ impl ThreadData {
             .unwrap_or(Move::null())]
             == mv
         {
-            // TODO: Prevent countermove scoring at root (ply > 0 condition)
             COUNTERMOVE_SCORE
         } else {
-            let countermove_score =
-                if let Some(countermove) = self.search_stack.get(ply.wrapping_sub(1)).map(|s| s.current_move) {
-                    self.countermove_history_tables[current_player][countermove.piece()]
-                        [countermove.to()][mv] as i32
-                } else {
-                    0
-                };
+            let countermove_score = if let Some(countermove) = self
+                .search_stack
+                .get(ply.wrapping_sub(1))
+                .map(|s| s.current_move)
+            {
+                self.countermove_history_tables[current_player][countermove.piece()]
+                    [countermove.to()][mv] as i32
+            } else {
+                0
+            };
             QUIET_SCORE + (self.history_tables[current_player][mv] as i32) + countermove_score
         }
     }
