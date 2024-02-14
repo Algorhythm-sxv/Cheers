@@ -1,8 +1,5 @@
 use crate::{
-    board::{
-        see::{MVV_LVA, SEE_PIECE_VALUES},
-        Board,
-    },
+    board::{see::SEE_PIECE_VALUES, Board},
     history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
     moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
