@@ -673,7 +673,7 @@ impl Search {
                 let delta = if depth > 13 {
                     32
                 } else {
-                    2 * depth as i16 * depth as i16
+                    4 * depth as i16 * depth as i16
                 };
                 if !capture {
                     self.thread_data.search_stack[ply].killer_moves.push(mv);

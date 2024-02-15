@@ -128,11 +128,6 @@ impl ThreadData {
         if matches!(mv.promotion(), Knight | Bishop | Rook) {
             return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion()] as i32);
         }
-        // let mvv_lva = if mv.promotion() == Queen {
-        //     MVV_LVA[Queen][Pawn]
-        // } else {
-        //     MVV_LVA[board.piece_on(mv.to()).unwrap_or(Pawn)][mv.piece()]
-        // } as i32;
         let piece_bonuses = [0, 240, 240, 480, 960];
         let mvv_bonus = 2 * piece_bonuses[board.piece_on(mv.to()).unwrap_or(Pawn)] as i32;
         let capture_history = self.capture_history_tables[board.current_player()][mv] as i32;
