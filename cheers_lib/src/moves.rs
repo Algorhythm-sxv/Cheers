@@ -171,7 +171,8 @@ pub const WINNING_CAPTURE_SCORE: i32 = 300_000;
 pub const KILLER_MOVE_SCORE: i32 = 200_000;
 pub const COUNTERMOVE_SCORE: i32 = 100_000;
 pub const QUIET_SCORE: i32 = 0;
-pub const UNDERPROMO_SCORE: i32 = -100_000;
+pub const LOSING_CAPTURE_SCORE: i32 = -100_000;
+pub const UNDERPROMO_SCORE: i32 = -200_000;
 
 #[derive(Copy, Clone, Debug)]
 pub struct SortingMove {

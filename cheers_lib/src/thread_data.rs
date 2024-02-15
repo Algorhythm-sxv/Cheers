@@ -137,8 +137,12 @@ impl ThreadData {
         let mvv_bonus = 2 * piece_bonuses[board.piece_on(mv.to()).unwrap_or(Pawn)] as i32;
         let capture_history = self.capture_history_tables[board.current_player()][mv] as i32;
 
-        // sort all captures before quiets
-        WINNING_CAPTURE_SCORE + 50_000 + capture_history + mvv_bonus
+        // sort winning captures before quiets, losing captures after
+        if board.see_beats_threshold(mv, 0) {
+            WINNING_CAPTURE_SCORE + 50_000 + capture_history + mvv_bonus
+        } else {
+            LOSING_CAPTURE_SCORE + 50_000 + capture_history + mvv_bonus
+        }
     }
 
     pub fn score_quiet(&self, board: &Board, ply: usize, mv: Move) -> i32 {
