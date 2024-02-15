@@ -670,7 +670,11 @@ impl Search {
                 );
 
                 // update killer, countermove and history tables for good quiets
-                let delta = depth as i16 * depth as i16;
+                let delta = if depth > 13 {
+                    32
+                } else {
+                    2 * depth as i16 * depth as i16
+                };
                 if !capture {
                     self.thread_data.search_stack[ply].killer_moves.push(mv);
                     self.thread_data.countermove_tables[current_player][last_move] = mv;
