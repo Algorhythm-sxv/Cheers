@@ -30,6 +30,7 @@ pub struct ThreadData {
     pub history_tables: Box<[HistoryTable; 2]>,
     pub capture_history_tables: Box<[HistoryTable; 2]>,
     pub countermove_history_tables: Box<[[[HistoryTable; 64]; 6]; 2]>,
+    pub continuation_history_tables: Box<[[[HistoryTable; 64]; 6]; 2]>,
     pub countermove_tables: Box<[CounterMoveTable; 2]>,
 }
 
@@ -40,6 +41,7 @@ impl ThreadData {
             history_tables: Box::new([HistoryTable::default(); 2]),
             capture_history_tables: Box::new([HistoryTable::default(); 2]),
             countermove_history_tables: Box::new([[[HistoryTable::default(); 64]; 6]; 2]),
+            continuation_history_tables: Box::new([[[HistoryTable::default(); 64]; 6]; 2]),
             countermove_tables: Box::new([CounterMoveTable::default(); 2]),
         }
     }
@@ -55,9 +57,15 @@ impl ThreadData {
         // reward quiets that produce a beta cutoff
         let countermove = self
             .search_stack
-            .get(ply - 1)
+            .get(ply.wrapping_sub(1))
             .map(|s| s.current_move)
             .unwrap_or(Move::null());
+        let continuation_move = self
+            .search_stack
+            .get(ply.wrapping_sub(2))
+            .map(|s| s.current_move)
+            .unwrap_or(Move::null());
+
         if !countermove.is_null() {
             apply_history_bonus(
                 &mut self.countermove_history_tables[player][countermove.piece()][countermove.to()]
@@ -65,6 +73,15 @@ impl ThreadData {
                 delta,
             )
         }
+
+        if !continuation_move.is_null() {
+            apply_history_bonus(
+                &mut self.continuation_history_tables[player][continuation_move.piece()]
+                    [continuation_move.to()][bonus_quiet],
+                delta,
+            )
+        }
+
         apply_history_bonus(&mut self.history_tables[player][bonus_quiet], delta);
 
         // punish quiets that were played but didn't cause a beta cutoff
@@ -75,6 +92,13 @@ impl ThreadData {
                 apply_history_malus(
                     &mut self.countermove_history_tables[player][countermove.piece()]
                         [countermove.to()][malus_quiet],
+                    delta,
+                )
+            }
+            if !continuation_move.is_null() {
+                apply_history_malus(
+                    &mut self.continuation_history_tables[player][continuation_move.piece()]
+                        [continuation_move.to()][malus_quiet],
                     delta,
                 )
             }
@@ -129,7 +153,7 @@ impl ThreadData {
             return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion()] as i32);
         }
         let piece_bonuses = [0, 240, 240, 480, 960];
-        let mvv_bonus = 2 * piece_bonuses[board.piece_on(mv.to()).unwrap_or(Pawn)] as i32;
+        let mvv_bonus = 2 * piece_bonuses[board.piece_on(mv.to()).unwrap_or(Pawn)];
         let capture_history = self.capture_history_tables[board.current_player()][mv] as i32;
 
         // sort winning captures before quiets, losing captures after
@@ -164,7 +188,20 @@ impl ThreadData {
             } else {
                 0
             };
-            QUIET_SCORE + (self.history_tables[current_player][mv] as i32) + countermove_score
+            let continuation_score = if let Some(continuation_move) = self
+                .search_stack
+                .get(ply.wrapping_sub(2))
+                .map(|s| s.current_move)
+            {
+                self.continuation_history_tables[current_player][continuation_move.piece()]
+                    [continuation_move.to()][mv] as i32
+            } else {
+                0
+            };
+            QUIET_SCORE
+                + (self.history_tables[current_player][mv] as i32)
+                + countermove_score
+                + continuation_score
         }
     }
 }
