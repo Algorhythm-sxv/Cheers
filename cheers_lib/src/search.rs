@@ -550,12 +550,11 @@ impl Search {
 
             // SEE pruning: if the move loses too much material at low depth then skip it
             if !R::ROOT && depth <= self.options.see_pruning_depth {
-                let threshold = depth as i16
-                    * if capture {
-                        self.options.see_capture_margin
-                    } else {
-                        self.options.see_quiet_margin
-                    };
+                let threshold = if capture {
+                    self.options.see_capture_margin * depth as i16 * depth as i16
+                } else {
+                    self.options.see_quiet_margin * depth as i16
+                };
                 if !board.see_beats_threshold(mv, threshold) {
                     if !capture {
                         quiets_tried.push(SortingMove::new(mv));
