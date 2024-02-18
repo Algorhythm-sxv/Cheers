@@ -556,10 +556,10 @@ impl Search {
                     self.options.see_quiet_margin * depth as i16
                 };
                 if !board.see_beats_threshold(mv, threshold) {
-                    if !capture {
-                        quiets_tried.push(SortingMove::new(mv));
-                    } else {
+                    if capture {
                         captures_tried.push(SortingMove::new(mv));
+                    } else {
+                        quiets_tried.push(SortingMove::new(mv));
                     }
                     move_index += 1;
                     continue;
