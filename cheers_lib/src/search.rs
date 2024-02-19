@@ -549,23 +549,23 @@ impl Search {
             }
 
             // SEE pruning: if the move loses too much material at low depth then skip it
-            if !R::ROOT && depth <= self.options.see_pruning_depth {
-                let threshold = depth as i16
-                    * if capture {
-                        self.options.see_capture_margin
-                    } else {
-                        self.options.see_quiet_margin
-                    };
-                if !board.see_beats_threshold(mv, threshold) {
-                    if !capture {
-                        quiets_tried.push(SortingMove::new(mv));
-                    } else {
-                        captures_tried.push(SortingMove::new(mv));
-                    }
-                    move_index += 1;
-                    continue;
-                }
-            }
+            // if !R::ROOT && depth <= self.options.see_pruning_depth {
+            //     let threshold = depth as i16
+            //         * if capture {
+            //             self.options.see_capture_margin
+            //         } else {
+            //             self.options.see_quiet_margin
+            //         };
+            //     if !board.see_beats_threshold(mv, threshold) {
+            //         if !capture {
+            //             quiets_tried.push(SortingMove::new(mv));
+            //         } else {
+            //             captures_tried.push(SortingMove::new(mv));
+            //         }
+            //         move_index += 1;
+            //         continue;
+            //     }
+            // }
 
             // make the move on a copy of the board
             self.thread_data.search_stack[ply].current_move = mv;
