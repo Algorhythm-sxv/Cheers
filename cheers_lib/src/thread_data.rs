@@ -58,15 +58,13 @@ impl ThreadData {
         let countermove = self
             .search_stack
             .get(ply.wrapping_sub(1))
-            .map(|s| s.current_move)
-            .unwrap_or(Move::null());
+            .map(|s| s.current_move);
         let continuation_move = self
             .search_stack
             .get(ply.wrapping_sub(2))
-            .map(|s| s.current_move)
-            .unwrap_or(Move::null());
+            .map(|s| s.current_move);
 
-        if !countermove.is_null() {
+        if let Some(countermove) = countermove {
             apply_history_bonus(
                 &mut self.countermove_history_tables[player][countermove.piece()][countermove.to()]
                     [bonus_quiet],
@@ -74,7 +72,7 @@ impl ThreadData {
             )
         }
 
-        if !continuation_move.is_null() {
+        if let Some(continuation_move) = continuation_move {
             apply_history_bonus(
                 &mut self.continuation_history_tables[player][continuation_move.piece()]
                     [continuation_move.to()][bonus_quiet],
@@ -88,14 +86,14 @@ impl ThreadData {
         for smv in malus_quiets.inner().iter() {
             let malus_quiet = smv.mv;
             debug_assert!(malus_quiet != bonus_quiet);
-            if !countermove.is_null() {
+            if let Some(countermove) = countermove {
                 apply_history_malus(
                     &mut self.countermove_history_tables[player][countermove.piece()]
                         [countermove.to()][malus_quiet],
                     delta,
                 )
             }
-            if !continuation_move.is_null() {
+            if let Some(continuation_move) = continuation_move {
                 apply_history_malus(
                     &mut self.continuation_history_tables[player][continuation_move.piece()]
                         [continuation_move.to()][malus_quiet],
