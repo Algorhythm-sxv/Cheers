@@ -591,7 +591,6 @@ impl Search {
                             && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000)
                                 .contains(&move_score)
                             && mv.promotion() != Queen
-                            && !in_check
                         {
                             r += LMR[(depth as usize).min(31)][move_index.min(31)];
                         }
