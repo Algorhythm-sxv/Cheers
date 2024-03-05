@@ -597,6 +597,9 @@ impl Search {
 
                             // reduce more outside of PV
                             r += !pv_node as i8;
+
+                            // reduce more when not improving
+                            r += !improving as i8;
                         }
 
                         r
