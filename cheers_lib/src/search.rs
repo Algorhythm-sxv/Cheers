@@ -580,8 +580,9 @@ impl Search {
 
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
+            // allow LMR after the first move except at the root, where it is allowed after the second
             let full_depth_null_window =
-                if depth > self.options.pvs_fulldepth && move_index > 0 && !R::ROOT {
+                if depth > self.options.pvs_fulldepth && move_index > R::ROOT as usize {
                     // reducing certain moves to same time, avoided for tactical and killer/counter moves
                     let reduction = {
                         let mut r = 0;
