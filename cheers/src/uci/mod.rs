@@ -31,6 +31,8 @@ uci_options![
     RfpImprovingMargin(Spin<i16> { default: RFP_IMPROVING_MARGIN, min: -100, max: 100 }),
     LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
     IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 10 }),
+    LmrConst(OptionString {default: "1.5"}),
+    LmrDivisor(OptionString {default: "1.75"}),
 ];
 
 pub enum UciCommand {
@@ -141,7 +143,7 @@ impl ValidateOption for Combo {
 }
 
 pub struct OptionString {
-    default: String,
+    default: &'static str,
 }
 
 impl ValidateOption for OptionString {

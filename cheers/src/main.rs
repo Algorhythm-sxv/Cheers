@@ -88,6 +88,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 uci::UciOption::RfpImprovingMargin(n) => options.rfp_improving_margin = n,
                 uci::UciOption::LmpDepth(n) => options.lmp_depth = n,
                 uci::UciOption::IirDepth(n) => options.iir_depth = n,
+                uci::UciOption::LmrConst(s) => options.lmr_const = s.parse().unwrap(),
+                uci::UciOption::LmrDivisor(s) => options.lmr_divisor = s.parse().unwrap(),
             },
             uci::UciCommand::UciNewGame => {
                 position = Board::new();

@@ -581,46 +581,49 @@ impl Search {
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
             // allow LMR after the first move except at the root, where it is allowed after the second
-            let full_depth_null_window =
-                if depth > self.options.pvs_fulldepth && move_index > R::ROOT as usize {
-                    // reducing certain moves to same time, avoided for tactical and killer/counter moves
-                    let reduction = {
-                        let mut r = 0;
+            let full_depth_null_window = if depth > self.options.pvs_fulldepth
+                && move_index > R::ROOT as usize
+            {
+                // reducing certain moves to same time, avoided for tactical and killer/counter moves
+                let reduction = {
+                    let mut r = 0;
 
-                        // Late Move Reduction: moves that are sorted later are likely to fail low
-                        if !capture
-                            && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000)
-                                .contains(&move_score)
-                            && mv.promotion() != Queen
-                        {
-                            r += LMR[(depth as usize).min(31)][move_index.min(31)];
+                    // Late Move Reduction: moves that are sorted later are likely to fail low
+                    if !capture
+                        && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
+                        && mv.promotion() != Queen
+                    {
+                        // r += LMR[(depth as usize).min(31)][move_index.min(31)];
+                        r += (self.options.lmr_const
+                            + (depth as f32).ln() * (move_index as f32).ln() / self.options.lmr_divisor)
+                            as i8;
 
-                            // reduce more outside of PV
-                            r += !pv_node as i8;
-                        }
+                        // reduce more outside of PV
+                        r += !pv_node as i8;
+                    }
 
-                        r
-                    };
-
-                    // perform a cheap reduced, null-window search in the hope it fails low immediately
-                    let reduced_depth = (depth - 1 - reduction).max(0);
-                    score = -self.negamax::<NotRoot, M>(
-                        &new,
-                        -alpha - 1,
-                        -alpha,
-                        reduced_depth,
-                        ply + 1,
-                        mv,
-                        &mut line,
-                        tt,
-                    );
-
-                    // perform a full-depth null-window search if the reduced search improves alpha and the move was actually reduced
-                    score > alpha && reduction > 0
-                } else {
-                    // if the first condition fails, perform the full depth null window search in non-pv nodes or later moves in PVS
-                    !pv_node || move_index > 0
+                    r
                 };
+
+                // perform a cheap reduced, null-window search in the hope it fails low immediately
+                let reduced_depth = (depth - 1 - reduction).max(0);
+                score = -self.negamax::<NotRoot, M>(
+                    &new,
+                    -alpha - 1,
+                    -alpha,
+                    reduced_depth,
+                    ply + 1,
+                    mv,
+                    &mut line,
+                    tt,
+                );
+
+                // perform a full-depth null-window search if the reduced search improves alpha and the move was actually reduced
+                score > alpha && reduction > 0
+            } else {
+                // if the first condition fails, perform the full depth null window search in non-pv nodes or later moves in PVS
+                !pv_node || move_index > 0
+            };
 
             // perform a full-depth null-window search on reduced moves that improve alpha, later moves or in non-pv nodes
             // we can't expand the window in non-pv nodes as alpha = beta-1

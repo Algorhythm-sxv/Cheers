@@ -18,6 +18,8 @@ pub struct SearchOptions {
     pub rfp_improving_margin: i16,
     pub lmp_depth: i8,
     pub iir_depth: i8,
+    pub lmr_const: f32,
+    pub lmr_divisor: f32,
 }
 
 pub const NMP_DEPTH: i8 = 1;
@@ -58,6 +60,8 @@ impl Default for SearchOptions {
             rfp_improving_margin: RFP_IMPROVING_MARGIN,
             lmp_depth: LMP_DEPTH,
             iir_depth: IIR_DEPTH,
+            lmr_const: 1.5,
+            lmr_divisor: 1.75,
         }
     }
 }
