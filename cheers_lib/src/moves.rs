@@ -297,12 +297,22 @@ impl<const N: usize> Default for KillerMoves<N> {
     }
 }
 
-pub const PV_MAX_LEN: usize = 16;
-#[derive(Copy, Clone, Default, Debug)]
+pub const PV_MAX_LEN: usize = 128;
+#[derive(Copy, Clone, Debug)]
 pub struct PrincipalVariation {
     len: usize,
     moves: [Move; PV_MAX_LEN],
     chess_960: bool,
+}
+
+impl Default for PrincipalVariation {
+    fn default() -> Self {
+        Self {
+            moves: [Move::default(); PV_MAX_LEN],
+            len: 0,
+            chess_960: false,
+        }
+    }
 }
 
 impl PrincipalVariation {
