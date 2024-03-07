@@ -593,7 +593,7 @@ impl Search {
                                 .contains(&move_score)
                             && mv.promotion() != Queen
                         {
-                            r += LMR[(depth as usize).min(31)][move_index.min(31)];
+                            r += LMR[(depth as usize).min(63)][move_index.min(63)];
 
                             // reduce more outside of PV
                             r += !pv_node as i8;
