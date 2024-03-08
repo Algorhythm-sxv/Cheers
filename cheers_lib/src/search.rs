@@ -201,7 +201,7 @@ impl Search {
                     0,
                     &mut pv,
                     tt,
-                    None,
+                    true,
                 );
 
                 // add helper thread nodes to global count
@@ -311,7 +311,7 @@ impl Search {
         ply: usize,
         pv: &mut PrincipalVariation,
         tt: &TranspositionTable,
-        excluded: Option<Move>,
+        allow_nmp: bool,
     ) -> i16 {
         // check time and max nodes every 2048 nodes in the main thread
         let nodes = self.local_nodes;
@@ -402,6 +402,8 @@ impl Search {
 
         let mut tt_move = Move::null();
         let mut tt_score = MINUS_INF;
+        let mut tt_depth = 0;
+        let mut tt_bound = UpperBound;
         if let Some(entry) = tt.get(board.hash()) {
             // TT pruning when the bounds are correct, but not at in the PV
             if !pv_node
@@ -416,10 +418,11 @@ impl Search {
 
             // otherwise use the score as an improved static eval
             // and the move for move ordering
-            if matches!(entry.node_type, LowerBound | Exact) {
-                tt_score = score_from_tt(entry.score, ply);
-            }
+            tt_score = score_from_tt(entry.score, ply);
+            tt_bound = entry.node_type;
+
             tt_move = Move::new(entry.piece, entry.move_from, entry.move_to, entry.promotion);
+            tt_depth = entry.depth;
         }
 
         // IIR: reduce the search depth if no TT move is present
@@ -427,7 +430,7 @@ impl Search {
             depth -= 1;
         }
 
-        let eval = if tt_score != MINUS_INF {
+        let eval = if matches!(tt_bound, LowerBound | Exact) {
             tt_score
         } else if !in_check {
             board.evaluate(&mut self.pawn_hash_table)
@@ -462,7 +465,12 @@ impl Search {
 
             // Null Move Pruning
             // if the opponent gets two moves in a row and the position is still good then prune
-            if excluded != Some(Move::null())
+            let skip_nmp = !tt_move.is_null()
+                && tt_depth >= depth - 2
+                && tt_score <= alpha
+                && tt_bound == UpperBound;
+            if allow_nmp
+                && !skip_nmp
                 && depth >= self.options.nmp_depth
                 && eval >= beta
                 && board.has_non_pawn_material(current_player)
@@ -487,7 +495,7 @@ impl Search {
                     &mut line,
                     tt,
                     // don't allow subsequent null moves
-                    Some(Move::null()),
+                    false,
                 );
                 self.search_history.pop();
 
@@ -614,7 +622,7 @@ impl Search {
                     ply + 1,
                     &mut line,
                     tt,
-                    None,
+                    true,
                 );
 
                 // perform a full-depth null-window search if the reduced search improves alpha and the move was actually reduced
@@ -635,7 +643,7 @@ impl Search {
                     ply + 1,
                     &mut line,
                     tt,
-                    None,
+                    true,
                 );
             }
 
@@ -649,7 +657,7 @@ impl Search {
                     ply + 1,
                     &mut line,
                     tt,
-                    None,
+                    true,
                 );
             }
 
