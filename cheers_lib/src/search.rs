@@ -199,9 +199,9 @@ impl Search {
                     window.1,
                     i as i8,
                     0,
-                    Move::null(),
                     &mut pv,
                     tt,
+                    None,
                 );
 
                 // add helper thread nodes to global count
@@ -301,6 +301,7 @@ impl Search {
         (last_score, last_pv)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn negamax<R: TypeRoot, M: TypeMainThread>(
         &mut self,
         board: &Board,
@@ -308,9 +309,9 @@ impl Search {
         mut beta: i16,
         mut depth: i8,
         ply: usize,
-        last_move: Move,
         pv: &mut PrincipalVariation,
         tt: &TranspositionTable,
+        excluded: Option<Move>,
     ) -> i16 {
         // check time and max nodes every 2048 nodes in the main thread
         let nodes = self.local_nodes;
@@ -461,7 +462,7 @@ impl Search {
 
             // Null Move Pruning
             // if the opponent gets two moves in a row and the position is still good then prune
-            if !last_move.is_null()
+            if excluded != Some(Move::null())
                 && depth >= self.options.nmp_depth
                 && eval >= beta
                 && board.has_non_pawn_material(current_player)
@@ -483,9 +484,10 @@ impl Search {
                     -beta + 1,
                     (depth - reduction).max(0),
                     ply + 1,
-                    Move::null(),
                     &mut line,
                     tt,
+                    // don't allow subsequent null moves
+                    Some(Move::null()),
                 );
                 self.search_history.pop();
 
@@ -581,46 +583,46 @@ impl Search {
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
             // allow LMR after the first move except at the root, where it is allowed after the second
-            let full_depth_null_window =
-                if depth > self.options.pvs_fulldepth && move_index > R::ROOT as usize {
-                    // reducing certain moves to same time, avoided for tactical and killer/counter moves
-                    let reduction = {
-                        let mut r = 0;
+            let full_depth_null_window = if depth > self.options.pvs_fulldepth
+                && move_index > R::ROOT as usize
+            {
+                // reducing certain moves to same time, avoided for tactical and killer/counter moves
+                let reduction = {
+                    let mut r = 0;
 
-                        // Late Move Reduction: moves that are sorted later are likely to fail low
-                        if !capture
-                            && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000)
-                                .contains(&move_score)
-                            && mv.promotion() != Queen
-                        {
-                            r += LMR[(depth as usize).min(63)][move_index.min(63)];
+                    // Late Move Reduction: moves that are sorted later are likely to fail low
+                    if !capture
+                        && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
+                        && mv.promotion() != Queen
+                    {
+                        r += LMR[(depth as usize).min(63)][move_index.min(63)];
 
-                            // reduce more outside of PV
-                            r += !pv_node as i8;
-                        }
+                        // reduce more outside of PV
+                        r += !pv_node as i8;
+                    }
 
-                        r
-                    };
-
-                    // perform a cheap reduced, null-window search in the hope it fails low immediately
-                    let reduced_depth = (depth - 1 - reduction).max(0);
-                    score = -self.negamax::<NotRoot, M>(
-                        &new,
-                        -alpha - 1,
-                        -alpha,
-                        reduced_depth,
-                        ply + 1,
-                        mv,
-                        &mut line,
-                        tt,
-                    );
-
-                    // perform a full-depth null-window search if the reduced search improves alpha and the move was actually reduced
-                    score > alpha && reduction > 0
-                } else {
-                    // if the first condition fails, perform the full depth null window search in non-pv nodes or later moves in PVS
-                    !pv_node || move_index > 0
+                    r
                 };
+
+                // perform a cheap reduced, null-window search in the hope it fails low immediately
+                let reduced_depth = (depth - 1 - reduction).max(0);
+                score = -self.negamax::<NotRoot, M>(
+                    &new,
+                    -alpha - 1,
+                    -alpha,
+                    reduced_depth,
+                    ply + 1,
+                    &mut line,
+                    tt,
+                    None,
+                );
+
+                // perform a full-depth null-window search if the reduced search improves alpha and the move was actually reduced
+                score > alpha && reduction > 0
+            } else {
+                // if the first condition fails, perform the full depth null window search in non-pv nodes or later moves in PVS
+                !pv_node || move_index > 0
+            };
 
             // perform a full-depth null-window search on reduced moves that improve alpha, later moves or in non-pv nodes
             // we can't expand the window in non-pv nodes as alpha = beta-1
@@ -631,9 +633,9 @@ impl Search {
                     -alpha,
                     depth - 1,
                     ply + 1,
-                    mv,
                     &mut line,
                     tt,
+                    None,
                 );
             }
 
@@ -645,9 +647,9 @@ impl Search {
                     -alpha,
                     depth - 1,
                     ply + 1,
-                    mv,
                     &mut line,
                     tt,
+                    None,
                 );
             }
 
@@ -680,7 +682,15 @@ impl Search {
                 };
                 if !capture {
                     self.thread_data.search_stack[ply].killer_moves.push(mv);
-                    self.thread_data.countermove_tables[current_player][last_move] = mv;
+
+                    if let Some(last_move) = self
+                        .thread_data
+                        .search_stack
+                        .get(ply - 1)
+                        .map(|s| s.current_move)
+                    {
+                        self.thread_data.countermove_tables[current_player][last_move] = mv;
+                    }
 
                     self.thread_data.update_quiet_histories(
                         current_player,
