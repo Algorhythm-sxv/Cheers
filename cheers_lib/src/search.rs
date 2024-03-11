@@ -504,8 +504,8 @@ impl Search {
                     let verified = depth < self.options.nmp_verification_depth || {
                         let verification_score = -self.negamax::<NotRoot, M>(
                             board,
-                            alpha,
-                            beta,
+                            -beta,
+                            -beta + 1,
                             (depth - reduction).max(0),
                             ply + 1,
                             &mut line,
