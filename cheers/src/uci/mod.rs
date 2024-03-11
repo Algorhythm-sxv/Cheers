@@ -18,6 +18,7 @@ uci_options![
     NmpDepth(Spin<i8> { default: NMP_DEPTH, min: 1, max: 10 }),
     NmpConstReduction(Spin<i8> { default: NMP_CONST_REDUCTION, min: 1, max: 10 }),
     NmpLinearDivisor(Spin<i8> { default: NMP_LINEAR_DIVISOR, min: 1, max: 10 }),
+    NmpVerificationDepth(Spin<i8> { default: NMP_VERIFICATION_DEPTH, min: 1, max: 15 }),
     SeePruningDepth(Spin<i8> { default: SEE_PRUNING_DEPTH, min: 1, max: 10 }),
     SeeCaptureMargin(Spin<i16> { default: SEE_CAPTURE_MARGIN, min: -200, max: 200 }),
     SeeQuietMargin(Spin<i16> { default: SEE_QUIET_MARGIN, min: -100, max: 100 }),

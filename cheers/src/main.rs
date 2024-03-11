@@ -75,6 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 uci::UciOption::NmpDepth(n) => options.nmp_depth = n,
                 uci::UciOption::NmpConstReduction(n) => options.nmp_const_reduction = n,
                 uci::UciOption::NmpLinearDivisor(n) => options.nmp_linear_divisor = n,
+                uci::UciOption::NmpVerificationDepth(n) => options.nmp_verification_depth = n,
                 uci::UciOption::SeePruningDepth(n) => options.see_pruning_depth = n,
                 uci::UciOption::SeeCaptureMargin(n) => options.see_capture_margin = n,
                 uci::UciOption::SeeQuietMargin(n) => options.see_quiet_margin = n,

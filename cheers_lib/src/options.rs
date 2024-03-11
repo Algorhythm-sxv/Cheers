@@ -5,6 +5,7 @@ pub struct SearchOptions {
     pub nmp_depth: i8,
     pub nmp_const_reduction: i8,
     pub nmp_linear_divisor: i8,
+    pub nmp_verification_depth: i8,
     pub see_pruning_depth: i8,
     pub see_capture_margin: i16,
     pub see_quiet_margin: i16,
@@ -23,6 +24,7 @@ pub struct SearchOptions {
 pub const NMP_DEPTH: i8 = 1;
 pub const NMP_CONST_REDUCTION: i8 = 2;
 pub const NMP_LINEAR_DIVISOR: i8 = 2;
+pub const NMP_VERIFICATION_DEPTH: i8 = 10;
 pub const SEE_PRUNING_DEPTH: i8 = 10;
 pub const SEE_CAPTURE_MARGIN: i16 = -45;
 pub const SEE_QUIET_MARGIN: i16 = -50;
@@ -45,6 +47,7 @@ impl Default for SearchOptions {
             nmp_depth: NMP_DEPTH,
             nmp_const_reduction: NMP_CONST_REDUCTION,
             nmp_linear_divisor: NMP_LINEAR_DIVISOR,
+            nmp_verification_depth: NMP_VERIFICATION_DEPTH,
             see_pruning_depth: SEE_PRUNING_DEPTH,
             see_capture_margin: SEE_CAPTURE_MARGIN,
             see_quiet_margin: SEE_QUIET_MARGIN,

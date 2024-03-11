@@ -500,7 +500,25 @@ impl Search {
                 self.search_history.pop();
 
                 if score >= beta {
-                    return score;
+                    // verify scores on deeper searches
+                    let verified = depth < self.options.nmp_verification_depth || {
+                        let verification_score = -self.negamax::<NotRoot, M>(
+                            board,
+                            alpha,
+                            beta,
+                            (depth - reduction).max(0),
+                            ply + 1,
+                            &mut line,
+                            tt,
+                            false,
+                        );
+
+                        verification_score >= beta
+                    };
+
+                    if verified {
+                        return score;
+                    }
                 }
             }
         }
