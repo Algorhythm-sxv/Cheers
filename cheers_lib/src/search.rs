@@ -189,6 +189,7 @@ impl Search {
 
             let mut pv = PrincipalVariation::new().chess_960(self.chess_960);
 
+            let this_depth_start = Instant::now();
             // repeat failed searches with wider windows until a search succeeds
             let score = loop {
                 search.seldepth = 0;
@@ -211,7 +212,31 @@ impl Search {
                 }
 
                 if ABORT_SEARCH.load(Relaxed) && i > 1 {
-                    // can't trust results from a partial search
+                    // can't trust results from a partial search, but report accurate statistics
+                    let end = Instant::now();
+                    let mate_distance = CHECKMATE_SCORE - last_score.abs();
+                    let score_string = if mate_distance < SEARCH_MAX_PLY as i16 {
+                        format!("mate {}", last_score.signum() * ((mate_distance + 1) / 2))
+                    } else {
+                        format!("cp {last_score}")
+                    };
+                    let hash_fill = tt.sample_fill();
+                    let nodes = if set_global_abort {
+                        NODE_COUNT.load(Relaxed)
+                    } else {
+                        search.local_nodes
+                    };
+                    if M::MAIN_THREAD && self.output {
+                        println!(
+                            "info depth {} seldepth {} score {score_string} nodes {} nps {} hashfull {} time {} pv {last_pv}",
+                            i-1,
+                            search.seldepth,
+                            nodes,
+                            ((nodes) as f32 / (end - start).as_secs_f32()) as usize,
+                            hash_fill,
+                            (end - start).as_millis(),
+                        )
+                    }
                     break 'id_loop;
                 }
 
@@ -265,11 +290,19 @@ impl Search {
 
             last_pv = pv;
             last_score = score;
-            let time = Instant::now();
-            // terminate search if we are hinted to do so
-            if let Some((stop_hint, _)) = self.max_time_ms {
-                if (time - start).as_millis() as usize >= stop_hint {
+            // terminate search if we are hinted to do so or the next depth would likely take too long
+            if let Some((stop_hint, abort_time)) = self.max_time_ms {
+                if (end - start).as_millis() as usize >= stop_hint {
                     break;
+                }
+
+                // only stop early if this is not a fixed-time search
+                if stop_hint != abort_time {
+                    let this_depth_time = end - this_depth_start;
+                    let estimated_next_time = end + 2 * this_depth_time;
+                    if (estimated_next_time - start).as_millis() as usize >= abort_time {
+                        break;
+                    }
                 }
             }
 
