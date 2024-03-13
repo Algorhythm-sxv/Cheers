@@ -46,6 +46,7 @@ pub struct Search {
     chess_960: bool,
     options: SearchOptions,
     pub local_nodes: usize,
+    root_nodes: [[usize; 64]; 64],
 }
 
 impl Search {
@@ -67,6 +68,7 @@ impl Search {
             chess_960: false,
             options: SearchOptions::default(),
             local_nodes: 0,
+            root_nodes: [[0; 64]; 64],
         }
     }
 
@@ -88,6 +90,7 @@ impl Search {
             chess_960: false,
             options: SearchOptions::default(),
             local_nodes: 0,
+            root_nodes: [[0; 64]; 64],
         }
     }
 
@@ -166,6 +169,9 @@ impl Search {
         let mut last_score = i16::MIN;
         let mut last_pv = PrincipalVariation::new();
 
+        // fraction of main thread nodes spent on the best move
+        let mut node_fraction = 0;
+
         let mut search = self.clone();
         let tt = &*self.transposition_table.read().unwrap();
 
@@ -189,7 +195,6 @@ impl Search {
 
             let mut pv = PrincipalVariation::new().chess_960(self.chess_960);
 
-            let this_depth_start = Instant::now();
             // repeat failed searches with wider windows until a search succeeds
             let score = loop {
                 search.seldepth = 0;
@@ -204,6 +209,11 @@ impl Search {
                     tt,
                     true,
                 );
+
+                if M::MAIN_THREAD {
+                    node_fraction =
+                        (search.root_nodes[pv[0].from()][pv[0].to()] * 1000) / search.local_nodes;
+                }
 
                 // add helper thread nodes to global count
                 if !M::MAIN_THREAD {
@@ -296,13 +306,14 @@ impl Search {
                     break;
                 }
 
-                // only stop early if this is not a fixed-time search
-                if stop_hint != abort_time {
-                    let this_depth_time = end - this_depth_start;
-                    let estimated_next_time = end + 2 * this_depth_time;
-                    if (estimated_next_time - start).as_millis() as usize >= abort_time {
-                        break;
-                    }
+                // nodetm: if the fraction of nodes spent on the best move is very high, use less time
+                // avoids spending too much time when the best move is 'obvious'
+                // not done in fixed-time searches
+                if stop_hint != abort_time
+                    && (end - start).as_millis() as usize
+                        > (stop_hint * (1500 - node_fraction)) / 1000
+                {
+                    break;
                 }
             }
 
@@ -610,6 +621,8 @@ impl Search {
                 }
             }
 
+            let old_nodes = self.local_nodes;
+
             // make the move on a copy of the board
             self.thread_data.search_stack[ply].current_move = mv;
             let mut new = *board;
@@ -692,6 +705,11 @@ impl Search {
                     tt,
                     true,
                 );
+            }
+
+            // count the nodes used for this particular move at the root
+            if M::MAIN_THREAD && R::ROOT {
+                self.root_nodes[mv.from()][mv.to()] += self.local_nodes - old_nodes;
             }
 
             // scores can't be trusted after an abort, don't let them get into the TT
