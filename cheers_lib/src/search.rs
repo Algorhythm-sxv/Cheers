@@ -57,7 +57,7 @@ impl Search {
             pre_history: Vec::new(),
             seldepth: 0,
             transposition_table: Arc::new(RwLock::new(TranspositionTable::new(0))),
-            pawn_hash_table: PawnHashTable::new(0),
+            pawn_hash_table: PawnHashTable::new(),
             thread_data: ThreadData::new(),
             max_depth: None,
             max_nodes: None,
@@ -72,14 +72,14 @@ impl Search {
         }
     }
 
-    pub fn new_with_tt(game: Board, tt: Arc<RwLock<TranspositionTable>>, pawn_hash: usize) -> Self {
+    pub fn new_with_tt(game: Board, tt: Arc<RwLock<TranspositionTable>>) -> Self {
         Self {
             game,
             search_history: Vec::new(),
             pre_history: Vec::new(),
             seldepth: 0,
             transposition_table: tt,
-            pawn_hash_table: PawnHashTable::new(pawn_hash),
+            pawn_hash_table: PawnHashTable::new(),
             thread_data: ThreadData::new(),
             max_depth: None,
             max_nodes: None,
@@ -94,12 +94,11 @@ impl Search {
         }
     }
 
-    pub fn tt_size_mb(mut self, tt_size_mb: usize, pawn_hash_size_mb: usize) -> Self {
+    pub fn tt_size_mb(self, tt_size_mb: usize) -> Self {
         self.transposition_table
             .write()
             .unwrap()
             .set_size(tt_size_mb);
-        self.pawn_hash_table = PawnHashTable::new(pawn_hash_size_mb);
         self
     }
 

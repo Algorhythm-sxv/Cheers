@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let bench_game = position;
         let search = Search::new(bench_game)
             .max_depth(Some(depth))
-            .tt_size_mb(options.tt_size_mb, options.tt_size_mb / 8)
+            .tt_size_mb(options.tt_size_mb)
             .output(false);
         let start = Instant::now();
         search.smp_search();
@@ -147,8 +147,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 };
 
-                let mut search = Search::new_with_tt(position, tt.clone(), 0)
-                    .tt_size_mb(options.tt_size_mb, options.tt_size_mb / 8)
+                let mut search = Search::new_with_tt(position, tt.clone())
+                    .tt_size_mb(options.tt_size_mb)
                     .pre_history(pre_history.clone())
                     .max_nodes(nodes)
                     .max_depth(depth)

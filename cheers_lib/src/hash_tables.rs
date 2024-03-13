@@ -6,7 +6,7 @@ use crate::{
     board::{eval_types::EvalScore, evaluate::CHECKMATE_SCORE},
     moves::Move,
     search::{MINUS_INF, SEARCH_MAX_PLY},
-    types::{Piece, TypeColor},
+    types::Piece,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -247,42 +247,41 @@ impl Default for PawnHashEntry {
 #[derive(Clone, Debug)]
 pub struct PawnHashTable {
     table: Vec<PawnHashEntry>,
-    mask: u64,
 }
 
 impl PawnHashTable {
-    pub fn new(table_size_mb: usize) -> Self {
-        let mut length = table_size_mb * 1024 * 1024 / std::mem::size_of::<PawnHashEntry>();
-        if length != 0 {
-            length = length.next_power_of_two();
-        }
+    const PAWN_HASH_TABLE_KEY_BITS: u64 = 16;
+    const PAWN_HASH_MASK: u64 = 0xFFFF;
+
+    pub fn new() -> Self {
         Self {
-            table: vec![PawnHashEntry::default(); length],
-            mask: (length as u64).saturating_sub(1),
+            table: vec![PawnHashEntry::default(); 1 << Self::PAWN_HASH_TABLE_KEY_BITS],
         }
     }
 
-    pub fn get<T: TypeColor>(&self, hash: u64) -> Option<(EvalScore, BitBoard)> {
-        let entry = self.table.get((hash & self.mask) as usize)?;
+    pub fn get(&self, hash: u64) -> Option<(EvalScore, BitBoard)> {
+        let entry = self.table.get((hash & Self::PAWN_HASH_MASK) as usize)?;
         if entry.hash == hash {
-            Some((
-                if T::WHITE { entry.score } else { -entry.score },
-                entry.passed_pawns,
-            ))
+            Some((entry.score, entry.passed_pawns))
         } else {
             None
         }
     }
 
-    pub fn set<T: TypeColor>(&mut self, hash: u64, score: EvalScore, passed_pawns: BitBoard) {
-        let score = if T::WHITE { score } else { -score };
-        if let Some(entry) = self.table.get_mut((hash & self.mask) as usize) {
+    pub fn set(&mut self, hash: u64, score: EvalScore, passed_pawns: BitBoard) {
+        if let Some(entry) = self.table.get_mut((hash & Self::PAWN_HASH_MASK) as usize) {
             *entry = PawnHashEntry {
                 hash,
                 score,
                 passed_pawns,
             };
         }
+    }
+}
+
+impl Default for PawnHashTable {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

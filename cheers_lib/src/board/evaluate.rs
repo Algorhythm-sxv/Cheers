@@ -11,10 +11,8 @@ pub struct EvalContext<'search, T> {
 }
 
 impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
-    #[inline]
-    pub fn evaluate<W: TypeColor>(&mut self) -> i16 {
-        let color = W::INDEX;
-        self.trace.term(|t| t.turn = color as i16);
+    pub fn evaluate(&mut self, pawn_cache: &mut PawnHashTable, black: bool) -> i16 {
+        self.trace.term(|t| t.turn = black as i16);
 
         let phase = self.game.game_phase();
 
@@ -24,7 +22,14 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let white_king_attacks = lookup_king(white_king_square);
         let black_king_attacks = lookup_king(black_king_square);
 
-        let (white_passers, black_passers) = {
+        let pawn_cache_entry = pawn_cache.get(self.game.pawn_hash);
+
+        let (white_passers, black_passers) = if let Some((_, passers)) = pawn_cache_entry {
+            (
+                passers & self.game.white_pawns,
+                passers & self.game.black_pawns,
+            )
+        } else {
             let front_spans_black = Board::pawn_front_spans::<Black>(self.game.black_pawns);
             let all_front_spans_black = front_spans_black
                 | (front_spans_black & NOT_H_FILE) << 1
@@ -48,7 +53,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         };
 
         // initialise eval info
-        let mut info = EvalInfo {
+        let info = EvalInfo {
             mobility_area: [
                 self.game.mobility_area::<White>(),
                 self.game.mobility_area::<Black>(),
@@ -66,31 +71,48 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
         let mut eval = EvalScore::zero();
 
-        eval += self.evaluate_pawns_only::<W>(&mut info)
-            - self.evaluate_pawns_only::<W::Other>(&mut info);
+        if let Some((white_score, _)) = pawn_cache_entry {
+            eval += white_score;
+        } else {
+            let white_score =
+                self.evaluate_pawns_only::<White>() - self.evaluate_pawns_only::<Black>();
 
-        eval += self.evaluate_passed_pawn_extras::<W>(&info)
-            - self.evaluate_passed_pawn_extras::<W::Other>(&info);
+            pawn_cache.set(
+                self.game.pawn_hash,
+                white_score,
+                white_passers | black_passers,
+            );
 
-        eval += self.evaluate_knights::<W>(&info) - self.evaluate_knights::<W::Other>(&info);
+            eval += white_score;
+        }
 
-        eval += self.evaluate_bishops::<W>(&info) - self.evaluate_bishops::<W::Other>(&info);
+        eval +=
+            self.evaluate_pawn_extras::<White>(&info) - self.evaluate_pawn_extras::<Black>(&info);
 
-        eval += self.evaluate_rooks::<W>(&info) - self.evaluate_rooks::<W::Other>(&info);
+        eval += self.evaluate_knights::<White>(&info) - self.evaluate_knights::<Black>(&info);
 
-        eval += self.evaluate_queens::<W>(&info) - self.evaluate_queens::<W::Other>(&info);
+        eval += self.evaluate_bishops::<White>(&info) - self.evaluate_bishops::<Black>(&info);
 
-        eval += self.evaluate_king::<W>(&info) - self.evaluate_king::<W::Other>(&info);
+        eval += self.evaluate_rooks::<White>(&info) - self.evaluate_rooks::<Black>(&info);
+
+        eval += self.evaluate_queens::<White>(&info) - self.evaluate_queens::<Black>(&info);
+
+        eval += self.evaluate_king::<White>(&info) - self.evaluate_king::<Black>(&info);
 
         // scale down evals for material draws
         if self.game.material_draw() {
             eval.div_by(32);
         }
 
-        (((eval.mg() as i32 * (256 - phase)) + (eval.eg() as i32 * phase)) / 256) as i16
+        let final_eval =
+            (((eval.mg() as i32 * (256 - phase)) + (eval.eg() as i32 * phase)) / 256) as i16;
+        if black {
+            -final_eval
+        } else {
+            final_eval
+        }
     }
 
-    #[inline]
     pub fn evaluate_knights<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
@@ -162,7 +184,6 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval
     }
 
-    #[inline]
     pub fn evaluate_bishops<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
@@ -239,7 +260,6 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval
     }
 
-    #[inline]
     pub fn evaluate_rooks<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
@@ -305,7 +325,6 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval
     }
 
-    #[inline]
     pub fn evaluate_queens<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
@@ -342,7 +361,6 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval
     }
 
-    #[inline]
     pub fn evaluate_king<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
@@ -397,8 +415,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval
     }
 
-    #[inline]
-    pub fn evaluate_pawns_only<W: TypeColor>(&mut self, _info: &mut EvalInfo) -> EvalScore {
+    pub fn evaluate_pawns_only<W: TypeColor>(&mut self) -> EvalScore {
         let mut eval = EvalScore::zero();
 
         let (pawns, other_pawns) = if W::WHITE {
@@ -422,18 +439,6 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .term(|t| t.pawn_doubled[file_double_pawn_count][color] += 1);
         }
 
-        // pawn threats
-        let attacks = self.game.pawn_attacks::<W>();
-        self.game
-            .pieces::<W::Other>()
-            .iter()
-            .enumerate()
-            .for_each(|(i, &p)| {
-                let threats = (p & attacks).count_ones() as i16;
-                eval += EVAL_PARAMS.pawn_threats[i] * threats;
-                self.trace.term(|t| t.pawn_threats[i][color] += threats)
-            });
-
         for pawn in pawns {
             // placement
             let relative_pawn = relative_board_index::<W>(pawn);
@@ -449,12 +454,11 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
                 .term(|t| t.pawn_connected[connected_pawns][color] += 1);
 
             // phalanx
-            let phalanx_pawns = ((pawn.bitboard()
-                | ((pawn.bitboard() & NOT_H_FILE) << 1)
+            let phalanx_pawns = ((((pawn.bitboard() & NOT_H_FILE) << 1)
                 | ((pawn.bitboard() & NOT_A_FILE) >> 1))
                 & pawns)
-                .count_ones() as usize
-                - 1; // the pawn in question will always be included
+                .count_ones() as usize;
+
             eval += EVAL_PARAMS.pawn_phalanx[phalanx_pawns];
             self.trace
                 .term(|t| t.pawn_phalanx[phalanx_pawns][color] += 1);
@@ -481,10 +485,22 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         eval
     }
 
-    pub fn evaluate_passed_pawn_extras<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
+    pub fn evaluate_pawn_extras<W: TypeColor>(&mut self, info: &EvalInfo) -> EvalScore {
         let mut eval = EvalScore::zero();
 
         let color = W::INDEX;
+
+        // pawn threats
+        let attacks = self.game.pawn_attacks::<W>();
+        self.game
+            .pieces::<W::Other>()
+            .iter()
+            .enumerate()
+            .for_each(|(i, &p)| {
+                let threats = (p & attacks).count_ones() as i16;
+                eval += EVAL_PARAMS.pawn_threats[i] * threats;
+                self.trace.term(|t| t.pawn_threats[i][color] += threats)
+            });
 
         let passers = info.passed_pawns[color];
 
@@ -524,7 +540,6 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 }
 
 impl Board {
-    #[inline]
     pub fn mobility_area<W: TypeColor>(&self) -> BitBoard {
         let (blocked_pawns, king) = if W::WHITE {
             (self.white_pawns & (self.black_pawns >> 8), self.white_king)
@@ -536,12 +551,10 @@ impl Board {
         (self.pawn_attacks::<W::Other>() | blocked_pawns | king).inverse()
     }
 
-    #[inline]
     pub fn evaluate(&self, pawn_hash_table: &mut PawnHashTable) -> i16 {
         self.evaluate_impl::<()>(pawn_hash_table).0
     }
 
-    #[inline]
     pub fn evaluate_impl<T: TraceTarget + Default>(
         &self,
         pawn_hash_table: &mut PawnHashTable,
@@ -551,16 +564,11 @@ impl Board {
             game: self,
             trace: &mut trace,
         };
-        let score = if self.black_to_move {
-            eval.evaluate::<Black>()
-        } else {
-            eval.evaluate::<White>()
-        };
+        let score = eval.evaluate(pawn_hash_table, self.black_to_move);
 
         (score, trace)
     }
 
-    #[inline]
     pub fn game_phase(&self) -> i32 {
         let knight_phase = 1;
         let bishop_phase = 1;

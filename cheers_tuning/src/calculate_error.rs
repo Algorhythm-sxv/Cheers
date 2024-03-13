@@ -47,7 +47,7 @@ pub fn mf_to_entry(mf: &str) -> TuningEntry {
         .parse::<f64>()
         .unwrap_or_else(|_| panic!("Invalid result in MF data: {mf}"));
 
-    let mut pawn_hash_table = PawnHashTable::new(0);
+    let mut pawn_hash_table = PawnHashTable::new();
 
     let (_, trace) = game.evaluate_impl::<EvalTrace>(&mut pawn_hash_table);
 
@@ -89,7 +89,7 @@ pub fn book_to_entry(book: &str) -> TuningEntry {
         _ => panic!("Invalid result extracted from book: {result_text}"),
     };
 
-    let mut pawn_hash_table = PawnHashTable::new(0);
+    let mut pawn_hash_table = PawnHashTable::new();
 
     let (_, trace) = game.evaluate_impl::<EvalTrace>(&mut pawn_hash_table);
 
@@ -137,7 +137,7 @@ pub fn epd_to_entry(epd: &str) -> TuningEntry {
         _ => panic!("Invalid result extracted from EPD: {result_text}"),
     };
 
-    let mut pawn_hash_table = PawnHashTable::new(0);
+    let mut pawn_hash_table = PawnHashTable::new();
 
     let (_, trace) = game.evaluate_impl::<EvalTrace>(&mut pawn_hash_table);
 

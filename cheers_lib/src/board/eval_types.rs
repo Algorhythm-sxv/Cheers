@@ -200,6 +200,9 @@ mod tests {
         score += s!(-200, 200) - s!(200, -200);
         score += s!(0, 0) - s!(0, 100);
         score -= s!(100, 100);
-        assert_eq!((score.mg(), score.eg()), (100, 500))
+        assert_eq!((score.mg(), score.eg()), (100, 500));
+
+        let score = s!(123, -456);
+        assert_eq!(score, -(-score));
     }
 }

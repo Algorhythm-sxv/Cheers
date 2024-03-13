@@ -129,7 +129,7 @@ impl ThreadData {
             return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion()] as i32);
         }
         let piece_bonuses = [0, 240, 240, 480, 960];
-        let mvv_bonus = 2 * piece_bonuses[board.piece_on(mv.to()).unwrap_or(Pawn)] as i32;
+        let mvv_bonus = 2 * piece_bonuses[board.piece_on(mv.to()).unwrap_or(Pawn)];
         let capture_history = self.capture_history_tables[board.current_player()][mv] as i32;
 
         // sort winning captures before quiets, losing captures after
