@@ -7,7 +7,6 @@ pub use super::{eval_params::*, eval_types::*};
 
 pub struct EvalContext<'search, T> {
     game: &'search Board,
-    pawn_hash_table: &'search mut PawnHashTable,
     trace: &'search mut T,
 }
 
@@ -17,12 +16,6 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let color = W::INDEX;
         self.trace.term(|t| t.turn = color as i16);
 
-        let pawn_cache = if !T::TRACING {
-            self.pawn_hash_table.get::<W>(self.game.pawn_hash)
-        } else {
-            None
-        };
-
         let phase = self.game.game_phase();
 
         let white_king_square = self.game.white_king.first_square();
@@ -31,12 +24,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         let white_king_attacks = lookup_king(white_king_square);
         let black_king_attacks = lookup_king(black_king_square);
 
-        let (white_passers, black_passers) = if let Some(cache) = pawn_cache {
-            (
-                cache.1 & self.game.white_pawns,
-                cache.1 & self.game.black_pawns,
-            )
-        } else {
+        let (white_passers, black_passers) = {
             let front_spans_black = Board::pawn_front_spans::<Black>(self.game.black_pawns);
             let all_front_spans_black = front_spans_black
                 | (front_spans_black & NOT_H_FILE) << 1
@@ -77,26 +65,9 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
         };
 
         let mut eval = EvalScore::zero();
-        if !T::TRACING {
-            match pawn_cache {
-                None => {
-                    let score = self.evaluate_pawns_only::<W>(&mut info)
-                        - self.evaluate_pawns_only::<W::Other>(&mut info);
-                    self.pawn_hash_table.set::<W>(
-                        self.game.pawn_hash,
-                        score,
-                        white_passers | black_passers,
-                    );
-                    eval += score;
-                }
-                Some((val, _)) => {
-                    eval += val;
-                }
-            }
-        } else {
-            eval += self.evaluate_pawns_only::<W>(&mut info)
-                - self.evaluate_pawns_only::<W::Other>(&mut info);
-        }
+
+        eval += self.evaluate_pawns_only::<W>(&mut info)
+            - self.evaluate_pawns_only::<W::Other>(&mut info);
 
         eval += self.evaluate_passed_pawn_extras::<W>(&info)
             - self.evaluate_passed_pawn_extras::<W::Other>(&info);
@@ -578,7 +549,6 @@ impl Board {
         let mut trace = T::default();
         let mut eval = EvalContext {
             game: self,
-            pawn_hash_table,
             trace: &mut trace,
         };
         let score = if self.black_to_move {
