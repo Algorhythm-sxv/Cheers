@@ -30,6 +30,7 @@ uci_options![
     RfpMargin(Spin<i16> { default: RFP_MARGIN, min: 0, max: 300 }),
     RfpImprovingMargin(Spin<i16> { default: RFP_IMPROVING_MARGIN, min: -100, max: 100 }),
     LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
+    HistoryLmrDivisor(Spin<i16> { default: HISTORY_LMR_DIVISOR, min: 0, max: 8192 }),
     IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 10 }),
 ];
 

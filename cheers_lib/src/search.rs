@@ -652,6 +652,12 @@ impl Search {
 
                         // reduce more outside of PV
                         r += !pv_node as i8;
+
+                        // reduce more or less relative to history
+                        let histories = self.thread_data.get_quiet_history(mv, current_player, ply);
+                        r -= (histories / self.options.history_lmr_divisor) as i8;
+                        // don't allow negative reductions
+                        r = r.max(0);
                     }
 
                     r
