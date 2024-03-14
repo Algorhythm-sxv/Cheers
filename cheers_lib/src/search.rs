@@ -494,7 +494,7 @@ impl Search {
         // Whole-node pruning techniques: these techniques will prune a whole node before move
         // generation and search is performed
         if !R::ROOT && !pv_node && !in_check {
-            //Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
+            // Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
             if depth <= self.options.rfp_depth
                 && eval.saturating_sub(
                     depth as i16 * self.options.rfp_margin
@@ -549,18 +549,12 @@ impl Search {
         }
 
         // Futility Pruning: if the static eval is bad enough skip quiet moves
-        let fp_margins = [
-            0,
-            self.options.fp_margin_1,
-            self.options.fp_margin_2,
-            self.options.fp_margin_3,
-        ];
         // decide if FP should be enabled
         let futility_pruning = !R::ROOT
             && !pv_node
             && !in_check
-            && depth <= 3
-            && eval + fp_margins[depth as usize] <= alpha;
+            && depth <= self.options.fp_depth
+            && eval + self.options.fp_const + depth as i16 * self.options.fp_depth_margin <= alpha;
 
         // move ordering: try heuristically good moves first to reduce the AB search tree
         let mut move_sorter = MoveSorter::<All>::new(tt_move);

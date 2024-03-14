@@ -10,9 +10,9 @@ pub struct SearchOptions {
     pub see_quiet_margin: i16,
     pub pvs_fulldepth: i8,
     pub delta_pruning_margin: i16,
-    pub fp_margin_1: i16,
-    pub fp_margin_2: i16,
-    pub fp_margin_3: i16,
+    pub fp_depth: i8,
+    pub fp_const: i16,
+    pub fp_depth_margin: i16,
     pub rfp_depth: i8,
     pub rfp_margin: i16,
     pub rfp_improving_margin: i16,
@@ -29,9 +29,9 @@ pub const SEE_CAPTURE_MARGIN: i16 = -45;
 pub const SEE_QUIET_MARGIN: i16 = -50;
 pub const PVS_FULLDEPTH: i8 = 1;
 pub const DELTA_PRUNING_MARGIN: i16 = 185;
-pub const FP_MARGIN_1: i16 = 100;
-pub const FP_MARGIN_2: i16 = 313;
-pub const FP_MARGIN_3: i16 = 547;
+pub const FP_DEPTH: i8 = 3;
+pub const FP_CONST: i16 = 100;
+pub const FP_DEPTH_MARGIN: i16 = 220;
 pub const RFP_DEPTH: i8 = 13;
 pub const RFP_MARGIN: i16 = 185;
 pub const RFP_IMPROVING_MARGIN: i16 = -79;
@@ -52,9 +52,9 @@ impl Default for SearchOptions {
             see_quiet_margin: SEE_QUIET_MARGIN,
             pvs_fulldepth: PVS_FULLDEPTH,
             delta_pruning_margin: DELTA_PRUNING_MARGIN,
-            fp_margin_1: FP_MARGIN_1,
-            fp_margin_2: FP_MARGIN_2,
-            fp_margin_3: FP_MARGIN_3,
+            fp_depth: FP_DEPTH,
+            fp_const: FP_CONST,
+            fp_depth_margin: FP_DEPTH_MARGIN,
             rfp_depth: RFP_DEPTH,
             rfp_margin: RFP_MARGIN,
             rfp_improving_margin: RFP_IMPROVING_MARGIN,
