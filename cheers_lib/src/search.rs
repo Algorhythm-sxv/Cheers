@@ -11,7 +11,7 @@ use crate::moves::*;
 use crate::thread_data::ThreadData;
 use crate::types::{HelperThread, MainThread, TypeMainThread};
 use crate::{
-    board::{eval_types::TraceTarget, *},
+    board::*,
     hash_tables::{score_from_tt, score_into_tt, NodeType::*, PawnHashTable, TranspositionTable},
     move_sorting::MoveSorter,
     options::SearchOptions,
@@ -356,7 +356,7 @@ impl Search {
         tt: &TranspositionTable,
         allow_nmp: bool,
     ) -> i16 {
-        // check time and max nodes every 2048 nodes in the main thread
+        // check time every 2048 nodes in the main thread
         let nodes = self.local_nodes;
         if M::MAIN_THREAD && nodes & 2047 == 2047 {
             if let Some((_, abort_time)) = self.max_time_ms {
@@ -397,11 +397,18 @@ impl Search {
             return score;
         }
 
-        // increment the node counters
-        if M::MAIN_THREAD {
-            NODE_COUNT.fetch_add(1, Relaxed);
-        }
+        // increment the node counters and check max nodes
         self.local_nodes += 1;
+        if M::MAIN_THREAD {
+            let old_nodes = NODE_COUNT.fetch_add(1, Relaxed);
+            // if this is the last node, allow it to complete, otherwise subtract this node from the count
+            if self.max_nodes.is_some_and(|n| old_nodes >= n) {
+                NODE_COUNT.fetch_sub(1, Relaxed);
+                ABORT_SEARCH.store(true, Relaxed);
+                pv.clear();
+                return 0;
+            }
+        }
 
         // increase the seldepth if this node is deeper
         self.seldepth = self.seldepth.max(ply);
@@ -721,6 +728,7 @@ impl Search {
             if ABORT_SEARCH.load(Relaxed) && depth > 1 {
                 // remove this position from the history
                 self.search_history.pop();
+                pv.clear();
                 return 0;
             }
 
@@ -833,26 +841,13 @@ impl Search {
     pub fn quiesce<M: TypeMainThread>(
         &mut self,
         board: &Board,
-        alpha: i16,
-        beta: i16,
-        ply: usize,
-        pv: &mut PrincipalVariation,
-        tt: &TranspositionTable,
-    ) -> i16 {
-        self.quiesce_impl::<(), M>(board, alpha, beta, ply, pv, tt)
-            .0
-    }
-
-    pub fn quiesce_impl<T: TraceTarget + Default, M: TypeMainThread>(
-        &mut self,
-        board: &Board,
         mut alpha: i16,
         beta: i16,
         ply: usize,
         pv: &mut PrincipalVariation,
         tt: &TranspositionTable,
-    ) -> (i16, T) {
-        // check time and max nodes every 2048 nodes
+    ) -> i16 {
+        // check time every 2048 nodes
         let nodes = self.local_nodes;
         if M::MAIN_THREAD && nodes & 2047 == 2047 {
             if let Some((_, abort_time)) = self.max_time_ms {
@@ -860,7 +855,8 @@ impl Search {
                 if Instant::now().duration_since(self.start_time).as_millis() as usize > abort_time
                 {
                     ABORT_SEARCH.store(true, Relaxed);
-                    return (0, T::default());
+                    pv.clear();
+                    return 0;
                 }
             }
         }
@@ -868,61 +864,66 @@ impl Search {
         // check for abort
         if ABORT_SEARCH.load(Relaxed) || ply >= SEARCH_MAX_PLY {
             pv.clear();
-            return (0, T::default());
+            return 0;
         }
 
         // prefetch the transposition table: hint to the CPU that we want this in the cache well
         // before we actually use it
         tt.prefetch(board.hash());
 
-        // increment node counters
-        if M::MAIN_THREAD {
-            NODE_COUNT.fetch_add(1, Relaxed);
-        }
+        // increment node counters and check for max nodes
         self.local_nodes += 1;
+        if M::MAIN_THREAD {
+            let old_nodes = NODE_COUNT.fetch_add(1, Relaxed);
+            // if this is the last node, allow it to complete, otherwise subtract this node from the count
+            if self.max_nodes.is_some_and(|n| old_nodes >= n) {
+                NODE_COUNT.fetch_sub(1, Relaxed);
+                ABORT_SEARCH.store(true, Relaxed);
+                pv.clear();
+                return 0;
+            }
+        }
 
         // increase the seldepth if this node is deeper
         self.seldepth = self.seldepth.max(ply);
 
         // check 50 move draw
         if board.halfmove_clock() >= 100 {
-            return (DRAW_SCORE, T::default());
+            return DRAW_SCORE;
         }
 
-        // Transposition Table lookup when tracing is disabled
+        // Transposition Table lookup
         let mut tt_move = Move::null();
         let mut tt_score = MINUS_INF;
-        if !T::TRACING {
-            if let Some(entry) = tt.get(board.hash()) {
-                // TT pruning when the bounds are correct
-                if entry.node_type == Exact
-                    || (entry.node_type == LowerBound && entry.score >= beta)
-                    || (entry.node_type == UpperBound && entry.score <= alpha)
-                {
-                    pv.clear();
-                    return (score_from_tt(entry.score, ply), T::default());
-                }
-
-                // otherwise use the score as an improved static eval
-                // and the move for move ordering
-                if matches!(entry.node_type, LowerBound | Exact) {
-                    tt_score = score_from_tt(entry.score, ply);
-                }
-                tt_move = Move::new(entry.piece, entry.move_from, entry.move_to, entry.promotion);
+        if let Some(entry) = tt.get(board.hash()) {
+            // TT pruning when the bounds are correct
+            if entry.node_type == Exact
+                || (entry.node_type == LowerBound && entry.score >= beta)
+                || (entry.node_type == UpperBound && entry.score <= alpha)
+            {
+                pv.clear();
+                return score_from_tt(entry.score, ply);
             }
+
+            // otherwise use the score as an improved static eval
+            // and the move for move ordering
+            if matches!(entry.node_type, LowerBound | Exact) {
+                tt_score = score_from_tt(entry.score, ply);
+            }
+            tt_move = Move::new(entry.piece, entry.move_from, entry.move_to, entry.promotion);
         }
 
         // the static evaluation allows us to prune moves that are worse than 'standing pat' at this node
-        let (static_eval, mut best_trace) = if !T::TRACING && tt_score != MINUS_INF {
-            (tt_score, T::default())
+        let static_eval = if tt_score != MINUS_INF {
+            tt_score
         } else {
-            board.evaluate_impl::<T>(&mut self.pawn_hash_table)
+            board.evaluate(&mut self.pawn_hash_table)
         };
 
         // if the static eval is above beta, then the opponent won't play into this position
         if static_eval >= beta {
             pv.clear();
-            return (beta, best_trace);
+            return beta;
         }
 
         // if the static eval is better than alpha, use it to prune moves instead
@@ -970,9 +971,14 @@ impl Search {
                 continue;
             }
 
-            let (mut score, trace) =
-                self.quiesce_impl::<T, M>(&new, -beta, -alpha, ply + 1, &mut line, tt);
-            score = -score;
+            let score = -self.quiesce::<M>(&new, -beta, -alpha, ply + 1, &mut line, tt);
+
+            // can't trust scores after an abort, don't let them get into the TT
+            if ABORT_SEARCH.load(Relaxed) {
+                self.search_history.pop();
+                pv.clear();
+                return 0;
+            }
 
             if score >= beta {
                 // beta cutoff, this move is too good and so the opponent won't go into this position
@@ -988,11 +994,10 @@ impl Search {
                 );
                 // return to the previous history state
                 self.search_history.pop();
-                return (score, trace);
+                return score;
             } else if score > alpha {
                 // a score between alpha and beta represents a new best move
                 best_move = mv;
-                best_trace = trace;
 
                 pv.update_from(best_move, &line);
                 // raise alpha so worse moves after this one will be pruned early
@@ -1003,17 +1008,16 @@ impl Search {
         self.search_history.pop();
 
         // if there are no legal captures, check for checkmate/stalemate
-        // disable when tracing to avoid empty traces
-        if !T::TRACING && self.thread_data.search_stack[ply].move_list.is_empty() {
+        if self.thread_data.search_stack[ply].move_list.is_empty() {
             let mut some_moves = false;
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 
             if !some_moves {
                 pv.clear();
                 if board.in_check() {
-                    return (-(CHECKMATE_SCORE - (ply as i16)), T::default());
+                    return -(CHECKMATE_SCORE - (ply as i16));
                 } else {
-                    return (DRAW_SCORE, T::default());
+                    return DRAW_SCORE;
                 }
             }
         }
@@ -1033,6 +1037,6 @@ impl Search {
             // no move was found from this position, clear the PV
             pv.clear();
         }
-        (alpha, best_trace)
+        alpha
     }
 }
