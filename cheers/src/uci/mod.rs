@@ -32,6 +32,9 @@ uci_options![
     LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
     HistoryLmrDivisor(Spin<i16> { default: HISTORY_LMR_DIVISOR, min: 0, max: 8192 }),
     IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 10 }),
+    SeDepth(Spin<i8> { default: SE_DEPTH, min: 3, max: 15 }),
+    SeTTDepth(Spin<i8> { default: SE_TT_DEPTH, min: 1, max: 6 }),
+    SeDepthMargin(Spin<i16> { default: SE_DEPTH_MARGIN, min: 0, max: 64 }),
 ];
 
 pub enum UciCommand {

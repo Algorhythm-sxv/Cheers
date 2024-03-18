@@ -89,6 +89,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 uci::UciOption::LmpDepth(n) => options.lmp_depth = n,
                 uci::UciOption::HistoryLmrDivisor(n) => options.history_lmr_divisor = n,
                 uci::UciOption::IirDepth(n) => options.iir_depth = n,
+                uci::UciOption::SeDepth(n) => options.se_depth = n,
+                uci::UciOption::SeTTDepth(n) => options.se_tt_depth = n,
+                uci::UciOption::SeDepthMargin(n) => options.se_depth_margin = n,
             },
             uci::UciCommand::UciNewGame => {
                 position = Board::new();

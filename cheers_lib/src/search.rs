@@ -654,16 +654,16 @@ impl Search {
 
             let extension = if !R::ROOT {
                 // Singular extensions: if there is one move better than all the others, extend the search
-                let singular = depth >= 8
+                let singular = depth >= self.options.se_depth
                     && mv == tt_move
                     && !is_mate_score(tt_score)
-                    && tt_depth >= depth - 2
+                    && tt_depth >= depth - self.options.se_tt_depth
                     && matches!(tt_bound, LowerBound | Exact);
 
                 if singular {
                     let mut line = PrincipalVariation::new();
 
-                    let singular_margin = tt_score - 2 * depth as i16;
+                    let singular_margin = tt_score - self.options.se_depth_margin * depth as i16 / 16;
 
                     // re-search the current ply with reduced depth and the TT move excluded
                     self.thread_data.search_stack[ply].excluded_move = mv;
