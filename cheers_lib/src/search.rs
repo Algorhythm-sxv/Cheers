@@ -414,8 +414,11 @@ impl Search {
         let pv_node = alpha != beta - 1;
         let current_player = board.current_player();
 
-        // check 50 move and repetition draws when not at the root
+        let excluded_move = self.thread_data.search_stack[ply].excluded_move;
+        // check 50 move and repetition draws when not at the root and in singular verification search,
+        // where these conditions have already been checked
         if !R::ROOT
+            && excluded_move.is_null()
             && (board.halfmove_clock() >= 100
                 || self
                     .pre_history
@@ -447,8 +450,6 @@ impl Search {
                 return beta;
             }
         }
-
-        let excluded_move = self.thread_data.search_stack[ply].excluded_move;
 
         let mut tt_move = Move::null();
         let mut tt_score = MINUS_INF;
