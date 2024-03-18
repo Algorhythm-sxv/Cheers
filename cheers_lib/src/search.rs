@@ -476,11 +476,11 @@ impl Search {
                 tt_move = Move::new(entry.piece, entry.move_from, entry.move_to, entry.promotion);
                 tt_depth = entry.depth;
             }
+        }
 
-            // IIR: reduce the search depth if no TT move is present
-            if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_move.is_null() {
-                depth -= 1;
-            }
+        // IIR: reduce the search depth if no TT move is present
+        if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_move.is_null() {
+            depth -= 1;
         }
 
         let eval = if matches!(tt_bound, LowerBound | Exact) {
@@ -663,7 +663,8 @@ impl Search {
                 if singular {
                     let mut line = PrincipalVariation::new();
 
-                    let singular_margin = tt_score - self.options.se_depth_margin * depth as i16 / 16;
+                    let singular_margin =
+                        tt_score - self.options.se_depth_margin * depth as i16 / 16;
 
                     // re-search the current ply with reduced depth and the TT move excluded
                     self.thread_data.search_stack[ply].excluded_move = mv;
