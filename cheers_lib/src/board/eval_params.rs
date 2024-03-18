@@ -1,6 +1,8 @@
 #[cfg(feature = "eval-tracing")]
 use bytemuck::{Pod, Zeroable};
 
+use crate::search::SEARCH_MAX_PLY;
+
 use super::eval_types::*;
 
 #[cfg_attr(feature = "eval-tracing", derive(Pod, Zeroable))]
@@ -52,9 +54,7 @@ impl EvalParams {
     pub const LEN: usize = std::mem::size_of::<Self>() / std::mem::size_of::<i16>();
     pub fn to_array(&mut self) -> [i16; Self::LEN] {
         let array = &mut bytemuck::cast::<EvalParams, [i16; Self::LEN]>(*self);
-        array
-            .chunks_exact_mut(2)
-            .for_each(EvalScore::convert);
+        array.chunks_exact_mut(2).for_each(EvalScore::convert);
         *array
     }
     pub fn as_array(&self) -> &[i16; Self::LEN] {
@@ -148,13 +148,16 @@ impl Default for EvalTrace {
 // static assert that eval params and trace are the same length (plus 1 for turn in trace)
 #[cfg(feature = "eval-tracing")]
 const _PARAMS_TRACE_LEN_EQ: () = if EvalParams::LEN + 1 == EvalTrace::LEN {
-    
 } else {
     panic!("Eval parameters and trace are not equal length!")
 };
 
 pub const CHECKMATE_SCORE: i16 = 30000;
 pub const DRAW_SCORE: i16 = 0;
+
+pub fn is_mate_score(score: i16) -> bool {
+    score.abs().abs_diff(CHECKMATE_SCORE) <= SEARCH_MAX_PLY as u16
+}
 
 pub static EVAL_PARAMS: EvalParams = EvalParams {
     piece_values: PieceValues([

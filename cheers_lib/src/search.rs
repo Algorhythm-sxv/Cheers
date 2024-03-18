@@ -18,6 +18,8 @@ use crate::{
     types::{All, Captures, NotRoot, Piece::*, Root, TypeRoot},
 };
 
+use self::evaluate::is_mate_score;
+
 pub static ABORT_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -446,38 +448,45 @@ impl Search {
             }
         }
 
+        let excluded_move = self.thread_data.search_stack[ply].excluded_move;
+
         let mut tt_move = Move::null();
         let mut tt_score = MINUS_INF;
         let mut tt_depth = 0;
         let mut tt_bound = UpperBound;
-        if let Some(entry) = tt.get(board.hash()) {
-            // TT pruning when the bounds are correct, but not at in the PV
-            if !pv_node
-                && entry.depth >= depth
-                && (entry.node_type == Exact
-                    || (entry.node_type == LowerBound && entry.score >= beta)
-                    || (entry.node_type == UpperBound && entry.score <= alpha))
-            {
-                pv.clear();
-                return score_from_tt(entry.score, ply);
+        if excluded_move.is_null() {
+            if let Some(entry) = tt.get(board.hash()) {
+                // TT pruning when the bounds are correct, but not at in the PV
+                if !pv_node
+                    && entry.depth >= depth
+                    && (entry.node_type == Exact
+                        || (entry.node_type == LowerBound && entry.score >= beta)
+                        || (entry.node_type == UpperBound && entry.score <= alpha))
+                {
+                    pv.clear();
+                    return score_from_tt(entry.score, ply);
+                }
+
+                // otherwise use the score as an improved static eval
+                // and the move for move ordering
+                tt_score = score_from_tt(entry.score, ply);
+                tt_bound = entry.node_type;
+
+                tt_move = Move::new(entry.piece, entry.move_from, entry.move_to, entry.promotion);
+                tt_depth = entry.depth;
             }
 
-            // otherwise use the score as an improved static eval
-            // and the move for move ordering
-            tt_score = score_from_tt(entry.score, ply);
-            tt_bound = entry.node_type;
-
-            tt_move = Move::new(entry.piece, entry.move_from, entry.move_to, entry.promotion);
-            tt_depth = entry.depth;
-        }
-
-        // IIR: reduce the search depth if no TT move is present
-        if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_move.is_null() {
-            depth -= 1;
+            // IIR: reduce the search depth if no TT move is present
+            if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_move.is_null() {
+                depth -= 1;
+            }
         }
 
         let eval = if matches!(tt_bound, LowerBound | Exact) {
             tt_score
+        } else if !excluded_move.is_null() {
+            // singular verification searches alread have the eval available
+            self.thread_data.search_stack[ply].eval
         } else if !in_check {
             board.evaluate(&mut self.pawn_hash_table)
         } else {
@@ -496,7 +505,7 @@ impl Search {
 
         // Whole-node pruning techniques: these techniques will prune a whole node before move
         // generation and search is performed
-        if !R::ROOT && !pv_node && !in_check {
+        if !R::ROOT && !pv_node && !in_check && excluded_move.is_null() {
             //Reverse Futility Pruning: if the static evaluation is high enough above beta assume we can skip search
             if depth <= self.options.rfp_depth
                 && eval.saturating_sub(
@@ -580,6 +589,11 @@ impl Search {
         let mut quiets_tried = MoveList::new();
         let mut captures_tried = MoveList::new();
         while let Some((mv, move_score)) = move_sorter.next(board, &mut self.thread_data, ply) {
+            // skip the excluded move in a singular verification search
+            if mv == excluded_move {
+                continue;
+            }
+
             let capture = board.is_capture(mv);
 
             // Futility Pruning: skip quiets on nodes with bad static eval
@@ -637,8 +651,42 @@ impl Search {
                 continue;
             }
 
-            // Check extension: search further if in check
-            let extension = if !R::ROOT { new.in_check() as i8 } else { 0 };
+            let extension = if !R::ROOT {
+                // Singular extensions: if there is one move better than all the others, extend the search
+                let singular = depth >= 8
+                    && mv == tt_move
+                    && !is_mate_score(tt_score)
+                    && tt_depth >= depth - 2
+                    && matches!(tt_bound, LowerBound | Exact);
+
+                if singular {
+                    let mut line = PrincipalVariation::new();
+
+                    let singular_margin = tt_score - 2 * depth as i16;
+
+                    // re-search the current ply with reduced depth and the TT move excluded
+                    self.thread_data.search_stack[ply].excluded_move = mv;
+                    let score = self.negamax::<NotRoot, M>(
+                        board,
+                        singular_margin - 1,
+                        singular_margin,
+                        (depth - 1) / 2,
+                        ply,
+                        &mut line,
+                        tt,
+                        false,
+                    );
+                    self.thread_data.search_stack[ply].excluded_move = Move::null();
+
+                    // if the position looks significantly worse without the TT move, the TT move is singular
+                    (score < singular_margin) as i8
+                } else {
+                    // Check extension: search further if in check
+                    new.in_check() as i8
+                }
+            } else {
+                0
+            };
 
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
@@ -736,15 +784,17 @@ impl Search {
                 // beta cutoff, this move is too good and so the opponent won't go into this position
                 pv.clear();
 
-                // add the score and move to TT
-                tt.set(
-                    board.hash(),
-                    mv,
-                    depth,
-                    score_into_tt(score, ply),
-                    LowerBound,
-                    pv_node,
-                );
+                // add the score and move to TT when not in a singular verification search
+                if excluded_move.is_null() {
+                    tt.set(
+                        board.hash(),
+                        mv,
+                        depth,
+                        score_into_tt(score, ply),
+                        LowerBound,
+                        pv_node,
+                    );
+                }
 
                 // update killer, countermove and history tables for good quiets
                 let delta = if depth > 13 {
@@ -821,15 +871,17 @@ impl Search {
 
         // after all moves have been searched, alpha is either unchanged
         // (this position is bad) or raised (new pv from this node)
-        // add the score and the new best move to the TT
-        tt.set(
-            board.hash(),
-            best_move,
-            depth,
-            score_into_tt(alpha, ply),
-            if alpha > old_alpha { Exact } else { UpperBound },
-            pv_node,
-        );
+        // add the score and the new best move to the TT when not in a singular verification search
+        if excluded_move.is_null() {
+            tt.set(
+                board.hash(),
+                best_move,
+                depth,
+                score_into_tt(alpha, ply),
+                if alpha > old_alpha { Exact } else { UpperBound },
+                pv_node,
+            );
+        }
 
         if alpha == old_alpha {
             // no move was found from this position, clear the PV
