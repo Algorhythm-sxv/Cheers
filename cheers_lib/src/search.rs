@@ -380,12 +380,8 @@ impl Search {
         // before we actually use it
         tt.prefetch(board.hash());
 
-        // Check extensions: increase depth by 1 when in check to avoid tactical blindness
+        // Being in check changes search a lot
         let in_check = board.in_check();
-        if in_check {
-            // saturating add to avoid negative depths on overflow
-            depth = depth.saturating_add(1);
-        }
 
         // the PV from this node will be gathered into this array
         let mut line = PrincipalVariation::new();
@@ -627,6 +623,7 @@ impl Search {
                 }
             }
 
+            // store the current node count for tracking at the root
             let old_nodes = self.local_nodes;
 
             // make the move on a copy of the board
@@ -639,6 +636,9 @@ impl Search {
                 // skip the TT move if it's illegal
                 continue;
             }
+
+            // Check extension: search further if in check
+            let extension = if !R::ROOT { new.in_check() as i8 } else { 0 };
 
             let mut score = MINUS_INF;
             // perform a search on the new position, returning the score and the PV
@@ -676,7 +676,7 @@ impl Search {
                     &new,
                     -alpha - 1,
                     -alpha,
-                    reduced_depth,
+                    reduced_depth + extension,
                     ply + 1,
                     &mut line,
                     tt,
@@ -697,7 +697,7 @@ impl Search {
                     &new,
                     -alpha - 1,
                     -alpha,
-                    depth - 1,
+                    depth + extension - 1,
                     ply + 1,
                     &mut line,
                     tt,
@@ -711,7 +711,7 @@ impl Search {
                     &new,
                     -beta,
                     -alpha,
-                    depth - 1,
+                    depth + extension - 1,
                     ply + 1,
                     &mut line,
                     tt,
