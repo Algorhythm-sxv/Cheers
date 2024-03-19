@@ -475,11 +475,6 @@ impl Search {
             tt_depth = entry.depth;
         }
 
-        // IIR: reduce the search depth if no TT move is present
-        if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_move.is_null() {
-            depth -= 1;
-        }
-
         let eval = if matches!(tt_bound, LowerBound | Exact) {
             tt_score
         } else if !in_check {
@@ -553,6 +548,11 @@ impl Search {
                     return score;
                 }
             }
+        }
+
+        // IIR: reduce the search depth if no TT move is present
+        if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_move.is_null() {
+            depth -= 1;
         }
 
         // Futility Pruning: if the static eval is bad enough skip quiet moves
