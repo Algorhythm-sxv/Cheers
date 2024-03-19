@@ -540,7 +540,7 @@ impl Search {
                     &new,
                     -beta,
                     -beta + 1,
-                    (depth - reduction).max(0),
+                    (depth - reduction).max(1),
                     ply + 1,
                     &mut line,
                     tt,
@@ -671,7 +671,7 @@ impl Search {
                 };
 
                 // perform a cheap reduced, null-window search in the hope it fails low immediately
-                let reduced_depth = (depth - 1 - reduction).max(0);
+                let reduced_depth = (depth - 1 - reduction).max(1);
                 score = -self.negamax::<NotRoot, M>(
                     &new,
                     -alpha - 1,
