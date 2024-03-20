@@ -579,6 +579,7 @@ impl Search {
         let mut move_sorter = MoveSorter::<All>::new(tt_move);
 
         let mut best_move = Move::null();
+        let mut best_score_found = MINUS_INF;
 
         // save the old alpha to see if any moves improve the PV
         let old_alpha = alpha;
@@ -802,6 +803,10 @@ impl Search {
                 // raise alpha so worse moves after this one will be pruned early
                 alpha = score;
             }
+
+            // keep track of the best score found at this node
+            best_score_found = best_score_found.max(score);
+
             // increment the move counter if the move was legal
             move_index += 1;
             if !capture {
@@ -832,7 +837,7 @@ impl Search {
             board.hash(),
             best_move,
             depth,
-            score_into_tt(alpha, ply),
+            score_into_tt(best_score_found, ply),
             if alpha > old_alpha { Exact } else { UpperBound },
             pv_node,
         );
@@ -841,7 +846,7 @@ impl Search {
             // no move was found from this position, clear the PV
             pv.clear();
         }
-        alpha
+        best_score_found
     }
 
     pub fn quiesce<M: TypeMainThread>(
