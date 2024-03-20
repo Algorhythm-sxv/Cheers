@@ -597,7 +597,6 @@ impl Search {
                 && !capture
                 && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
             {
-                quiets_tried.push(SortingMove::new(mv));
                 move_index += 1;
                 continue;
             }
@@ -609,7 +608,6 @@ impl Search {
                 && depth <= self.options.lmp_depth
                 && quiets_tried.len() >= LMP_MARGINS[depth.min(31) as usize][improving as usize]
             {
-                quiets_tried.push(SortingMove::new(mv));
                 move_index += 1;
                 continue;
             }
@@ -623,11 +621,6 @@ impl Search {
                         self.options.see_quiet_margin
                     };
                 if !board.see_beats_threshold(mv, threshold) {
-                    if !capture {
-                        quiets_tried.push(SortingMove::new(mv));
-                    } else {
-                        captures_tried.push(SortingMove::new(mv));
-                    }
                     move_index += 1;
                     continue;
                 }
