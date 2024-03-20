@@ -124,8 +124,8 @@ impl ThreadData {
 
     pub fn get_quiet_history(&self, mv: Move, current_player: Color, ply: usize) -> i16 {
         let mut history = self.history_tables[current_player][mv];
-        if ply > 1 {
-            let countermove = self.search_stack[ply - 2].current_move;
+        if ply > 0 {
+            let countermove = self.search_stack[ply - 1].current_move;
             history += self.countermove_history_tables[current_player][countermove.piece()]
                 [countermove.to()][mv];
         }
