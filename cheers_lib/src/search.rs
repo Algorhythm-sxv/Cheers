@@ -454,7 +454,8 @@ impl Search {
         let mut tt_score = MINUS_INF;
         let mut tt_depth = 0;
         let mut tt_bound = UpperBound;
-        if let Some(entry) = tt.get(board.hash()) {
+        let tt_entry = tt.get(board.hash());
+        if let Some(entry) = &tt_entry {
             // TT pruning when the bounds are correct, but not at in the PV
             if !pv_node
                 && entry.depth >= depth
@@ -475,19 +476,24 @@ impl Search {
             tt_depth = entry.depth;
         }
 
-        // IIR: reduce the search depth if no TT move is present
-        if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_move.is_null() {
+        // IIR: reduce the search depth if the position was missing in the TT
+        if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_entry.is_none() {
             depth -= 1;
         }
 
-        let eval = if matches!(tt_bound, LowerBound | Exact) {
-            tt_score
-        } else if !in_check {
-            board.evaluate(&mut self.pawn_hash_table)
-        } else {
+        let mut eval = if in_check {
             // static eval isn't valid when in check
             MINUS_INF
+        } else {
+            board.evaluate(&mut self.pawn_hash_table)
         };
+        if tt_entry.is_some()
+            && (tt_bound == Exact
+                || (tt_bound == LowerBound && tt_score > eval)
+                || (tt_bound == UpperBound && tt_score < eval))
+        {
+            eval = tt_score;
+        }
 
         // store the current 'static' eval to use with heuristics
         self.thread_data.search_stack[ply].eval = eval;
@@ -758,7 +764,7 @@ impl Search {
                     if let Some(last_move) = self
                         .thread_data
                         .search_stack
-                        .get(ply - 1)
+                        .get(ply.wrapping_sub(1))
                         .map(|s| s.current_move)
                     {
                         self.thread_data.countermove_tables[current_player][last_move] = mv;
@@ -895,7 +901,9 @@ impl Search {
         // Transposition Table lookup
         let mut tt_move = Move::null();
         let mut tt_score = MINUS_INF;
-        if let Some(entry) = tt.get(board.hash()) {
+        let mut tt_bound = UpperBound;
+        let tt_entry = tt.get(board.hash());
+        if let Some(entry) = &tt_entry {
             // TT pruning when the bounds are correct
             if entry.node_type == Exact
                 || (entry.node_type == LowerBound && entry.score >= beta)
@@ -907,18 +915,20 @@ impl Search {
 
             // otherwise use the score as an improved static eval
             // and the move for move ordering
-            if matches!(entry.node_type, LowerBound | Exact) {
-                tt_score = score_from_tt(entry.score, ply);
-            }
+            tt_score = score_from_tt(entry.score, ply);
+            tt_bound = entry.node_type;
             tt_move = Move::new(entry.piece, entry.move_from, entry.move_to, entry.promotion);
         }
 
         // the static evaluation allows us to prune moves that are worse than 'standing pat' at this node
-        let static_eval = if tt_score != MINUS_INF {
-            tt_score
-        } else {
-            board.evaluate(&mut self.pawn_hash_table)
-        };
+        let mut static_eval = board.evaluate(&mut self.pawn_hash_table);
+        if tt_entry.is_some()
+            && (tt_bound == Exact
+                || (tt_bound == LowerBound && tt_score > static_eval)
+                || (tt_bound == UpperBound && tt_score < static_eval))
+        {
+            static_eval = tt_score;
+        }
 
         // if the static eval is above beta, then the opponent won't play into this position
         if static_eval >= beta {

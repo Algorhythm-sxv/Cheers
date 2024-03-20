@@ -55,7 +55,7 @@ impl ThreadData {
         // reward quiets that produce a beta cutoff
         let countermove = self
             .search_stack
-            .get(ply - 1)
+            .get(ply.wrapping_sub(1))
             .map(|s| s.current_move)
             .unwrap_or(Move::null());
         if !countermove.is_null() {
