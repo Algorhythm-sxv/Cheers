@@ -1,7 +1,8 @@
 use cheers_lib::{
-    board::Board,
+    board::{tb_adapter::MovegenAdapter, Board},
     hash_tables::TranspositionTable,
     options::SearchOptions,
+    pyrrhic_rs::TableBases,
     search::{Search, ABORT_SEARCH, NODE_COUNT},
     types::Color,
 };
@@ -20,6 +21,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut position = Board::new();
     let mut options = SearchOptions::default();
     let mut chess_960 = false;
+
+    let mut tbs = None;
 
     let mut tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
     let mut pre_history = Vec::new();
@@ -72,6 +75,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
                 uci::UciOption::Threads(n) => options.threads = n,
                 uci::UciOption::UCI_Chess960(x) => chess_960 = x,
+                uci::UciOption::SyzygyPath(p) => {
+                    // drop old TBs
+                    tbs = None;
+                    match TableBases::<MovegenAdapter>::new(p) {
+                        Ok(t) => tbs = Some(t),
+                        Err(e) => eprintln!("Failed to load tablebases: {e:?}"),
+                    }
+                }
                 uci::UciOption::NmpDepth(n) => options.nmp_depth = n,
                 uci::UciOption::NmpConstReduction(n) => options.nmp_const_reduction = n,
                 uci::UciOption::NmpLinearDivisor(n) => options.nmp_linear_divisor = n,
@@ -150,6 +161,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let mut search = Search::new_with_tt(position, tt.clone())
                     .tt_size_mb(options.tt_size_mb)
+                    .tablebases(tbs.clone())
                     .pre_history(pre_history.clone())
                     .max_nodes(nodes)
                     .max_depth(depth)

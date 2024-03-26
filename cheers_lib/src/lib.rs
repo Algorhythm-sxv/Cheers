@@ -11,3 +11,4 @@ pub mod types;
 pub mod zobrist;
 
 pub use cheers_bitboards::*;
+pub use pyrrhic_rs;

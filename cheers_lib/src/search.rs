@@ -3,8 +3,10 @@ use std::sync::{atomic::Ordering::*, Arc, RwLock};
 use std::thread;
 use std::time::Instant;
 
+use cheers_bitboards::BitBoard;
 use cheers_pregen::{LMP_MARGINS, LMR};
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
+use pyrrhic_rs::{TableBases, WdlProbeResult};
 
 use crate::board::see::SEE_PIECE_VALUES;
 use crate::moves::*;
@@ -17,6 +19,9 @@ use crate::{
     options::SearchOptions,
     types::{All, Captures, NotRoot, Piece::*, Root, TypeRoot},
 };
+
+use self::evaluate::TB_WIN_SCORE;
+use self::tb_adapter::MovegenAdapter;
 
 pub static ABORT_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -35,6 +40,7 @@ pub struct Search {
     pub pre_history: Vec<u64>,
     pub seldepth: usize,
     transposition_table: Arc<RwLock<TranspositionTable>>,
+    tablebases: Option<TableBases<MovegenAdapter>>,
     pawn_hash_table: PawnHashTable,
     pub thread_data: ThreadData,
     pub max_depth: Option<usize>,
@@ -57,6 +63,7 @@ impl Search {
             pre_history: Vec::new(),
             seldepth: 0,
             transposition_table: Arc::new(RwLock::new(TranspositionTable::new(0))),
+            tablebases: None,
             pawn_hash_table: PawnHashTable::new(),
             thread_data: ThreadData::new(),
             max_depth: None,
@@ -79,6 +86,7 @@ impl Search {
             pre_history: Vec::new(),
             seldepth: 0,
             transposition_table: tt,
+            tablebases: None,
             pawn_hash_table: PawnHashTable::new(),
             thread_data: ThreadData::new(),
             max_depth: None,
@@ -99,6 +107,11 @@ impl Search {
             .write()
             .unwrap()
             .set_size(tt_size_mb);
+        self
+    }
+
+    pub fn tablebases(mut self, tablebases: Option<TableBases<MovegenAdapter>>) -> Self {
+        self.tablebases = tablebases;
         self
     }
 
@@ -476,6 +489,52 @@ impl Search {
             tt_depth = entry.depth;
         }
 
+        // Probe the Syzygy tablebases if they are available
+        if !R::ROOT
+            && board.halfmove_clock() == 0
+            && board.piece_count() <= 5
+            && board.castling_rights() == &[[BitBoard::empty(); 2]; 2]
+        {
+            if let Some(tb) = &self.tablebases {
+                if let Ok(wdl_result) = board.probe_wdl(tb) {
+                    let tb_score = match wdl_result {
+                        WdlProbeResult::Loss => -TB_WIN_SCORE + ply as i16,
+                        WdlProbeResult::Win => TB_WIN_SCORE - ply as i16,
+                        _ => 0,
+                    };
+
+                    let tb_bound = match wdl_result {
+                        WdlProbeResult::Loss => UpperBound,
+                        WdlProbeResult::Win => LowerBound,
+                        _ => Exact,
+                    };
+
+                    if tb_bound == Exact
+                        || (tb_bound == LowerBound && tb_score >= beta)
+                        || (tb_bound == UpperBound && tb_score <= alpha)
+                    {
+                        // store TB score in the TT for cutoffs
+                        tt.set(
+                            board.hash(),
+                            Move::null(),
+                            depth,
+                            tb_score,
+                            tb_bound,
+                            pv_node,
+                        );
+                        return tb_score;
+                    }
+
+                    if pv_node && tb_bound == LowerBound {
+                        alpha = alpha.max(tb_score);
+                    }
+
+                    if pv_node && tb_bound == UpperBound {
+                        beta = beta.min(tb_score);
+                    }
+                }
+            }
+        }
         // IIR: reduce the search depth if the position was missing in the TT
         if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_entry.is_none() {
             depth -= 1;
@@ -521,7 +580,7 @@ impl Search {
 
             // Null Move Pruning
             // if the opponent gets two moves in a row and the position is still good then prune
-            let skip_nmp = !tt_move.is_null()
+            let skip_nmp = tt_entry.is_some()
                 && tt_depth >= depth - 2
                 && tt_score <= alpha
                 && tt_bound == UpperBound;

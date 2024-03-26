@@ -3,6 +3,7 @@ pub mod eval_types;
 pub mod evaluate;
 pub mod movegen;
 pub mod see;
+pub mod tb_adapter;
 
 use std::time::Instant;
 
@@ -12,7 +13,12 @@ use crate::types::*;
 use crate::zobrist::*;
 use cheers_bitboards::*;
 
+use pyrrhic_rs::TBError;
+use pyrrhic_rs::TableBases;
+use pyrrhic_rs::WdlProbeResult;
 use Piece::*;
+
+use self::tb_adapter::MovegenAdapter;
 
 macro_rules! select_colored_pieces {
     ($self: ident, $piece:ident, $piece_board:ident, $color_board:ident) => {
@@ -211,8 +217,8 @@ impl Board {
         let rooks = self.white_rooks | self.black_rooks | self.white_queens | self.black_queens;
         let kings = self.white_king | self.black_king;
 
-        (self.pawn_attack::<White>(target) & self.black_pawns)
-            | (self.pawn_attack::<Black>(target) & self.white_pawns)
+        (Self::pawn_attack::<White>(target) & self.black_pawns)
+            | (Self::pawn_attack::<Black>(target) & self.white_pawns)
             | (lookup_knight(target) & knights)
             | (lookup_bishop(target, mask) & bishops)
             | (lookup_rook(target, mask) & rooks)
@@ -332,7 +338,7 @@ impl Board {
         }
     }
     #[inline(always)]
-    pub fn pawn_attack<T: TypeColor>(&self, square: Square) -> BitBoard {
+    pub fn pawn_attack<T: TypeColor>(square: Square) -> BitBoard {
         let board = square.bitboard();
         if T::WHITE {
             ((board & A_FILE.inverse()) << 7) | ((board & H_FILE.inverse()) << 9)
@@ -473,6 +479,12 @@ impl Board {
             ]
         }
     }
+
+    #[inline(always)]
+    pub fn piece_count(&self) -> u32 {
+        (self.white_pieces | self.black_pieces).count_ones() as u32
+    }
+
     #[inline(always)]
     pub fn xor_piece<T: TypeColor>(&mut self, piece: Piece, square: Square) {
         select_colored_pieces!(self, piece, board, pieces);
@@ -549,6 +561,27 @@ impl Board {
         }
     }
 
+    pub fn probe_wdl(&self, tb: &TableBases<MovegenAdapter>) -> Result<WdlProbeResult, TBError> {
+        tb.probe_wdl(
+            self.white_pieces.0,
+            self.black_pieces.0,
+            self.white_king.0 | self.black_king.0,
+            self.white_queens.0 | self.black_queens.0,
+            self.white_rooks.0 | self.black_rooks.0,
+            self.white_bishops.0 | self.black_bishops.0,
+            self.white_knights.0 | self.black_knights.0,
+            self.white_pawns.0 | self.black_pawns.0,
+            {
+                if self.ep_mask.is_empty() {
+                    0
+                } else {
+                    *self.ep_mask.first_square() as u32
+                }
+            },
+            !self.black_to_move,
+        )
+    }
+
     pub fn is_pseudolegal(&self, mv: Move) -> bool {
         if self.black_to_move {
             self._is_pseudolegal::<Black>(mv)
@@ -612,7 +645,9 @@ impl Board {
                     return (self.pawn_pushes::<T>(mv.from()) & to).is_not_empty();
                 } else {
                     // captures
-                    return (self.pawn_attack::<T>(mv.from()) & to & (enemy_pieces | self.ep_mask))
+                    return (Self::pawn_attack::<T>(mv.from())
+                        & to
+                        & (enemy_pieces | self.ep_mask))
                         .is_not_empty();
                 }
             }
@@ -847,7 +882,7 @@ impl Board {
                     self.pawn_hash ^= zobrist_piece::<T::Other>(Pawn, target_square)
                 }
                 // update check mask
-                let new_checkers = self.pawn_attack::<T::Other>(other_king) & target_mask;
+                let new_checkers = Self::pawn_attack::<T::Other>(other_king) & target_mask;
                 if new_checkers.is_not_empty() {
                     self.check_mask = new_checkers;
                 }
@@ -882,7 +917,7 @@ impl Board {
             self.white_pawns
         };
         if new_ep_mask != BitBoard::empty()
-            && (self.pawn_attack::<T>(new_ep_mask.first_square()) & enemy_pawns).is_not_empty()
+            && (Self::pawn_attack::<T>(new_ep_mask.first_square()) & enemy_pawns).is_not_empty()
         {
             self.ep_mask = new_ep_mask;
             self.hash ^= zobrist_ep(self.ep_mask);
@@ -973,7 +1008,7 @@ impl Board {
                 self.white_rooks | self.white_queens,
             )
         };
-        let pawn_attackers = self.pawn_attack::<T>(king) & enemy_pawns;
+        let pawn_attackers = Self::pawn_attack::<T>(king) & enemy_pawns;
         let knight_attackers = lookup_knight(king) & enemy_knights;
         let bishop_attackers = lookup_bishop(king, self.occupied) & enemy_bishops;
         let rook_attackers = lookup_rook(king, self.occupied) & enemy_rooks;

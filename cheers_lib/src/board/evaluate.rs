@@ -161,8 +161,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             };
             let outpost =
                 (self.game.pawn_attack_spans::<W::Other>() & knight.bitboard()).is_empty() as usize;
-            let defended =
-                (self.game.pawn_attack::<W::Other>(knight) & pawns).is_not_empty() as usize;
+            let defended = (Board::pawn_attack::<W::Other>(knight) & pawns).is_not_empty() as usize;
             // normal - 0, outpost - 1, defended outpost - 2
             let outpost_score = outpost + defended * outpost;
             eval += EVAL_PARAMS.knight_outpost[outpost_score];
@@ -237,8 +236,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
             };
             let outpost =
                 (self.game.pawn_attack_spans::<W::Other>() & bishop.bitboard()).is_empty() as usize;
-            let defended =
-                (self.game.pawn_attack::<W::Other>(bishop) & pawns).is_not_empty() as usize;
+            let defended = (Board::pawn_attack::<W::Other>(bishop) & pawns).is_not_empty() as usize;
             // normal - 0, outpost - 1, defended outpost - 2
             let outpost_score = outpost + defended * outpost;
             eval += EVAL_PARAMS.bishop_outpost[outpost_score];
@@ -448,7 +446,7 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
             // connected
             let connected_pawns =
-                (self.game.pawn_attack::<W::Other>(pawn) & pawns).count_ones() as usize;
+                (Board::pawn_attack::<W::Other>(pawn) & pawns).count_ones() as usize;
             eval += EVAL_PARAMS.pawn_connected[connected_pawns];
             self.trace
                 .term(|t| t.pawn_connected[connected_pawns][color] += 1);
@@ -471,9 +469,9 @@ impl<'search, T: TraceTarget + Default> EvalContext<'search, T> {
 
             // backward
             let gatekeeper = if W::WHITE {
-                self.game.pawn_attack::<W>(pawn) << 8
+                Board::pawn_attack::<W>(pawn) << 8
             } else {
-                self.game.pawn_attack::<W>(pawn) >> 8
+                Board::pawn_attack::<W>(pawn) >> 8
             } & other_pawns;
             let backward = (self.game.pawn_adjacent_rear_span::<W>(pawn) & pawns).is_empty()
                 && gatekeeper.is_not_empty();

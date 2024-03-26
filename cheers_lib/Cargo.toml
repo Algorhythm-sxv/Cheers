@@ -13,5 +13,6 @@ eval-tracing = ["dep:bytemuck"]
 
 [dependencies]
 bytemuck = { version = "1.9", features = ["min_const_generics", "derive"], optional = true}
+pyrrhic-rs = "0.1.0"
 cheers_bitboards = { path = "../cheers_bitboards" }
 cheers_pregen = { path = "../cheers_pregen" }

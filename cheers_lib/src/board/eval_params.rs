@@ -153,7 +153,8 @@ const _PARAMS_TRACE_LEN_EQ: () = if EvalParams::LEN + 1 == EvalTrace::LEN {
     panic!("Eval parameters and trace are not equal length!")
 };
 
-pub const CHECKMATE_SCORE: i16 = 30000;
+pub const CHECKMATE_SCORE: i16 = 31000;
+pub const TB_WIN_SCORE: i16 = 30000;
 pub const DRAW_SCORE: i16 = 0;
 
 pub static EVAL_PARAMS: EvalParams = EvalParams {

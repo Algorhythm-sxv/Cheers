@@ -107,7 +107,7 @@ impl Board {
         // unpinned pawns
         for pawn in pawns & (self.diagonal_pin_mask | self.orthogonal_pin_mask).inverse() {
             let pushes = self.pawn_pushes::<T>(pawn);
-            let attacks = self.pawn_attack::<T>(pawn);
+            let attacks = Self::pawn_attack::<T>(pawn);
             let captures = attacks & enemy_pieces;
             let ep = if E::EP_POSSIBLE {
                 let mut ep = attacks & self.ep_mask;
@@ -165,7 +165,7 @@ impl Board {
 
             // diagonally pinned pawns can only capture along the line of the pin
             for pawn in pawns & self.diagonal_pin_mask {
-                let attacks = self.pawn_attack::<T>(pawn);
+                let attacks = Self::pawn_attack::<T>(pawn);
                 let captures = attacks & enemy_pieces & self.diagonal_pin_mask;
 
                 // diagonally pinned pawns can ep, but can't be horizontally pinned

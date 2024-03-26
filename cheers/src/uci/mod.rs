@@ -15,6 +15,7 @@ uci_options![
     Hash(Spin<usize> { default: 32, min: 1, max: 32768 }),
     Threads(Spin<usize> { default: 1, min: 1, max: 256 }),
     UCI_Chess960(Check { default: false }),
+    SyzygyPath(OptionString { default: "<empty>" }),
     NmpDepth(Spin<i8> { default: NMP_DEPTH, min: 1, max: 10 }),
     NmpConstReduction(Spin<i8> { default: NMP_CONST_REDUCTION, min: 1, max: 10 }),
     NmpLinearDivisor(Spin<i8> { default: NMP_LINEAR_DIVISOR, min: 1, max: 10 }),
@@ -142,7 +143,7 @@ impl ValidateOption for Combo {
 }
 
 pub struct OptionString {
-    default: String,
+    default: &'static str,
 }
 
 impl ValidateOption for OptionString {
