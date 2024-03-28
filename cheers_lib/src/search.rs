@@ -581,6 +581,7 @@ impl Search {
                             tb_bound,
                             pv_node,
                         );
+                        pv.clear();
                         return tb_score;
                     }
 
