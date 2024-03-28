@@ -11,7 +11,7 @@ use std::{
     error::Error,
     io::{prelude::*, stdin},
     sync::{atomic::Ordering, Arc, RwLock},
-    thread,
+    thread::{self, JoinHandle},
     time::Instant,
 };
 
@@ -23,6 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut chess_960 = false;
 
     let mut tbs = None;
+    let mut running_thread: Option<JoinHandle<_>> = None;
 
     let mut tt = Arc::new(RwLock::new(TranspositionTable::new(options.tt_size_mb)));
     let mut pre_history = Vec::new();
@@ -78,9 +79,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 uci::UciOption::SyzygyPath(p) => {
                     // drop old TBs
                     tbs = None;
-                    match TableBases::<MovegenAdapter>::new(p) {
-                        Ok(t) => tbs = Some(t),
-                        Err(e) => eprintln!("Failed to load tablebases: {e:?}"),
+                    if &p != "<empty>" {
+                        match TableBases::<MovegenAdapter>::new(p.clone()) {
+                            Ok(t) => {
+                                println!("info string loaded syzygy tablebases from {p}");
+                                tbs = Some(t)
+                            }
+                            Err(e) => eprintln!("Failed to load tablebases: {e:?}"),
+                        }
                     }
                 }
                 uci::UciOption::NmpDepth(n) => options.nmp_depth = n,
@@ -129,6 +135,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                 infinite,
                 perft,
             } => {
+                // make sure the previous search terminates before starting a new one
+                if let Some(handle) = running_thread.take() {
+                    // retrieve the TB handle to re-use
+                    if let Some(tb) = handle.join().expect("Search thread crashed") {
+                        tbs = Some(tb);
+                    }
+                }
                 if let Some(depth) = perft {
                     position.perft(depth);
                     continue;
@@ -159,9 +172,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 };
 
+                // extract the TBs so the search thread can be the sole owner
+                let tb = tbs.take();
+
                 let mut search = Search::new_with_tt(position, tt.clone())
                     .tt_size_mb(options.tt_size_mb)
-                    .tablebases(tbs.clone())
+                    .tablebases(tb)
                     .pre_history(pre_history.clone())
                     .max_nodes(nodes)
                     .max_depth(depth)
@@ -170,7 +186,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .chess_960(chess_960);
                 search.max_time_ms = movetime;
 
-                let _ = thread::spawn(move || engine_thread(search).unwrap());
+                running_thread = Some(thread::spawn(move || engine_thread(search).unwrap()));
             }
             uci::UciCommand::Fen => println!("{}", position.fen()),
             uci::UciCommand::Stop => ABORT_SEARCH.store(true, Ordering::Relaxed),
@@ -183,15 +199,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn engine_thread(search: Search) -> Result<(), Box<dyn Error>> {
+fn engine_thread(search: Search) -> Result<Option<TableBases<MovegenAdapter>>, Box<dyn Error>> {
     ABORT_SEARCH.store(false, Ordering::Relaxed);
     NODE_COUNT.store(0, Ordering::Relaxed);
 
-    let (_, pv) = search.smp_search();
+    let (_, pv, tbs) = search.smp_search();
 
     println!("bestmove {}", pv[0].coords());
 
-    Ok(())
+    Ok(tbs)
 }
 
 fn move_time(time_millis: Option<usize>, inc_millis: Option<usize>) -> Option<(usize, usize)> {

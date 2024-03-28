@@ -21,7 +21,7 @@ macro_rules! uci_options {
                     }
                 )*
 
-                unreachable!()
+                Err(UciParseError::Other(format!("Unknown option name: {name}")))
             }
         }
         #[allow(non_snake_case)]

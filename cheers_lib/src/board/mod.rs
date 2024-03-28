@@ -13,6 +13,7 @@ use crate::types::*;
 use crate::zobrist::*;
 use cheers_bitboards::*;
 
+use pyrrhic_rs::DtzProbeResult;
 use pyrrhic_rs::TBError;
 use pyrrhic_rs::TableBases;
 use pyrrhic_rs::WdlProbeResult;
@@ -571,6 +572,28 @@ impl Board {
             self.white_bishops.0 | self.black_bishops.0,
             self.white_knights.0 | self.black_knights.0,
             self.white_pawns.0 | self.black_pawns.0,
+            {
+                if self.ep_mask.is_empty() {
+                    0
+                } else {
+                    *self.ep_mask.first_square() as u32
+                }
+            },
+            !self.black_to_move,
+        )
+    }
+
+    pub fn probe_root(&self, tb: &TableBases<MovegenAdapter>) -> Result<DtzProbeResult, TBError> {
+        tb.probe_root(
+            self.white_pieces.0,
+            self.black_pieces.0,
+            self.white_king.0 | self.black_king.0,
+            self.white_queens.0 | self.black_queens.0,
+            self.white_rooks.0 | self.black_rooks.0,
+            self.white_bishops.0 | self.black_bishops.0,
+            self.white_knights.0 | self.black_knights.0,
+            self.white_pawns.0 | self.black_pawns.0,
+            self.halfmove_clock as u32 + 1, // add 1 to avoid stumbling into 50-move draws
             {
                 if self.ep_mask.is_empty() {
                     0

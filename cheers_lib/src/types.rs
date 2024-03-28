@@ -181,3 +181,16 @@ impl<T, const N: usize> IndexMut<CastlingIndex> for [T; N] {
         &mut self[index as usize]
     }
 }
+
+impl From<pyrrhic_rs::Piece> for Piece {
+    fn from(piece: pyrrhic_rs::Piece) -> Self {
+        match piece {
+            pyrrhic_rs::Piece::Pawn => Pawn,
+            pyrrhic_rs::Piece::Knight => Knight,
+            pyrrhic_rs::Piece::Bishop => Bishop,
+            pyrrhic_rs::Piece::Rook => Rook,
+            pyrrhic_rs::Piece::Queen => Queen,
+            pyrrhic_rs::Piece::King => King,
+        }
+    }
+}

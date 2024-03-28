@@ -1,6 +1,7 @@
 use std::{fmt::Display, ops::Index};
 
 use crate::{board::Board, types::*};
+use pyrrhic_rs::DtzResult;
 use Piece::*;
 
 use cheers_bitboards::*;
@@ -32,6 +33,16 @@ impl Move {
                 to = board.castling_rights()[board.current_player()][1].first_square()
             }
         }
+
+        Self::new(piece, from, to, promotion)
+    }
+
+    pub fn from_dtz_result(result: &DtzResult) -> Self {
+        let from = Square::from(result.from_square);
+        let to = Square::from(result.to_square);
+        let promotion = Piece::from(result.promotion);
+        // piece type doesn't really matter
+        let piece = Pawn;
 
         Self::new(piece, from, to, promotion)
     }
@@ -250,6 +261,10 @@ impl MoveList {
             self.inner[current_index].score,
         )
     }
+
+    pub fn contains(&self, mv: Move) -> bool {
+        self.inner().iter().any(|smv| smv.mv == mv)
+    }
 }
 
 impl Index<usize> for MoveList {
@@ -334,6 +349,10 @@ impl PrincipalVariation {
     pub fn chess_960(mut self, chess_960: bool) -> Self {
         self.chess_960 = chess_960;
         self
+    }
+    pub fn push(&mut self, mv: Move) {
+        self.moves[self.len] = mv;
+        self.len += 1;
     }
 }
 impl Display for PrincipalVariation {

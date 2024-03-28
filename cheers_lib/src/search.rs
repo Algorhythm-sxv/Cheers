@@ -6,7 +6,7 @@ use std::time::Instant;
 use cheers_bitboards::BitBoard;
 use cheers_pregen::{LMP_MARGINS, LMR};
 use eval_params::{CHECKMATE_SCORE, DRAW_SCORE};
-use pyrrhic_rs::{TableBases, WdlProbeResult};
+use pyrrhic_rs::{DtzProbeValue, TableBases, WdlProbeResult};
 
 use crate::board::see::SEE_PIECE_VALUES;
 use crate::moves::*;
@@ -25,6 +25,7 @@ use self::tb_adapter::MovegenAdapter;
 
 pub static ABORT_SEARCH: AtomicBool = AtomicBool::new(false);
 pub static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
+pub static TB_HITS: AtomicUsize = AtomicUsize::new(0);
 
 pub const INF: i16 = i16::MAX;
 pub const MINUS_INF: i16 = -INF;
@@ -145,35 +146,74 @@ impl Search {
         self
     }
 
-    pub fn smp_search(&self) -> (i16, PrincipalVariation) {
+    pub fn smp_search(self) -> (i16, PrincipalVariation, Option<TableBases<MovegenAdapter>>) {
         ABORT_SEARCH.store(false, Relaxed);
         NODE_COUNT.store(0, Ordering::Relaxed);
-        let mut score = MINUS_INF;
-        let mut pv = PrincipalVariation::new();
+        TB_HITS.store(0, Ordering::Relaxed);
+
+        // if tablebases are available at the root, take the best move from there
+        if let Some(ref tb) = self.tablebases {
+            if self.game.piece_count() <= tb.max_pieces() {
+                if let Ok(dtz_result) = self.game.probe_root(&tb) {
+                    match dtz_result.root {
+                        DtzProbeValue::DtzResult(result) => {
+                            let tb_move = Move::from_dtz_result(&result);
+
+                            let tb_score = if result.dtz > 0 {
+                                TB_WIN_SCORE - result.dtz as i16
+                            } else {
+                                -TB_WIN_SCORE + result.dtz as i16
+                            };
+
+                            let mut tb_pv = PrincipalVariation::new();
+                            tb_pv.push(tb_move);
+
+                            if self.output {
+                                println!(
+                                    "info string Syzygy WDL: {:?}, DTZ: {}",
+                                    result.wdl, result.dtz
+                                );
+                                println!(
+                                    "info depth 0 seldepth 0 score cp {tb_score} nodes 0 nps 0 tbhits 1 pv {}",
+                                    tb_move.coords()
+                                )
+                            }
+
+                            // cloning the TB handle satisfies the borrow checker, the original
+                            // will just be dropped immediately anyway
+                            return (tb_score, tb_pv, Some(tb.clone()));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
 
         // Lazy SMP: start all threads at the same depth, communicating only
         // via the shared TT
+        let mut score = MINUS_INF;
+        let mut pv = PrincipalVariation::new();
+        let mut tablebases = None;
         thread::scope(|s| {
-            // main thread: this is the only thread that reports back over UCI
-            let _main_thread = s.spawn(|| {
-                let search = self.clone();
-                (score, pv) = search.search::<MainThread>(true);
-                ABORT_SEARCH.store(true, Relaxed);
-            });
-
             // helper threads: these only have their results added to the TT
             for _ in 1..self.options.threads {
+                let search = self.clone();
                 s.spawn(|| {
-                    let search = self.clone();
                     let _ = search.search::<HelperThread>(true);
                 });
             }
+            // main thread: this is the only thread that reports back over UCI
+            (score, pv, tablebases) = self.search::<MainThread>(true);
+            ABORT_SEARCH.store(true, Relaxed);
         });
 
-        (score, pv)
+        (score, pv, tablebases)
     }
 
-    pub fn search<M: TypeMainThread>(&self, set_global_abort: bool) -> (i16, PrincipalVariation) {
+    pub fn search<M: TypeMainThread>(
+        mut self,
+        set_global_abort: bool,
+    ) -> (i16, PrincipalVariation, Option<TableBases<MovegenAdapter>>) {
         ABORT_SEARCH.store(false, Relaxed);
         if M::MAIN_THREAD {
             NODE_COUNT.store(0, Ordering::Relaxed);
@@ -184,8 +224,8 @@ impl Search {
         // fraction of main thread nodes spent on the best move
         let mut node_fraction = 0;
 
-        let mut search = self.clone();
-        let tt = &*self.transposition_table.read().unwrap();
+        let tt_handle = self.transposition_table.clone();
+        let tt = &tt_handle.read().unwrap();
 
         let start = Instant::now();
 
@@ -209,9 +249,9 @@ impl Search {
 
             // repeat failed searches with wider windows until a search succeeds
             let score = loop {
-                search.seldepth = 0;
+                self.seldepth = 0;
 
-                let score = search.negamax::<Root, M>(
+                let score = self.negamax::<Root, M>(
                     &self.game.clone(),
                     window.0,
                     window.1,
@@ -224,13 +264,13 @@ impl Search {
 
                 if M::MAIN_THREAD {
                     node_fraction =
-                        (search.root_nodes[pv[0].from()][pv[0].to()] * 1000) / search.local_nodes;
+                        (self.root_nodes[pv[0].from()][pv[0].to()] * 1000) / self.local_nodes;
                 }
 
                 // add helper thread nodes to global count
                 if !M::MAIN_THREAD {
-                    NODE_COUNT.fetch_add(search.local_nodes, Relaxed);
-                    search.local_nodes = 0;
+                    NODE_COUNT.fetch_add(self.local_nodes, Relaxed);
+                    self.local_nodes = 0;
                 }
 
                 if ABORT_SEARCH.load(Relaxed) && i > 1 {
@@ -246,13 +286,19 @@ impl Search {
                     let nodes = if set_global_abort {
                         NODE_COUNT.load(Relaxed)
                     } else {
-                        search.local_nodes
+                        self.local_nodes
                     };
+                    let tbhits_string = if self.tablebases.is_some() {
+                        format!("tbhits {}", TB_HITS.load(Ordering::Relaxed))
+                    } else {
+                        String::new()
+                    };
+
                     if M::MAIN_THREAD && self.output {
                         println!(
-                            "info depth {} seldepth {} score {score_string} nodes {} nps {} hashfull {} time {} pv {last_pv}",
+                            "info depth {} seldepth {} score {score_string} nodes {} nps {} {tbhits_string} hashfull {} time {} pv {last_pv}",
                             i-1,
-                            search.seldepth,
+                            self.seldepth,
                             nodes,
                             ((nodes) as f32 / (end - start).as_secs_f32()) as usize,
                             hash_fill,
@@ -296,13 +342,20 @@ impl Search {
             let nodes = if set_global_abort {
                 NODE_COUNT.load(Relaxed)
             } else {
-                search.local_nodes
+                self.local_nodes
             };
+
+            let tbhits_string = if self.tablebases.is_some() {
+                format!("tbhits {} ", TB_HITS.load(Ordering::Relaxed))
+            } else {
+                String::new()
+            };
+
             // we can trust the results from the previous search
             if M::MAIN_THREAD && self.output {
                 println!(
-                    "info depth {i} seldepth {} score {score_string} nodes {} nps {} hashfull {} time {} pv {pv}",
-                    search.seldepth,
+                    "info depth {i} seldepth {} score {score_string} nodes {} nps {} {tbhits_string}hashfull {} time {} pv {pv}",
+                    self.seldepth,
                     nodes,
                     ((nodes) as f32 / (end - start).as_secs_f32()) as usize,
                     hash_fill,
@@ -354,7 +407,7 @@ impl Search {
                 break;
             }
         }
-        (last_score, last_pv)
+        (last_score, last_pv, self.tablebases)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -492,11 +545,17 @@ impl Search {
         // Probe the Syzygy tablebases if they are available
         if !R::ROOT
             && board.halfmove_clock() == 0
-            && board.piece_count() <= 5
+            && board.piece_count()
+                <= self
+                    .tablebases
+                    .as_ref()
+                    .map(|tb| tb.max_pieces())
+                    .unwrap_or(0)
             && board.castling_rights() == &[[BitBoard::empty(); 2]; 2]
         {
             if let Some(tb) = &self.tablebases {
                 if let Ok(wdl_result) = board.probe_wdl(tb) {
+                    TB_HITS.fetch_add(1, Ordering::Relaxed);
                     let tb_score = match wdl_result {
                         WdlProbeResult::Loss => -TB_WIN_SCORE + ply as i16,
                         WdlProbeResult::Win => TB_WIN_SCORE - ply as i16,
@@ -535,6 +594,7 @@ impl Search {
                 }
             }
         }
+
         // IIR: reduce the search depth if the position was missing in the TT
         if !R::ROOT && !pv_node && depth >= self.options.iir_depth && tt_entry.is_none() {
             depth -= 1;
