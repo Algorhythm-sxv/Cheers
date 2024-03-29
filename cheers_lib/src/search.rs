@@ -154,36 +154,33 @@ impl Search {
         // if tablebases are available at the root, take the best move from there
         if let Some(ref tb) = self.tablebases {
             if self.game.piece_count() <= tb.max_pieces() {
-                if let Ok(dtz_result) = self.game.probe_root(&tb) {
-                    match dtz_result.root {
-                        DtzProbeValue::DtzResult(result) => {
-                            let tb_move = Move::from_dtz_result(&result);
+                if let Ok(dtz_result) = self.game.probe_root(tb) {
+                    if let DtzProbeValue::DtzResult(result) = dtz_result.root {
+                        let tb_move = Move::from_dtz_result(&result);
 
-                            let tb_score = if result.dtz > 0 {
-                                TB_WIN_SCORE - result.dtz as i16
-                            } else {
-                                -TB_WIN_SCORE + result.dtz as i16
-                            };
+                        let tb_score = if result.dtz > 0 {
+                            TB_WIN_SCORE - result.dtz as i16
+                        } else {
+                            -TB_WIN_SCORE + result.dtz as i16
+                        };
 
-                            let mut tb_pv = PrincipalVariation::new();
-                            tb_pv.push(tb_move);
+                        let mut tb_pv = PrincipalVariation::new();
+                        tb_pv.push(tb_move);
 
-                            if self.output {
-                                println!(
-                                    "info string Syzygy WDL: {:?}, DTZ: {}",
-                                    result.wdl, result.dtz
-                                );
-                                println!(
-                                    "info depth 0 seldepth 0 score cp {tb_score} nodes 0 nps 0 tbhits 1 pv {}",
-                                    tb_move.coords()
-                                )
-                            }
-
-                            // cloning the TB handle satisfies the borrow checker, the original
-                            // will just be dropped immediately anyway
-                            return (tb_score, tb_pv, Some(tb.clone()));
+                        if self.output {
+                            println!(
+                                "info string Syzygy WDL: {:?}, DTZ: {}",
+                                result.wdl, result.dtz
+                            );
+                            println!(
+                                "info depth 0 seldepth 0 score cp {tb_score} nodes 0 nps 0 tbhits 1 pv {}",
+                                tb_move.coords()
+                            )
                         }
-                        _ => {}
+
+                        // cloning the TB handle satisfies the borrow checker, the original
+                        // will just be dropped immediately anyway
+                        return (tb_score, tb_pv, Some(tb.clone()));
                     }
                 }
             }
@@ -543,6 +540,7 @@ impl Search {
         }
 
         // Probe the Syzygy tablebases if they are available
+        let (mut tb_max, mut tb_min) = (INF, MINUS_INF);
         if !R::ROOT
             && board.halfmove_clock() == 0
             && board.piece_count()
@@ -587,10 +585,11 @@ impl Search {
 
                     if pv_node && tb_bound == LowerBound {
                         alpha = alpha.max(tb_score);
+                        tb_min = tb_score;
                     }
 
                     if pv_node && tb_bound == UpperBound {
-                        beta = beta.min(tb_score);
+                        tb_max = tb_score;
                     }
                 }
             }
@@ -662,7 +661,7 @@ impl Search {
                 self.thread_data.search_stack[ply].current_move = Move::null();
                 let mut new = *board;
                 new.make_null_move();
-                let score = -self.negamax::<NotRoot, M>(
+                let mut score = -self.negamax::<NotRoot, M>(
                     &new,
                     -beta,
                     -beta + 1,
@@ -676,6 +675,10 @@ impl Search {
                 self.search_history.pop();
 
                 if score >= beta {
+                    // don't let TB results leak out of NMP
+                    if score >= TB_WIN_SCORE - SEARCH_MAX_PLY as i16 {
+                        score = beta;
+                    }
                     return score;
                 }
             }
@@ -944,6 +947,9 @@ impl Search {
                 DRAW_SCORE
             };
         }
+
+        // don't allow scores better or worse than the retrieved tb value to get into the TT
+        alpha = alpha.clamp(tb_min, tb_max);
 
         // after all moves have been searched, alpha is either unchanged
         // (this position is bad) or raised (new pv from this node)
