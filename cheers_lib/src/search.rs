@@ -542,7 +542,6 @@ impl Search {
         // Probe the Syzygy tablebases if they are available
         let (mut tb_max, mut tb_min) = (INF, MINUS_INF);
         if !R::ROOT
-            && board.halfmove_clock() == 0
             && board.piece_count()
                 <= self
                     .tablebases
