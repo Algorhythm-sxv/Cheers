@@ -962,7 +962,11 @@ impl Search {
             best_move,
             depth,
             score_into_tt(best_score, ply),
-            if best_score > old_alpha { Exact } else { UpperBound },
+            if best_score > old_alpha {
+                Exact
+            } else {
+                UpperBound
+            },
             pv_node,
         );
 
@@ -1062,9 +1066,10 @@ impl Search {
         // if the static eval is above beta, then the opponent won't play into this position
         if static_eval >= beta {
             pv.clear();
-            return beta;
+            return static_eval;
         }
 
+        let old_alpha = alpha;
         // if the static eval is better than alpha, use it to prune moves instead
         alpha = alpha.max(static_eval);
 
@@ -1074,12 +1079,11 @@ impl Search {
         // quiescence search only looks at captures and promotions to ensure termination
         let mut move_sorter = MoveSorter::<Captures>::new(tt_move);
 
-        let old_alpha = alpha;
-
         // add the current position to the history
         self.search_history.push(board.hash());
 
         let mut best_move = Move::null();
+        let mut best_score = static_eval;
         while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply) {
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
@@ -1134,13 +1138,17 @@ impl Search {
                 // return to the previous history state
                 self.search_history.pop();
                 return score;
-            } else if score > alpha {
-                // a score between alpha and beta represents a new best move
-                best_move = mv;
+            }
+            if score > best_score {
+                best_score = score;
+                if score > alpha {
+                    // a score between alpha and beta represents a new best move
+                    best_move = mv;
 
-                pv.update_from(best_move, &line);
-                // raise alpha so worse moves after this one will be pruned early
-                alpha = score;
+                    pv.update_from(best_move, &line);
+                    // raise alpha so worse moves after this one will be pruned early
+                    alpha = score;
+                }
             }
         }
 
@@ -1167,8 +1175,8 @@ impl Search {
             board.hash(),
             best_move,
             -1,
-            score_into_tt(alpha, ply),
-            if alpha > old_alpha { Exact } else { UpperBound },
+            score_into_tt(best_score, ply),
+            if best_score > old_alpha { Exact } else { UpperBound },
             false,
         );
 
@@ -1176,6 +1184,6 @@ impl Search {
             // no move was found from this position, clear the PV
             pv.clear();
         }
-        alpha
+        best_score
     }
 }
