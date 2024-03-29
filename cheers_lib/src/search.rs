@@ -715,44 +715,47 @@ impl Search {
         while let Some((mv, move_score)) = move_sorter.next(board, &mut self.thread_data, ply) {
             let capture = board.is_capture(mv);
 
-            // Futility Pruning: skip quiets on nodes with bad static eval
-            if futility_pruning
-                && !capture
-                && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
-            {
-                quiets_tried.push(SortingMove::new(mv));
-                move_index += 1;
-                continue;
-            }
-
-            // Late Move Pruning: skip moves ordered late, earlier if not improving
-            if !R::ROOT
-                && !pv_node
-                && !capture
-                && depth <= self.options.lmp_depth
-                && quiets_tried.len() >= LMP_MARGINS[depth.min(31) as usize][improving as usize]
-            {
-                quiets_tried.push(SortingMove::new(mv));
-                move_index += 1;
-                continue;
-            }
-
-            // SEE pruning: if the move loses too much material at low depth then skip it
-            if !R::ROOT && depth <= self.options.see_pruning_depth {
-                let threshold = depth as i16
-                    * if capture {
-                        self.options.see_capture_margin
-                    } else {
-                        self.options.see_quiet_margin
-                    };
-                if !board.see_beats_threshold(mv, threshold) {
-                    if !capture {
-                        quiets_tried.push(SortingMove::new(mv));
-                    } else {
-                        captures_tried.push(SortingMove::new(mv));
-                    }
+            // Move-based pruning techniques, not done until we have searched at least one move
+            if move_index >= 1 {
+                // Futility Pruning: skip quiets on nodes with bad static eval
+                if futility_pruning
+                    && !capture
+                    && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
+                {
+                    quiets_tried.push(SortingMove::new(mv));
                     move_index += 1;
                     continue;
+                }
+
+                // Late Move Pruning: skip moves ordered late, earlier if not improving
+                if !R::ROOT
+                    && !pv_node
+                    && !capture
+                    && depth <= self.options.lmp_depth
+                    && quiets_tried.len() >= LMP_MARGINS[depth.min(31) as usize][improving as usize]
+                {
+                    quiets_tried.push(SortingMove::new(mv));
+                    move_index += 1;
+                    continue;
+                }
+
+                // SEE pruning: if the move loses too much material at low depth then skip it
+                if !R::ROOT && depth <= self.options.see_pruning_depth {
+                    let threshold = depth as i16
+                        * if capture {
+                            self.options.see_capture_margin
+                        } else {
+                            self.options.see_quiet_margin
+                        };
+                    if !board.see_beats_threshold(mv, threshold) {
+                        if !capture {
+                            quiets_tried.push(SortingMove::new(mv));
+                        } else {
+                            captures_tried.push(SortingMove::new(mv));
+                        }
+                        move_index += 1;
+                        continue;
+                    }
                 }
             }
 
@@ -1069,9 +1072,9 @@ impl Search {
             return static_eval;
         }
 
-        let old_alpha = alpha;
         // if the static eval is better than alpha, use it to prune moves instead
         alpha = alpha.max(static_eval);
+        let old_alpha = alpha;
 
         let mut line = PrincipalVariation::new();
 
@@ -1176,7 +1179,11 @@ impl Search {
             best_move,
             -1,
             score_into_tt(best_score, ply),
-            if best_score > old_alpha { Exact } else { UpperBound },
+            if best_score > old_alpha {
+                Exact
+            } else {
+                UpperBound
+            },
             false,
         );
 
