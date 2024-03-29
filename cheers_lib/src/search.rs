@@ -864,64 +864,10 @@ impl Search {
                 return 0;
             }
 
-            if score >= beta {
-                // beta cutoff, this move is too good and so the opponent won't go into this position
-                pv.clear();
-
-                // add the score and move to TT
-                tt.set(
-                    board.hash(),
-                    mv,
-                    depth,
-                    score_into_tt(score, ply),
-                    LowerBound,
-                    pv_node,
-                );
-
-                // update killer, countermove and history tables for good quiets
-                let delta = if depth > 13 {
-                    32
-                } else {
-                    4 * depth as i16 * depth as i16
-                };
-                if !capture {
-                    self.thread_data.search_stack[ply].killer_moves.push(mv);
-
-                    if let Some(last_move) = self
-                        .thread_data
-                        .search_stack
-                        .get(ply.wrapping_sub(1))
-                        .map(|s| s.current_move)
-                    {
-                        self.thread_data.countermove_tables[current_player][last_move] = mv;
-                    }
-
-                    self.thread_data.update_quiet_histories(
-                        current_player,
-                        delta,
-                        mv,
-                        &quiets_tried,
-                        ply,
-                    );
-                }
-                // update capture histories for all moves that cause a beta cutoff
-                self.thread_data.update_capture_histories(
-                    current_player,
-                    delta,
-                    // provide the best move if it was a capture
-                    capture.then_some(mv),
-                    &captures_tried,
-                );
-
-                // remove this position from the history
-                self.search_history.pop();
-
-                return score;
-            }
             if score > best_score {
                 best_score = score;
                 if score > alpha {
-                    // a score between alpha and beta represents a new best move
+                    // a score better than alpha represents a new best move
                     best_move = mv;
 
                     // update the parent PV with the new PV
@@ -930,7 +876,13 @@ impl Search {
                     // raise alpha so worse moves after this one will be pruned early
                     alpha = score;
                 }
+
+                // fail high: if this move is too good the opponent won't play into this line
+                if alpha >= beta {
+                    break;
+                }
             }
+
             // increment the move counter if the move was legal
             move_index += 1;
             if !capture {
@@ -939,7 +891,8 @@ impl Search {
                 captures_tried.push(SortingMove::new(mv));
             }
         }
-        // remove this position from the history
+
+        // search complete, remove this position from the history
         self.search_history.pop();
 
         // check for checkmate and stalemate
@@ -957,26 +910,69 @@ impl Search {
         // don't allow scores better or worse than the retrieved tb value to get into the TT
         best_score = best_score.clamp(tb_min, tb_max);
 
-        // after all moves have been searched, alpha is either unchanged
-        // (this position is bad) or raised (new pv from this node)
-        // add the score and the new best move to the TT
+        // alpha was raised
+        if alpha != old_alpha {
+            let capture = self.game.is_capture(best_move);
+
+            // update killer, countermove and history tables for good quiets
+            let delta = if depth > 13 {
+                32
+            } else {
+                4 * depth as i16 * depth as i16
+            };
+
+            // quiet history heuristics updated for quiet moves only
+            if !capture {
+                self.thread_data.search_stack[ply]
+                    .killer_moves
+                    .push(best_move);
+
+                if let Some(last_move) = self
+                    .thread_data
+                    .search_stack
+                    .get(ply.wrapping_sub(1))
+                    .map(|s| s.current_move)
+                {
+                    self.thread_data.countermove_tables[current_player][last_move] = best_move;
+                }
+
+                self.thread_data.update_quiet_histories(
+                    current_player,
+                    delta,
+                    best_move,
+                    &quiets_tried,
+                    ply,
+                );
+            }
+
+            // capture history heuristics for all moves
+            self.thread_data.update_capture_histories(
+                current_player,
+                delta,
+                // provide the best move if it was a capture
+                capture.then_some(best_move),
+                &captures_tried,
+            );
+        } else {
+            // no move was found, clear the PV
+            pv.clear();
+        }
+
+        // add the score and move to TT
+        let bound = match (best_score >= beta, best_score > old_alpha) {
+            (true, _) => LowerBound,
+            (false, true) => Exact,
+            _ => UpperBound,
+        };
         tt.set(
             board.hash(),
             best_move,
             depth,
             score_into_tt(best_score, ply),
-            if best_score > old_alpha {
-                Exact
-            } else {
-                UpperBound
-            },
+            bound,
             pv_node,
         );
 
-        if alpha == old_alpha {
-            // no move was found from this position, clear the PV
-            pv.clear();
-        }
         best_score
     }
 
@@ -1126,22 +1122,6 @@ impl Search {
                 return 0;
             }
 
-            if score >= beta {
-                // beta cutoff, this move is too good and so the opponent won't go into this position
-                pv.clear();
-                // add the score to the TT
-                tt.set(
-                    board.hash(),
-                    mv,
-                    -1,
-                    score_into_tt(score, ply),
-                    LowerBound,
-                    false,
-                );
-                // return to the previous history state
-                self.search_history.pop();
-                return score;
-            }
             if score > best_score {
                 best_score = score;
                 if score > alpha {
@@ -1151,6 +1131,11 @@ impl Search {
                     pv.update_from(best_move, &line);
                     // raise alpha so worse moves after this one will be pruned early
                     alpha = score;
+                }
+
+                // fail high: if this move is too good the opponent won't play into this line
+                if alpha >= beta {
+                    break;
                 }
             }
         }
@@ -1172,18 +1157,18 @@ impl Search {
             }
         }
 
-        // after all moves are searched alpha is either unchanged (this position is bad) or raised (new pv)
-        // add the score to the TT
+        // add the score and move to TT
+        let bound = match (best_score >= beta, best_score > old_alpha) {
+            (true, _) => LowerBound,
+            (false, true) => Exact,
+            _ => UpperBound,
+        };
         tt.set(
             board.hash(),
             best_move,
             -1,
             score_into_tt(best_score, ply),
-            if best_score > old_alpha {
-                Exact
-            } else {
-                UpperBound
-            },
+            bound,
             false,
         );
 
