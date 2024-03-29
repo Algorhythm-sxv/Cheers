@@ -704,6 +704,7 @@ impl Search {
 
         // save the old alpha to see if any moves improve the PV
         let old_alpha = alpha;
+        let mut best_score = MINUS_INF;
 
         // push this position to the history
         self.search_history.push(board.hash());
@@ -914,15 +915,18 @@ impl Search {
 
                 return score;
             }
-            if score > alpha {
-                // a score between alpha and beta represents a new best move
-                best_move = mv;
+            if score > best_score {
+                best_score = score;
+                if score > alpha {
+                    // a score between alpha and beta represents a new best move
+                    best_move = mv;
 
-                // update the parent PV with the new PV
-                pv.update_from(mv, &line);
+                    // update the parent PV with the new PV
+                    pv.update_from(mv, &line);
 
-                // raise alpha so worse moves after this one will be pruned early
-                alpha = score;
+                    // raise alpha so worse moves after this one will be pruned early
+                    alpha = score;
+                }
             }
             // increment the move counter if the move was legal
             move_index += 1;
@@ -948,7 +952,7 @@ impl Search {
         }
 
         // don't allow scores better or worse than the retrieved tb value to get into the TT
-        alpha = alpha.clamp(tb_min, tb_max);
+        best_score = best_score.clamp(tb_min, tb_max);
 
         // after all moves have been searched, alpha is either unchanged
         // (this position is bad) or raised (new pv from this node)
@@ -957,8 +961,8 @@ impl Search {
             board.hash(),
             best_move,
             depth,
-            score_into_tt(alpha, ply),
-            if alpha > old_alpha { Exact } else { UpperBound },
+            score_into_tt(best_score, ply),
+            if best_score > old_alpha { Exact } else { UpperBound },
             pv_node,
         );
 
@@ -966,7 +970,7 @@ impl Search {
             // no move was found from this position, clear the PV
             pv.clear();
         }
-        alpha
+        best_score
     }
 
     pub fn quiesce<M: TypeMainThread>(
