@@ -912,7 +912,8 @@ impl Search {
         // don't allow scores better or worse than the retrieved tb value to get into the TT
         best_score = best_score.clamp(tb_min, tb_max);
 
-        if best_score >= beta {
+        // when alpha is raised a new PV was found
+        if alpha != old_alpha {
             let capture = board.is_capture(best_move);
 
             // update killer, countermove and history tables for good quiets
@@ -943,7 +944,8 @@ impl Search {
                     ply,
                 );
             }
-            // update capture histories for all moves that cause a beta cutoff
+
+            // update capture histories for all moves that raise alpha
             self.thread_data.update_capture_histories(
                 current_player,
                 delta,
