@@ -59,11 +59,21 @@ impl ThreadData {
             .checked_sub(1)
             .map(|p| self.search_stack[p].current_move);
 
+        let followup_move = ply
+            .checked_sub(2)
+            .map(|p| self.search_stack[p].current_move);
+
         if let Some(cm) = countermove {
             apply_history_bonus(
                 &mut self.countermove_history_tables[player][cm.piece()][cm.to()][bonus_quiet],
                 delta,
             );
+            if let Some(fm) = followup_move {
+                apply_history_bonus(
+                    &mut self.conthist_tables[player][fm.piece()][fm.to()][bonus_quiet],
+                    delta,
+                );
+            }
         }
 
         apply_history_bonus(&mut self.history_tables[player][bonus_quiet], delta);
@@ -77,6 +87,12 @@ impl ThreadData {
                     &mut self.countermove_history_tables[player][cm.piece()][cm.to()][malus_quiet],
                     delta,
                 );
+                if let Some(fm) = followup_move {
+                    apply_history_malus(
+                        &mut self.conthist_tables[player][fm.piece()][fm.to()][malus_quiet],
+                        delta,
+                    );
+                }
             }
 
             apply_history_malus(&mut self.history_tables[player][malus_quiet], delta);
@@ -165,16 +181,24 @@ impl ThreadData {
         {
             COUNTERMOVE_SCORE
         } else {
-            let countermove_score = if let Some(countermove) = ply
+            let countermove_score = ply
                 .checked_sub(1)
-                .map(|p| self.search_stack[p].current_move)
-            {
-                self.countermove_history_tables[current_player][countermove.piece()]
-                    [countermove.to()][mv] as i32
-            } else {
-                0
-            };
-            QUIET_SCORE + (self.history_tables[current_player][mv] as i32) + countermove_score
+                .map(|p| {
+                    let cm = self.search_stack[p].current_move;
+                    self.countermove_history_tables[current_player][cm.piece()][cm.to()][mv] as i32
+                })
+                .unwrap_or(0);
+            let followup_score = ply
+                .checked_sub(2)
+                .map(|p| {
+                    let fm = self.search_stack[p].current_move;
+                    self.conthist_tables[current_player][fm.piece()][fm.to()][mv] as i32
+                })
+                .unwrap_or(0);
+            QUIET_SCORE
+                + (self.history_tables[current_player][mv] as i32)
+                + countermove_score
+                + followup_score
         }
     }
 }
