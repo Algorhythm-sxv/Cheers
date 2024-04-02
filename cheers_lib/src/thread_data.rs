@@ -30,6 +30,7 @@ pub struct ThreadData {
     pub history_tables: Box<[HistoryTable; 2]>,
     pub capture_history_tables: Box<[HistoryTable; 2]>,
     pub countermove_history_tables: Box<[[[HistoryTable; 64]; 6]; 2]>,
+    pub conthist_tables: Box<[[[HistoryTable; 64]; 6]; 2]>,
     pub countermove_tables: Box<[CounterMoveTable; 2]>,
 }
 
@@ -40,6 +41,7 @@ impl ThreadData {
             history_tables: Box::new([HistoryTable::default(); 2]),
             capture_history_tables: Box::new([HistoryTable::default(); 2]),
             countermove_history_tables: Box::new([[[HistoryTable::default(); 64]; 6]; 2]),
+            conthist_tables: Box::new([[[HistoryTable::default(); 64]; 6]; 2]),
             countermove_tables: Box::new([CounterMoveTable::default(); 2]),
         }
     }
@@ -53,31 +55,30 @@ impl ThreadData {
         ply: usize,
     ) {
         // reward quiets that produce a beta cutoff
-        let countermove = self
-            .search_stack
-            .get(ply.wrapping_sub(1))
-            .map(|s| s.current_move)
-            .unwrap_or(Move::null());
-        if !countermove.is_null() {
+        let countermove = ply
+            .checked_sub(1)
+            .map(|p| self.search_stack[p].current_move);
+
+        if let Some(cm) = countermove {
             apply_history_bonus(
-                &mut self.countermove_history_tables[player][countermove.piece()][countermove.to()]
-                    [bonus_quiet],
+                &mut self.countermove_history_tables[player][cm.piece()][cm.to()][bonus_quiet],
                 delta,
-            )
+            );
         }
+
         apply_history_bonus(&mut self.history_tables[player][bonus_quiet], delta);
 
         // punish quiets that were played but didn't cause a beta cutoff
         for smv in malus_quiets.inner().iter() {
             let malus_quiet = smv.mv;
             debug_assert!(malus_quiet != bonus_quiet);
-            if !countermove.is_null() {
+            if let Some(cm) = countermove {
                 apply_history_malus(
-                    &mut self.countermove_history_tables[player][countermove.piece()]
-                        [countermove.to()][malus_quiet],
+                    &mut self.countermove_history_tables[player][cm.piece()][cm.to()][malus_quiet],
                     delta,
-                )
+                );
             }
+
             apply_history_malus(&mut self.history_tables[player][malus_quiet], delta);
         }
     }
@@ -164,10 +165,9 @@ impl ThreadData {
         {
             COUNTERMOVE_SCORE
         } else {
-            let countermove_score = if let Some(countermove) = self
-                .search_stack
-                .get(ply.wrapping_sub(1))
-                .map(|s| s.current_move)
+            let countermove_score = if let Some(countermove) = ply
+                .checked_sub(1)
+                .map(|p| self.search_stack[p].current_move)
             {
                 self.countermove_history_tables[current_player][countermove.piece()]
                     [countermove.to()][mv] as i32
