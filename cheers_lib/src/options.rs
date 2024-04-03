@@ -36,7 +36,7 @@ pub const RFP_DEPTH: i8 = 13;
 pub const RFP_MARGIN: i16 = 185;
 pub const RFP_IMPROVING_MARGIN: i16 = -79;
 pub const LMP_DEPTH: i8 = 10;
-pub const HISTORY_LMR_DIVISOR: i16 = 2047;
+pub const HISTORY_LMR_DIVISOR: i16 = 4095;
 pub const IIR_DEPTH: i8 = 7;
 
 impl Default for SearchOptions {

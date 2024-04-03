@@ -136,7 +136,7 @@ impl ThreadData {
     pub fn get_quiet_history(&self, mv: Move, current_player: Color, ply: usize) -> i16 {
         let mut history = self.history_tables[current_player][mv];
         if ply > 0 {
-            for i in 0..1 {
+            for i in 0..CONTHIST_MAX {
                 if let Some(cm) = ply
                     .checked_sub(i + 1)
                     .map(|p| self.search_stack[p].current_move)
