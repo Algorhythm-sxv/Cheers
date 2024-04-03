@@ -24,13 +24,13 @@ impl Default for SearchStackEntry {
     }
 }
 
+const CONTHIST_MAX: usize = 2;
 #[derive(Clone)]
 pub struct ThreadData {
     pub search_stack: Box<[SearchStackEntry]>,
     pub history_tables: Box<[HistoryTable; 2]>,
     pub capture_history_tables: Box<[HistoryTable; 2]>,
-    pub countermove_history_tables: Box<[[[HistoryTable; 64]; 6]; 2]>,
-    pub conthist_tables: Box<[[[HistoryTable; 64]; 6]; 2]>,
+    pub conthist_tables: Box<[[[[HistoryTable; 64]; 6]; 2]; CONTHIST_MAX]>,
     pub countermove_tables: Box<[CounterMoveTable; 2]>,
 }
 
@@ -40,8 +40,7 @@ impl ThreadData {
             search_stack: vec![SearchStackEntry::default(); SEARCH_MAX_PLY].into_boxed_slice(),
             history_tables: Box::new([HistoryTable::default(); 2]),
             capture_history_tables: Box::new([HistoryTable::default(); 2]),
-            countermove_history_tables: Box::new([[[HistoryTable::default(); 64]; 6]; 2]),
-            conthist_tables: Box::new([[[HistoryTable::default(); 64]; 6]; 2]),
+            conthist_tables: Box::new([[[[HistoryTable::default(); 64]; 6]; 2]; CONTHIST_MAX]),
             countermove_tables: Box::new([CounterMoveTable::default(); 2]),
         }
     }
@@ -54,25 +53,22 @@ impl ThreadData {
         malus_quiets: &MoveList,
         ply: usize,
     ) {
+        let mut conthist_moves = [None; CONTHIST_MAX];
+        for i in 0..CONTHIST_MAX {
+            conthist_moves[i] = ply
+                .checked_sub(i + 1)
+                .map(|p| self.search_stack[p].current_move);
+        }
+
         // reward quiets that produce a beta cutoff
-        let countermove = ply
-            .checked_sub(1)
-            .map(|p| self.search_stack[p].current_move);
-
-        let followup_move = ply
-            .checked_sub(2)
-            .map(|p| self.search_stack[p].current_move);
-
-        if let Some(cm) = countermove {
-            apply_history_bonus(
-                &mut self.countermove_history_tables[player][cm.piece()][cm.to()][bonus_quiet],
-                delta,
-            );
-            if let Some(fm) = followup_move {
+        for i in 0..CONTHIST_MAX {
+            if let Some(cm) = conthist_moves[i] {
                 apply_history_bonus(
-                    &mut self.conthist_tables[player][fm.piece()][fm.to()][bonus_quiet],
+                    &mut self.conthist_tables[i][player][cm.piece()][cm.to()][bonus_quiet],
                     delta,
-                );
+                )
+            } else {
+                break; // once we miss a conthist move there will be no more
             }
         }
 
@@ -82,16 +78,14 @@ impl ThreadData {
         for smv in malus_quiets.inner().iter() {
             let malus_quiet = smv.mv;
             debug_assert!(malus_quiet != bonus_quiet);
-            if let Some(cm) = countermove {
-                apply_history_malus(
-                    &mut self.countermove_history_tables[player][cm.piece()][cm.to()][malus_quiet],
-                    delta,
-                );
-                if let Some(fm) = followup_move {
+            for i in 0..CONTHIST_MAX {
+                if let Some(cm) = conthist_moves[i] {
                     apply_history_malus(
-                        &mut self.conthist_tables[player][fm.piece()][fm.to()][malus_quiet],
+                        &mut self.conthist_tables[i][player][cm.piece()][cm.to()][malus_quiet],
                         delta,
                     );
+                } else {
+                    break; // once we miss a conthist move there will be no more
                 }
             }
 
@@ -142,9 +136,16 @@ impl ThreadData {
     pub fn get_quiet_history(&self, mv: Move, current_player: Color, ply: usize) -> i16 {
         let mut history = self.history_tables[current_player][mv];
         if ply > 0 {
-            let countermove = self.search_stack[ply - 1].current_move;
-            history += self.countermove_history_tables[current_player][countermove.piece()]
-                [countermove.to()][mv];
+            for i in 0..1 {
+                if let Some(cm) = ply
+                    .checked_sub(i + 1)
+                    .map(|p| self.search_stack[p].current_move)
+                {
+                    history += self.conthist_tables[i][current_player][cm.piece()][cm.to()][mv];
+                } else {
+                    break;
+                }
+            }
         }
         history
     }
@@ -181,24 +182,21 @@ impl ThreadData {
         {
             COUNTERMOVE_SCORE
         } else {
-            let countermove_score = ply
-                .checked_sub(1)
-                .map(|p| {
-                    let cm = self.search_stack[p].current_move;
-                    self.countermove_history_tables[current_player][cm.piece()][cm.to()][mv] as i32
-                })
-                .unwrap_or(0);
-            let followup_score = ply
-                .checked_sub(2)
-                .map(|p| {
-                    let fm = self.search_stack[p].current_move;
-                    self.conthist_tables[current_player][fm.piece()][fm.to()][mv] as i32
-                })
-                .unwrap_or(0);
+            let mut conthist_scores = [0i32; CONTHIST_MAX];
+            for (i, conthist_score) in conthist_scores.iter_mut().enumerate() {
+                if let Some(cm) = ply
+                    .checked_sub(i + 1)
+                    .map(|p| self.search_stack[p].current_move)
+                {
+                    *conthist_score =
+                        self.conthist_tables[i][current_player][cm.piece()][cm.to()][mv] as i32
+                } else {
+                    break;
+                }
+            }
             QUIET_SCORE
                 + (self.history_tables[current_player][mv] as i32)
-                + countermove_score
-                + followup_score
+                + conthist_scores.iter().sum::<i32>()
         }
     }
 }
