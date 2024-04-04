@@ -182,21 +182,19 @@ impl ThreadData {
         {
             COUNTERMOVE_SCORE
         } else {
-            let mut conthist_scores = [0i32; CONTHIST_MAX];
-            for (i, conthist_score) in conthist_scores.iter_mut().enumerate() {
+            let mut score = QUIET_SCORE + (self.history_tables[current_player][mv] as i32);
+
+            for i in 0..CONTHIST_MAX {
                 if let Some(cm) = ply
                     .checked_sub(i + 1)
                     .map(|p| self.search_stack[p].current_move)
                 {
-                    *conthist_score =
-                        self.conthist_tables[i][current_player][cm.piece()][cm.to()][mv] as i32
+                    score += self.conthist_tables[i][current_player][cm.piece()][cm.to()][mv] as i32
                 } else {
                     break;
                 }
             }
-            QUIET_SCORE
-                + (self.history_tables[current_player][mv] as i32)
-                + conthist_scores.iter().sum::<i32>()
+            score
         }
     }
 }
