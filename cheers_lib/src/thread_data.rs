@@ -3,7 +3,7 @@ use crate::{
     history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
     moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
-    types::{Color, Piece},
+    types::Color,
 };
 
 #[derive(Clone)]
@@ -24,7 +24,7 @@ impl Default for SearchStackEntry {
     }
 }
 
-const CONTHIST_MAX: usize = 1;
+const CONTHIST_MAX: usize = 4;
 #[derive(Clone)]
 pub struct ThreadData {
     pub search_stack: Box<[SearchStackEntry]>,
@@ -118,12 +118,12 @@ impl ThreadData {
         }
     }
 
-    pub fn score_moves(&mut self, board: &Board, ply: usize, captures_only: bool) {
+    pub fn score_moves(&mut self, board: &Board, ply: usize, noisy_only: bool) {
         // for m in self.search_stack[ply].move_list.inner_mut() {
         for i in 0..self.search_stack[ply].move_list.len() {
             let mv = self.search_stack[ply].move_list[i];
 
-            let score = if captures_only || mv.promotion() != Piece::Pawn || board.is_capture(mv) {
+            let score = if noisy_only || board.move_is_noisy(mv) {
                 self.score_capture(board, mv)
             } else {
                 self.score_quiet(board, ply, mv)

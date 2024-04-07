@@ -712,7 +712,9 @@ impl Search {
         let mut move_index = 0;
         let mut quiets_tried = MoveList::new();
         let mut captures_tried = MoveList::new();
+        let mut moves_available = false;
         while let Some((mv, move_score)) = move_sorter.next(board, &mut self.thread_data, ply) {
+            moves_available = true;
             let capture = board.is_capture(mv);
 
             // Move-based pruning techniques, not done until we have searched at least one move
@@ -943,7 +945,7 @@ impl Search {
         self.search_history.pop();
 
         // check for checkmate and stalemate
-        if self.thread_data.search_stack[ply].move_list.is_empty() {
+        if !moves_available {
             pv.clear();
             return if in_check {
                 // checkmate, preferring shorter mating sequences
@@ -1087,7 +1089,9 @@ impl Search {
 
         let mut best_move = Move::null();
         let mut best_score = static_eval;
+        let mut captures_available = false;
         while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply) {
+            captures_available = true;
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
                 .saturating_add(
@@ -1158,7 +1162,7 @@ impl Search {
         self.search_history.pop();
 
         // if there are no legal captures, check for checkmate/stalemate
-        if self.thread_data.search_stack[ply].move_list.is_empty() {
+        if !captures_available {
             let mut some_moves = false;
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 
