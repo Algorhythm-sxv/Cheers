@@ -1,5 +1,9 @@
 use crate::{
-    board::{see::SEE_PIECE_VALUES, Board},
+    board::{
+        evaluate::{relative_board_index, EVAL_PARAMS},
+        see::SEE_PIECE_VALUES,
+        Board,
+    },
     history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
     moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
@@ -129,7 +133,12 @@ impl ThreadData {
                 self.score_quiet(board, ply, mv)
             };
 
-            *self.search_stack[ply].move_list.score(i) = score
+            let relative_to = match board.current_player() {
+                Color::White => mv.to(),
+                Color::Black => relative_board_index::<crate::types::Black>(mv.to()),
+            };
+            let tiebreak_psqt = EVAL_PARAMS.piece_tables[(mv.piece(), relative_to)].mg() as i32;
+            *self.search_stack[ply].move_list.score(i) = (score << 10) + tiebreak_psqt
         }
     }
 

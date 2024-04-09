@@ -181,7 +181,7 @@ pub const TT_MOVE_SCORE: i32 = 400_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 300_000;
 pub const KILLER_MOVE_SCORE: i32 = 200_000;
 pub const COUNTERMOVE_SCORE: i32 = 100_000;
-pub const QUIET_SCORE: i32 = 0;
+pub const QUIET_SCORE: i32 = 50_000;
 pub const LOSING_CAPTURE_SCORE: i32 = -100_000;
 pub const UNDERPROMO_SCORE: i32 = -200_000;
 
@@ -201,12 +201,14 @@ impl SortingMove {
 }
 
 impl Ord for SortingMove {
+    #[inline(always)]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.hash().cmp(&other.hash())
     }
 }
 
 impl PartialOrd for SortingMove {
+    #[inline(always)]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -257,24 +259,10 @@ impl MoveList {
 
     #[inline(always)]
     pub fn pick_move(&mut self, current_index: usize) -> (Move, i32) {
-        // let moves = &self.inner[(current_index + 1)..self.len];
-        // let mut best_index = current_index;
-        // let mut best_score = self.inner[current_index].score;
-        // let mut best_move = self.inner[current_index].mv.0;
-
-        // for (i, mv) in moves.iter().enumerate() {
-        //     let new = mv.score;
-        //     let replace = new > best_score || (new == best_score && mv.mv.0 > best_move);
-        //     best_index =
-        //         (best_index * !replace as usize) | ((i + current_index + 1) * replace as usize);
-        //     best_score = (best_score * !replace as i32) | (new * replace as i32);
-        //     best_move = (best_move * !replace as u32) | (mv.mv.0 * replace as u32);
-        // }
-
         let best_index = self.inner[current_index..self.len]
             .iter()
             .enumerate()
-            .max_by_key(|(_, &m)| m)
+            .max_by_key(|(_, &m)| m.score)
             .unwrap()
             .0
             + current_index;

@@ -712,15 +712,14 @@ impl Search {
         let mut move_index = 0;
         let mut quiets_tried = MoveList::new();
         let mut captures_tried = MoveList::new();
-        while let Some((mv, move_score)) = move_sorter.next(board, &mut self.thread_data, ply) {
+        while let Some((mv, _move_score)) = move_sorter.next(board, &mut self.thread_data, ply) {
             let capture = board.is_capture(mv);
 
             // Move-based pruning techniques, not done until we have searched at least one move
             if move_index >= 1 {
                 // Futility Pruning: skip quiets on nodes with bad static eval
-                if futility_pruning
-                    && !capture
-                    && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
+                if futility_pruning && !capture
+                // && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
                 {
                     quiets_tried.push(SortingMove::new(mv));
                     move_index += 1;
@@ -783,9 +782,8 @@ impl Search {
                     let mut r = 0;
 
                     // Late Move Reduction: moves that are sorted later are likely to fail low
-                    if !capture
-                        && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
-                        && mv.promotion() != Queen
+                    if !capture && mv.promotion() != Queen
+                    // && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
                     {
                         r += LMR[(depth as usize).min(63)][move_index.min(63)];
 
