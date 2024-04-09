@@ -137,8 +137,8 @@ impl ThreadData {
                 Color::White => mv.to(),
                 Color::Black => relative_board_index::<crate::types::Black>(mv.to()),
             };
-            let tiebreak_psqt = EVAL_PARAMS.piece_tables[(mv.piece(), relative_to)].mg() as i32;
-            *self.search_stack[ply].move_list.score(i) = (score << 10) + tiebreak_psqt
+            let _tiebreak_psqt = EVAL_PARAMS.piece_tables[(mv.piece(), relative_to)].mg() as i32;
+            *self.search_stack[ply].move_list.score(i) = score
         }
     }
 
