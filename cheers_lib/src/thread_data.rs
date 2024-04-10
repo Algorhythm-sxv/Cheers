@@ -173,12 +173,10 @@ impl ThreadData {
         if self.search_stack[ply].killer_moves.contains(&mv) {
             // there can be more than 1 killer move, so sort them by their respective histories
             KILLER_MOVE_SCORE + (self.history_tables[current_player][mv] as i32)
-        } else if self.countermove_tables[current_player][self
-            .search_stack
-            .get(ply.wrapping_sub(1))
-            .map(|s| s.current_move)
-            .unwrap_or(Move::null())]
-            == mv
+        } else if ply
+            .checked_sub(1)
+            .map(|p| self.search_stack[p].current_move)
+            == Some(mv)
         {
             COUNTERMOVE_SCORE
         } else {
