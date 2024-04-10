@@ -6,7 +6,7 @@ use Piece::*;
 
 use cheers_bitboards::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Move(u32);
 
 impl Move {
@@ -185,10 +185,10 @@ pub const QUIET_SCORE: i32 = 0;
 pub const LOSING_CAPTURE_SCORE: i32 = -100_000;
 pub const UNDERPROMO_SCORE: i32 = -200_000;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SortingMove {
-    pub mv: Move,
     pub score: i32,
+    pub mv: Move,
 }
 
 impl SortingMove {
@@ -242,18 +242,14 @@ impl MoveList {
 
     #[inline(always)]
     pub fn pick_move(&mut self, current_index: usize) -> (Move, i32) {
-        let moves = &self.inner[(current_index + 1)..self.len];
-        let mut best_index = current_index;
-        let mut best_score = self.inner[current_index].score;
-
-        for (i, mv) in moves.iter().enumerate() {
-            let new = mv.score;
-            let replace = new > best_score;
-            best_index =
-                (best_index * !replace as usize) | ((i + current_index + 1) * replace as usize);
-            best_score = (best_score * !replace as i32) | (new * replace as i32);
-        }
-
+        let best_index = self.inner[current_index..self.len]
+            .iter()
+            .enumerate()
+            .rev()
+            .max_by_key(|(_, &mv)| mv)
+            .unwrap()
+            .0
+            + current_index;
         self.inner.swap(current_index, best_index);
 
         (
