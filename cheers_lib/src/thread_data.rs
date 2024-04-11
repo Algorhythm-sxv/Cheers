@@ -150,8 +150,12 @@ impl ThreadData {
         history
     }
 
-    pub fn score_capture(&self, _board: &Board, _mv: Move) -> i32 {
-        0
+    pub fn score_capture(&self, board: &Board, mv: Move) -> i32 {
+        if board.see_beats_threshold(mv, 0) {
+            WINNING_CAPTURE_SCORE
+        } else {
+            LOSING_CAPTURE_SCORE
+        }
     }
 
     pub fn score_quiet(&self, _board: &Board, _ply: usize, _mv: Move) -> i32 {
