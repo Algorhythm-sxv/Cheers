@@ -1,5 +1,5 @@
 use crate::{
-    board::{see::SEE_PIECE_VALUES, Board},
+    board::Board,
     history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
     moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
@@ -150,52 +150,12 @@ impl ThreadData {
         history
     }
 
-    pub fn score_capture(&self, board: &Board, mv: Move) -> i32 {
-        use crate::types::Piece::*;
-        // filter out underpromotions
-        if matches!(mv.promotion(), Knight | Bishop | Rook) {
-            return UNDERPROMO_SCORE + (SEE_PIECE_VALUES[mv.promotion()] as i32);
-        }
-        let piece_bonuses = [0, 240, 240, 480, 960];
-        let mvv_bonus = 2 * piece_bonuses[board.piece_on(mv.to()).unwrap_or(Pawn)];
-        let capture_history = self.capture_history_tables[board.current_player()][mv] as i32;
-
-        // sort winning captures before quiets, losing captures after
-        if board.see_beats_threshold(mv, 0) {
-            WINNING_CAPTURE_SCORE + 50_000 + capture_history + mvv_bonus
-        } else {
-            LOSING_CAPTURE_SCORE + 50_000 + capture_history + mvv_bonus
-        }
+    pub fn score_capture(&self, _board: &Board, _mv: Move) -> i32 {
+        0
     }
 
-    pub fn score_quiet(&self, board: &Board, ply: usize, mv: Move) -> i32 {
-        let current_player = board.current_player();
-        if self.search_stack[ply].killer_moves.contains(&mv) {
-            // there can be more than 1 killer move, so sort them by their respective histories
-            KILLER_MOVE_SCORE + (self.history_tables[current_player][mv] as i32)
-        } else if self.countermove_tables[current_player][self
-            .search_stack
-            .get(ply.wrapping_sub(1))
-            .map(|s| s.current_move)
-            .unwrap_or(Move::null())]
-            == mv
-        {
-            COUNTERMOVE_SCORE
-        } else {
-            let mut score = QUIET_SCORE + (self.history_tables[current_player][mv] as i32);
-
-            for i in 0..CONTHIST_MAX {
-                if let Some(cm) = ply
-                    .checked_sub(i + 1)
-                    .map(|p| self.search_stack[p].current_move)
-                {
-                    score += self.conthist_tables[i][current_player][cm.piece()][cm.to()][mv] as i32
-                } else {
-                    break;
-                }
-            }
-            score
-        }
+    pub fn score_quiet(&self, _board: &Board, _ply: usize, _mv: Move) -> i32 {
+        0
     }
 }
 
