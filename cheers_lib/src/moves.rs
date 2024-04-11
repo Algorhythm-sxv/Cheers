@@ -241,25 +241,16 @@ impl MoveList {
     }
 
     #[inline(always)]
-    pub fn pick_move(&mut self, current_index: usize) -> (Move, i32) {
-        let moves = &self.inner[(current_index + 1)..self.len];
-        let mut best_index = current_index;
-        let mut best_score = self.inner[current_index].score;
+    pub fn pick_move(&mut self) -> Option<(Move, i32)> {
+        let (best_index, best_move) = self.inner[..self.len]
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, mv)| mv.score)
+            .map(|(i, mv)| (i, *mv))?;
 
-        for (i, mv) in moves.iter().enumerate() {
-            let new = mv.score;
-            let replace = new > best_score;
-            best_index =
-                (best_index * !replace as usize) | ((i + current_index + 1) * replace as usize);
-            best_score = (best_score * !replace as i32) | (new * replace as i32);
-        }
-
-        self.inner.swap(current_index, best_index);
-
-        (
-            self.inner[current_index].mv,
-            self.inner[current_index].score,
-        )
+        self.len -= 1;
+        self.inner.swap(best_index, self.len);
+        Some((best_move.mv, best_move.score))
     }
 
     pub fn contains(&self, mv: Move) -> bool {

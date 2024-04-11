@@ -709,21 +709,20 @@ impl Search {
         // push this position to the history
         self.search_history.push(board.hash());
 
-        let mut move_index = 0;
         let mut quiets_tried = MoveList::new();
         let mut captures_tried = MoveList::new();
-        while let Some((mv, move_score)) = move_sorter.next(board, &mut self.thread_data, ply) {
+        let mut any_moves = false;
+        while let Some((mv, move_index)) = move_sorter.next(board, &mut self.thread_data, ply) {
+            any_moves = true;
             let capture = board.is_capture(mv);
 
             // Move-based pruning techniques, not done until we have searched at least one move
             if move_index >= 1 {
                 // Futility Pruning: skip quiets on nodes with bad static eval
-                if futility_pruning
-                    && !capture
-                    && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
+                if futility_pruning && !capture
+                // && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
                 {
                     quiets_tried.push(SortingMove::new(mv));
-                    move_index += 1;
                     continue;
                 }
 
@@ -735,7 +734,6 @@ impl Search {
                     && quiets_tried.len() >= LMP_MARGINS[depth.min(31) as usize][improving as usize]
                 {
                     quiets_tried.push(SortingMove::new(mv));
-                    move_index += 1;
                     continue;
                 }
 
@@ -753,7 +751,6 @@ impl Search {
                         } else {
                             captures_tried.push(SortingMove::new(mv));
                         }
-                        move_index += 1;
                         continue;
                     }
                 }
@@ -769,6 +766,7 @@ impl Search {
             // legality check for the TT move, which is only verified as pseudolegal
             if mv == tt_move && new.illegal_position() {
                 // skip the TT move if it's illegal
+                any_moves = false;
                 continue;
             }
 
@@ -784,7 +782,7 @@ impl Search {
 
                     // Late Move Reduction: moves that are sorted later are likely to fail low
                     if !capture
-                        && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
+                        // && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
                         && mv.promotion() != Queen
                     {
                         r += LMR[(depth as usize).min(63)][move_index.min(63)];
@@ -932,7 +930,6 @@ impl Search {
                 }
             }
             // increment the move counter if the move was legal
-            move_index += 1;
             if !capture {
                 quiets_tried.push(SortingMove::new(mv));
             } else {
@@ -943,7 +940,7 @@ impl Search {
         self.search_history.pop();
 
         // check for checkmate and stalemate
-        if self.thread_data.search_stack[ply].move_list.is_empty() {
+        if !any_moves {
             pv.clear();
             return if in_check {
                 // checkmate, preferring shorter mating sequences
@@ -1087,7 +1084,10 @@ impl Search {
 
         let mut best_move = Move::null();
         let mut best_score = static_eval;
+        let mut any_captures = false;
         while let Some((mv, _)) = move_sorter.next(board, &mut self.thread_data, ply) {
+            any_captures = true;
+
             // Delta Pruning: if this capture immediately falls short by some margin, skip it
             if static_eval
                 .saturating_add(
@@ -1114,6 +1114,7 @@ impl Search {
             // legality check for the TT move, which is only verified as pseudolegal
             if mv == tt_move && new.illegal_position() {
                 // skip the TT move if it's illegal
+                any_captures = false;
                 continue;
             }
 
@@ -1158,7 +1159,7 @@ impl Search {
         self.search_history.pop();
 
         // if there are no legal captures, check for checkmate/stalemate
-        if self.thread_data.search_stack[ply].move_list.is_empty() {
+        if !any_captures {
             let mut some_moves = false;
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 

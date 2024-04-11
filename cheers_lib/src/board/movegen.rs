@@ -25,15 +25,26 @@ impl Board {
         });
     }
 
-    pub fn generate_legal_captures_into(&self, list: &mut MoveList) {
+    pub fn is_noisy(&self, mv: Move) -> bool {
+        self.is_capture(mv)
+    }
+
+    pub fn generate_legal_noisy_into(&self, list: &mut MoveList) {
         list.reset();
         self.generate_legal_moves(|mvs| {
-            for mv in mvs {
-                if mv.promotion() != Pawn || self.is_capture(mv) {
-                    list.push(SortingMove::new(mv))
-                }
+            for mv in mvs.into_iter().filter(|&m| self.is_noisy(m)) {
+                list.push(SortingMove::new(mv))
             }
         });
+    }
+
+    pub fn generate_legal_quiet_into(&self, list: &mut MoveList) {
+        list.reset();
+        self.generate_legal_moves(|mvs| {
+            for mv in mvs.into_iter().filter(|&m| !self.is_noisy(m)) {
+                list.push(SortingMove::new(mv))
+            }
+        })
     }
 
     pub fn generate_legal_moves(&self, mut listener: impl FnMut(MoveMask)) {
