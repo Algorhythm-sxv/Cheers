@@ -158,8 +158,14 @@ impl ThreadData {
         }
     }
 
-    pub fn score_quiet(&self, _board: &Board, _ply: usize, _mv: Move) -> i32 {
-        0
+    pub fn score_quiet(&self, board: &Board, _ply: usize, mv: Move) -> i32 {
+        let current_player = board.current_player();
+        let mut score = QUIET_SCORE;
+
+        // history heuristic
+        score += self.history_tables[current_player][mv] as i32;
+
+        score
     }
 }
 
