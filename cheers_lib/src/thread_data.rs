@@ -1,9 +1,9 @@
 use crate::{
-    board::Board,
+    board::{see::MVV_LVA, Board},
     history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
     moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
-    types::{Color, Piece},
+    types::{Color, Piece, Piece::*},
 };
 
 #[derive(Clone)]
@@ -151,11 +151,16 @@ impl ThreadData {
     }
 
     pub fn score_capture(&self, board: &Board, mv: Move) -> i32 {
-        if board.see_beats_threshold(mv, 0) {
+        let mut score = if board.see_beats_threshold(mv, 0) {
             WINNING_CAPTURE_SCORE
         } else {
             LOSING_CAPTURE_SCORE
-        }
+        };
+
+        let captured = board.piece_on(mv.to()).unwrap_or(Pawn);
+        score += MVV_LVA[captured][mv.piece()] as i32;
+
+        score
     }
 
     pub fn score_quiet(&self, board: &Board, _ply: usize, mv: Move) -> i32 {
