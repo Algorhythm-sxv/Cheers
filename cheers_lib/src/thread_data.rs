@@ -151,7 +151,8 @@ impl ThreadData {
     }
 
     pub fn score_capture(&self, board: &Board, mv: Move) -> i32 {
-        let mut score = if board.see_beats_threshold(mv, 0) {
+        let mut score = board.see(mv) as i32 * 100;
+        score += if score >= 0 {
             WINNING_CAPTURE_SCORE
         } else {
             LOSING_CAPTURE_SCORE
