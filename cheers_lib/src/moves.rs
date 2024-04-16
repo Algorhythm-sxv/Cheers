@@ -253,6 +253,10 @@ impl MoveList {
         Some((best_move.mv, best_move.score))
     }
 
+    pub fn unpick_move(&mut self) {
+        self.len += 1;
+    }
+
     pub fn contains(&self, mv: Move) -> bool {
         self.inner().iter().any(|smv| smv.mv == mv)
     }

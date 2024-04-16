@@ -6,8 +6,8 @@ pub struct SearchOptions {
     pub nmp_const_reduction: i8,
     pub nmp_linear_divisor: i8,
     pub see_pruning_depth: i8,
-    pub see_capture_margin: i16,
-    pub see_quiet_margin: i16,
+    pub see_capture_margin: i32,
+    pub see_quiet_margin: i32,
     pub pvs_fulldepth: i8,
     pub delta_pruning_margin: i16,
     pub fp_margin_1: i16,
@@ -25,8 +25,8 @@ pub const NMP_DEPTH: i8 = 1;
 pub const NMP_CONST_REDUCTION: i8 = 2;
 pub const NMP_LINEAR_DIVISOR: i8 = 2;
 pub const SEE_PRUNING_DEPTH: i8 = 10;
-pub const SEE_CAPTURE_MARGIN: i16 = -45;
-pub const SEE_QUIET_MARGIN: i16 = -50;
+pub const SEE_CAPTURE_MARGIN: i32 = -45;
+pub const SEE_QUIET_MARGIN: i32 = -50;
 pub const PVS_FULLDEPTH: i8 = 1;
 pub const DELTA_PRUNING_MARGIN: i16 = 185;
 pub const FP_MARGIN_1: i16 = 100;

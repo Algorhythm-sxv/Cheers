@@ -8,7 +8,7 @@ use Piece::*;
 use super::Board;
 
 pub const SEE_WINNING_SCORE: i16 = 10000;
-pub const SEE_PIECE_VALUES: [i16; 6] = [100, 300, 300, 500, 900, 20000];
+pub const SEE_PIECE_VALUES: [i32; 6] = [100, 300, 300, 500, 900, 20000];
 pub const MVV_LVA: [[i16; 6]; 6] = [
     // pawn captured
     [1500, 1400, 1300, 1200, 1100, 1000],
@@ -25,9 +25,9 @@ pub const MVV_LVA: [[i16; 6]; 6] = [
 ];
 
 impl Board {
-    pub fn see(&self, mv: Move) -> i16 {
+    pub fn see(&self, mv: Move) -> i32 {
         let target = mv.to();
-        let mut swap_list = [0i16; 32];
+        let mut swap_list = [0i32; 32];
 
         let mut current_attacker = mv.piece();
         let mut attacker_mask = mv.from().bitboard();
@@ -135,7 +135,7 @@ impl Board {
         swap_list[0]
     }
 
-    pub fn see_beats_threshold(&self, mv: Move, threshold: i16) -> bool {
+    pub fn see_beats_threshold(&self, mv: Move, threshold: i32) -> bool {
         // correct for ep capture
         let mut value = if mv.piece() == Pawn && mv.to().bitboard() == self.ep_mask {
             SEE_PIECE_VALUES[Pawn] - threshold

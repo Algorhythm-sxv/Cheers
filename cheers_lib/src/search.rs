@@ -739,7 +739,7 @@ impl Search {
 
                 // SEE pruning: if the move loses too much material at low depth then skip it
                 if !R::ROOT && depth <= self.options.see_pruning_depth {
-                    let threshold = depth as i16
+                    let threshold = depth as i32
                         * if capture {
                             self.options.see_capture_margin
                         } else {
@@ -1093,7 +1093,7 @@ impl Search {
                 .saturating_add(
                     board
                         .piece_on(mv.to())
-                        .map(|p| SEE_PIECE_VALUES[p])
+                        .map(|p| SEE_PIECE_VALUES[p] as i16)
                         .unwrap_or(0),
                 )
                 .saturating_add(self.options.delta_pruning_margin)

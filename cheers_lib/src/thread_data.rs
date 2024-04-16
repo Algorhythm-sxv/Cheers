@@ -10,6 +10,7 @@ use crate::{
 pub struct SearchStackEntry {
     pub eval: i16,
     pub move_list: MoveList,
+    pub noisy_move_list: MoveList,
     pub current_move: Move,
     pub killer_moves: KillerMoves<NUM_KILLER_MOVES>,
 }
@@ -18,6 +19,7 @@ impl Default for SearchStackEntry {
         Self {
             eval: MINUS_INF,
             move_list: MoveList::default(),
+            noisy_move_list: MoveList::default(),
             current_move: Move::null(),
             killer_moves: KillerMoves::default(),
         }

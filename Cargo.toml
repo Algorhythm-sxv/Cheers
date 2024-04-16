@@ -9,6 +9,9 @@ members = [
     "cheers_pregen"
 ]
 
+[profile.dev]
+opt-level = 1
+
 [profile.test]
 debug = true
 lto = true
