@@ -58,13 +58,13 @@ impl<M: TypeMoveGen> MoveSorter<M> {
             if self.stage == Stage::GenerateNoisy {
                 self.stage = Stage::WinningNoisy;
                 board.generate_legal_noisy_into(&mut thread_data.search_stack[ply].noisy_move_list);
-                thread_data.score_moves(board, ply, true);
+                thread_data.score_noisies(board, ply);
             }
 
             if self.stage == Stage::GenerateQuiet {
                 self.stage = Stage::Quiet;
                 board.generate_legal_quiet_into(&mut thread_data.search_stack[ply].move_list);
-                thread_data.score_moves(board, ply, false);
+                thread_data.score_quiets(board, ply);
             }
 
             // find the move with the next highest sort score

@@ -3,7 +3,7 @@ use crate::{
     history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
     moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
-    types::{Color, Piece, Piece::*},
+    types::{Color, Piece::*},
 };
 
 #[derive(Clone)]
@@ -120,16 +120,21 @@ impl ThreadData {
         }
     }
 
-    pub fn score_moves(&mut self, board: &Board, ply: usize, captures_only: bool) {
-        // for m in self.search_stack[ply].move_list.inner_mut() {
+    pub fn score_noisies(&mut self, board: &Board, ply: usize) {
+        for i in 0..self.search_stack[ply].noisy_move_list.len() {
+            let mv = self.search_stack[ply].noisy_move_list[i];
+
+            let score = self.score_noisy(board, mv);
+
+            *self.search_stack[ply].noisy_move_list.score(i) = score
+        }
+    }
+
+    pub fn score_quiets(&mut self, board: &Board, ply: usize) {
         for i in 0..self.search_stack[ply].move_list.len() {
             let mv = self.search_stack[ply].move_list[i];
 
-            let score = if captures_only || mv.promotion() != Piece::Pawn || board.is_capture(mv) {
-                self.score_capture(board, mv)
-            } else {
-                self.score_quiet(board, ply, mv)
-            };
+            let score = self.score_quiet(board, ply, mv);
 
             *self.search_stack[ply].move_list.score(i) = score
         }
@@ -152,8 +157,8 @@ impl ThreadData {
         history
     }
 
-    pub fn score_capture(&self, board: &Board, mv: Move) -> i32 {
-        let mut score = board.see(mv) as i32 * 100;
+    pub fn score_noisy(&self, board: &Board, mv: Move) -> i32 {
+        let mut score = board.see(mv) * 100;
         score += if score >= 0 {
             WINNING_CAPTURE_SCORE
         } else {
