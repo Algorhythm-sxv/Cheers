@@ -66,9 +66,10 @@ impl<M: TypeMoveGen> MoveSorter<M> {
         loop {
             match thread_data.search_stack[ply].move_list.pick_move() {
                 Some((mv, _)) => {
-                    // if mv == self.tt_move {
-                    //     continue;
-                    // }
+                    // don't report the TT move more than once
+                    if mv == self.tt_move {
+                        continue;
+                    }
 
                     let move_index = self.moves_given;
                     self.moves_given += 1;
