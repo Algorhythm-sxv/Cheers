@@ -691,11 +691,7 @@ impl Search {
             self.options.fp_margin_3,
         ];
         // decide if FP should be enabled
-        let futility_pruning = !R::ROOT
-            && !pv_node
-            && !in_check
-            && depth <= 3
-            && eval + fp_margins[depth as usize] <= alpha;
+        let futility_pruning = !R::ROOT && !pv_node && !in_check && depth <= 3;
 
         // move ordering: try heuristically good moves first to reduce the AB search tree
         let mut move_sorter = MoveSorter::<All>::new(tt_move);
@@ -721,6 +717,7 @@ impl Search {
                 if futility_pruning
                     && !capture
                     && !(COUNTERMOVE_SCORE..KILLER_MOVE_SCORE + 50_000).contains(&move_score)
+                    && eval + fp_margins[depth as usize] <= alpha
                 {
                     quiets_tried.push(SortingMove::new(mv));
                     move_index += 1;
