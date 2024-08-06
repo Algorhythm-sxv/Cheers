@@ -231,7 +231,7 @@ impl Search {
         'id_loop: for i in 1..SEARCH_MAX_PLY {
             // Aspiration Window: search a narrow window around the score in hope of saving
             // some search time
-            let mut window_size = 50;
+            let mut window_size = 20;
             let mut window = if i == 1 {
                 (MINUS_INF, INF)
             } else {
