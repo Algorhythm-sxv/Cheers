@@ -45,10 +45,10 @@ pub enum UciCommand {
         moves: Vec<Move>,
     },
     Go {
-        wtime: Option<usize>,
-        btime: Option<usize>,
-        winc: Option<usize>,
-        binc: Option<usize>,
+        wtime: Option<isize>,
+        btime: Option<isize>,
+        winc: Option<isize>,
+        binc: Option<isize>,
         movestogo: Option<usize>,
         depth: Option<usize>,
         nodes: Option<usize>,
@@ -119,6 +119,7 @@ impl<T: FromStr + PartialOrd + Display> ValidateOption for Spin<T> {
     }
 }
 
+#[allow(dead_code)]
 pub struct Combo {
     vars: &'static [&'static str],
     default: &'static str,
@@ -364,10 +365,10 @@ pub fn parse_uci_command<T: AsRef<str>>(cmd: T) -> Result<UciCommand, UciParseEr
                     Ok(Position { fen, moves })
                 }
                 "go" => {
-                    parse_uci_go_value!(words, wtime, usize);
-                    parse_uci_go_value!(words, btime, usize);
-                    parse_uci_go_value!(words, winc, usize);
-                    parse_uci_go_value!(words, binc, usize);
+                    parse_uci_go_value!(words, wtime, isize);
+                    parse_uci_go_value!(words, btime, isize);
+                    parse_uci_go_value!(words, winc, isize);
+                    parse_uci_go_value!(words, binc, isize);
                     parse_uci_go_value!(words, movestogo, usize);
                     parse_uci_go_value!(words, depth, usize);
                     parse_uci_go_value!(words, nodes, usize);

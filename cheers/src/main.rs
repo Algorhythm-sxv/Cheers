@@ -155,10 +155,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                             Some(n) => {
                                 if position.current_player() == Color::White {
                                     // add a 50ms margin to avoid timeouts
-                                    Some(((wtime.unwrap() - 50) / n, (wtime.unwrap() - 50) / n))
+                                    Some((
+                                        (wtime.unwrap().max(0) as usize - 50) / n,
+                                        (wtime.unwrap().max(0) as usize - 50) / n,
+                                    ))
                                 } else {
                                     // add a 50ms margin to avoid timeouts
-                                    Some(((btime.unwrap() - 50) / n, (btime.unwrap() - 50) / n))
+                                    Some((
+                                        (btime.unwrap().max(0) as usize - 50) / n,
+                                        (btime.unwrap().max(0) as usize - 50) / n,
+                                    ))
                                 }
                             }
                             None => {
@@ -210,10 +216,13 @@ fn engine_thread(search: Search) -> Result<Option<TableBases<MovegenAdapter>>, B
     Ok(tbs)
 }
 
-fn move_time(time_millis: Option<usize>, inc_millis: Option<usize>) -> Option<(usize, usize)> {
+fn move_time(time_millis: Option<isize>, inc_millis: Option<isize>) -> Option<(usize, usize)> {
     let (time, inc) = match (time_millis, inc_millis) {
         (None, None) => return None,
-        (t, i) => (t.unwrap_or(0), i.unwrap_or(0)),
+        (t, i) => (
+            t.unwrap_or(0).max(0) as usize,
+            i.unwrap_or(0).max(0) as usize,
+        ),
     };
     if time < inc {
         Some((time / 20, time / 2))
