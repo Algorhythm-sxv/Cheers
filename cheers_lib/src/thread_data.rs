@@ -3,13 +3,14 @@ use crate::{
     history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
     moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
-    types::{Color, Piece},
+    types::Color,
 };
 
 #[derive(Clone)]
 pub struct SearchStackEntry {
     pub eval: i16,
-    pub move_list: MoveList,
+    pub captures: MoveList,
+    pub quiets: MoveList,
     pub current_move: Move,
     pub killer_moves: KillerMoves<NUM_KILLER_MOVES>,
 }
@@ -17,10 +18,17 @@ impl Default for SearchStackEntry {
     fn default() -> Self {
         Self {
             eval: MINUS_INF,
-            move_list: MoveList::default(),
+            captures: MoveList::default(),
+            quiets: MoveList::default(),
             current_move: Move::null(),
             killer_moves: KillerMoves::default(),
         }
+    }
+}
+
+impl SearchStackEntry {
+    pub fn num_moves(&self) -> usize {
+        self.captures.len() + self.quiets.len()
     }
 }
 
@@ -118,18 +126,31 @@ impl ThreadData {
         }
     }
 
-    pub fn score_moves(&mut self, board: &Board, ply: usize, captures_only: bool) {
-        // for m in self.search_stack[ply].move_list.inner_mut() {
-        for i in 0..self.search_stack[ply].move_list.len() {
-            let mv = self.search_stack[ply].move_list[i];
+    // pub fn score_moves(&mut self, board: &Board, ply: usize, captures_only: bool) {
+    //     // for m in self.search_stack[ply].move_list.inner_mut() {
+    //     for i in 0..self.search_stack[ply].move_list.len() {
+    //         let mv = self.search_stack[ply].move_list[i];
 
-            let score = if captures_only || mv.promotion() != Piece::Pawn || board.is_capture(mv) {
-                self.score_capture(board, mv)
-            } else {
-                self.score_quiet(board, ply, mv)
-            };
+    //         let score = if captures_only || mv.promotion() != Piece::Pawn || board.is_capture(mv) {
+    //             self.score_capture(board, mv)
+    //         } else {
+    //             self.score_quiet(board, ply, mv)
+    //         };
 
-            *self.search_stack[ply].move_list.score(i) = score
+    //         *self.search_stack[ply].move_list.score(i) = score
+    //     }
+    // }
+
+    pub fn score_moves(&mut self, board: &Board, ply: usize) {
+        for i in 0..self.search_stack[ply].captures.len() {
+            let mv = self.search_stack[ply].captures[i];
+
+            *self.search_stack[ply].captures.score(i) = self.score_capture(board, mv);
+        }
+        for i in 0..self.search_stack[ply].quiets.len() {
+            let mv = self.search_stack[ply].quiets[i];
+
+            *self.search_stack[ply].quiets.score(i) = self.score_quiet(board, ply, mv);
         }
     }
 

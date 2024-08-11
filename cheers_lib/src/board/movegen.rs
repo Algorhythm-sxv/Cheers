@@ -16,11 +16,16 @@ impl Board {
         moves
     }
 
-    pub fn generate_legal_moves_into(&self, list: &mut MoveList) {
-        list.reset();
+    pub fn generate_legal_moves_into(&self, captures: &mut MoveList, quiets: &mut MoveList) {
+        captures.reset();
+        quiets.reset();
         self.generate_legal_moves(|mvs| {
             for mv in mvs {
-                list.push(SortingMove::new(mv))
+                if self.is_capture(mv) {
+                    captures.push(SortingMove::new(mv))
+                } else {
+                    quiets.push(SortingMove::new(mv))
+                }
             }
         });
     }

@@ -943,7 +943,7 @@ impl Search {
         self.search_history.pop();
 
         // check for checkmate and stalemate
-        if self.thread_data.search_stack[ply].move_list.is_empty() {
+        if self.thread_data.search_stack[ply].num_moves() == 0 {
             pv.clear();
             return if in_check {
                 // checkmate, preferring shorter mating sequences
@@ -1158,7 +1158,7 @@ impl Search {
         self.search_history.pop();
 
         // if there are no legal captures, check for checkmate/stalemate
-        if self.thread_data.search_stack[ply].move_list.is_empty() {
+        if self.thread_data.search_stack[ply].num_moves() == 0 {
             let mut some_moves = false;
             board.generate_legal_moves(|mvs| some_moves = some_moves || mvs.moves.is_not_empty());
 

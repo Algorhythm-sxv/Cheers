@@ -6,14 +6,17 @@ use crate::{board::Board, moves::*, thread_data::ThreadData, types::TypeMoveGen}
 enum Stage {
     TTMove,
     GenerateMoves,
-    SortMoves,
+    YieldGoodCaptures,
+    YieldQuiets,
+    YieldBadCaptures,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct MoveSorter<M: TypeMoveGen> {
     stage: Stage,
     tt_move: Move,
-    index: usize,
+    capture_index: usize,
+    quiet_index: usize,
     _captures: PhantomData<M>,
 }
 
@@ -26,7 +29,8 @@ impl<M: TypeMoveGen> MoveSorter<M> {
                 Stage::GenerateMoves
             },
             tt_move,
-            index: 0,
+            capture_index: 0,
+            quiet_index: 0,
             _captures: PhantomData,
         }
     }
@@ -49,37 +53,87 @@ impl<M: TypeMoveGen> MoveSorter<M> {
 
         // generate the moves as desired and score them all
         if self.stage == Stage::GenerateMoves {
-            self.stage = Stage::SortMoves;
+            self.stage = Stage::YieldGoodCaptures;
             if M::CAPTURES {
-                board.generate_legal_captures_into(&mut thread_data.search_stack[ply].move_list);
-                thread_data.score_moves(board, ply, true);
+                board.generate_legal_captures_into(&mut thread_data.search_stack[ply].captures);
+                thread_data.search_stack[ply].quiets.reset();
             } else {
-                board.generate_legal_moves_into(&mut thread_data.search_stack[ply].move_list);
-                thread_data.score_moves(board, ply, false);
+                board.generate_legal_moves_into(
+                    &mut thread_data.search_stack[ply].captures,
+                    &mut thread_data.search_stack[ply].quiets,
+                );
             }
+            thread_data.score_moves(board, ply);
         }
 
         // find the move with the next highest sort score
         // or return None if the end of the list has been reached
-        if self.index < thread_data.search_stack[ply].move_list.len() {
-            let (mut mv, mut score) = thread_data.search_stack[ply]
-                .move_list
-                .pick_move(self.index);
-            // tt move has already been reported
-            if mv == self.tt_move {
-                self.index += 1;
-                if self.index < thread_data.search_stack[ply].move_list.len() {
-                    (mv, score) = thread_data.search_stack[ply]
-                        .move_list
-                        .pick_move(self.index);
+        if self.stage == Stage::YieldGoodCaptures {
+            loop {
+                if self.capture_index < thread_data.search_stack[ply].captures.len() {
+                    let (mv, score) = thread_data.search_stack[ply]
+                        .captures
+                        .pick_move(self.capture_index);
+                    self.capture_index += 1;
+                    if mv == self.tt_move {
+                        continue;
+                    }
+
+                    // reached the bad captures, replace the current move and skip to quietts
+                    if score < 0 {
+                        self.capture_index -= 1;
+                        self.stage = Stage::YieldQuiets;
+                        break;
+                    }
+
+                    return Some((mv, score));
                 } else {
+                    self.stage = Stage::YieldQuiets;
+                    break;
+                }
+            }
+        }
+        if self.stage == Stage::YieldQuiets {
+            loop {
+                if self.quiet_index < thread_data.search_stack[ply].quiets.len() {
+                    let (mv, score) = thread_data.search_stack[ply]
+                        .quiets
+                        .pick_move(self.quiet_index);
+                    self.quiet_index += 1;
+                    if mv == self.tt_move {
+                        continue;
+                    }
+
+                    return Some((mv, score));
+                } else {
+                    self.stage = Stage::YieldBadCaptures;
+                    break;
+                }
+            }
+        }
+        if self.stage == Stage::YieldBadCaptures {
+            loop {
+                if self.capture_index < thread_data.search_stack[ply].captures.len() {
+                    let (mv, score) = thread_data.search_stack[ply]
+                        .captures
+                        .pick_move(self.capture_index);
+                    self.capture_index += 1;
+                    if mv == self.tt_move {
+                        continue;
+                    }
+
+                    return Some((mv, score));
+                } else {
+                    // should be last moves yielded
+                    debug_assert!(
+                        self.capture_index == thread_data.search_stack[ply].captures.len()
+                    );
+                    debug_assert!(self.quiet_index == thread_data.search_stack[ply].quiets.len());
                     return None;
                 }
             }
-            self.index += 1;
-            Some((mv, score))
-        } else {
-            None
         }
+
+        None
     }
 }
