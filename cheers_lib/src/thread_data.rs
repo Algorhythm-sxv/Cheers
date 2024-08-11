@@ -32,7 +32,7 @@ impl SearchStackEntry {
     }
 }
 
-const CONTHIST_MAX: usize = 1;
+const CONTHIST_MAX: usize = 2;
 #[derive(Clone)]
 pub struct ThreadData {
     pub search_stack: Box<[SearchStackEntry]>,
