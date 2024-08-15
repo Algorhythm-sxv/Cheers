@@ -156,6 +156,11 @@ impl Board {
     }
 
     #[inline(always)]
+    pub fn pawn_hash(&self) -> u64 {
+        self.pawn_hash
+    }
+
+    #[inline(always)]
     pub fn castling_rights(&self) -> &[[BitBoard; 2]; 2] {
         &self.castling_rights
     }

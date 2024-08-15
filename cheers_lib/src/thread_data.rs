@@ -1,6 +1,9 @@
 use crate::{
     board::{see::SEE_PIECE_VALUES, Board},
-    history_tables::{apply_history_bonus, apply_history_malus, CounterMoveTable, HistoryTable},
+    history_tables::{
+        apply_history_bonus, apply_history_malus, CorrectionHistoryTable, CounterMoveTable,
+        HistoryTable, CORRHIST_MAX, CORRHIST_TABLE_UNIT,
+    },
     moves::*,
     search::{MINUS_INF, SEARCH_MAX_PLY},
     types::Color,
@@ -40,6 +43,7 @@ pub struct ThreadData {
     pub capture_history_tables: Box<[HistoryTable; 2]>,
     pub conthist_tables: Box<[[[[HistoryTable; 64]; 6]; 2]; CONTHIST_MAX]>,
     pub countermove_tables: Box<[CounterMoveTable; 2]>,
+    pub corrhist_table: Box<CorrectionHistoryTable>,
 }
 
 impl ThreadData {
@@ -50,10 +54,11 @@ impl ThreadData {
             capture_history_tables: Box::new([HistoryTable::default(); 2]),
             conthist_tables: Box::new([[[[HistoryTable::default(); 64]; 6]; 2]; CONTHIST_MAX]),
             countermove_tables: Box::new([CounterMoveTable::default(); 2]),
+            corrhist_table: Box::new(CorrectionHistoryTable::default()),
         }
     }
 
-    pub fn update_quiet_histories(
+    pub fn update_quiet_history(
         &mut self,
         player: Color,
         delta: i16,
@@ -101,7 +106,7 @@ impl ThreadData {
         }
     }
 
-    pub fn update_capture_histories(
+    pub fn update_capture_history(
         &mut self,
         player: Color,
         delta: i16,
@@ -126,20 +131,23 @@ impl ThreadData {
         }
     }
 
-    // pub fn score_moves(&mut self, board: &Board, ply: usize, captures_only: bool) {
-    //     // for m in self.search_stack[ply].move_list.inner_mut() {
-    //     for i in 0..self.search_stack[ply].move_list.len() {
-    //         let mv = self.search_stack[ply].move_list[i];
+    pub fn update_correction_history(&mut self, board: &Board, depth: i8, diff: i16) {
+        let hist = self
+            .corrhist_table
+            .get_mut(board.current_player(), board.pawn_hash());
+        let diff = diff * CORRHIST_TABLE_UNIT;
+        let weight = 16.min(1 + depth as i16);
 
-    //         let score = if captures_only || mv.promotion() != Piece::Pawn || board.is_capture(mv) {
-    //             self.score_capture(board, mv)
-    //         } else {
-    //             self.score_quiet(board, ply, mv)
-    //         };
+        let update = *hist * (CORRHIST_TABLE_UNIT - weight) + diff * weight;
+        *hist = i16::clamp(update / CORRHIST_TABLE_UNIT, -CORRHIST_MAX, CORRHIST_MAX);
+    }
 
-    //         *self.search_stack[ply].move_list.score(i) = score
-    //     }
-    // }
+    pub fn corrected_eval(&self, board: &Board, eval: i16) -> i16 {
+        let hist = self
+            .corrhist_table
+            .get(board.current_player(), board.pawn_hash());
+        eval + hist / CORRHIST_TABLE_UNIT
+    }
 
     pub fn score_moves(&mut self, board: &Board, ply: usize) {
         for i in 0..self.search_stack[ply].captures.len() {

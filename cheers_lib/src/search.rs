@@ -612,6 +612,9 @@ impl Search {
         {
             eval = tt_score;
         }
+        if eval != MINUS_INF {
+            eval = self.thread_data.corrected_eval(board, eval);
+        }
 
         // store the current 'static' eval to use with heuristics
         self.thread_data.search_stack[ply].eval = eval;
@@ -896,7 +899,7 @@ impl Search {
                         self.thread_data.countermove_tables[current_player][last_move] = mv;
                     }
 
-                    self.thread_data.update_quiet_histories(
+                    self.thread_data.update_quiet_history(
                         current_player,
                         delta,
                         mv,
@@ -905,13 +908,20 @@ impl Search {
                     );
                 }
                 // update capture histories for all moves that cause a beta cutoff
-                self.thread_data.update_capture_histories(
+                self.thread_data.update_capture_history(
                     current_player,
                     delta,
                     // provide the best move if it was a capture
                     capture.then_some(mv),
                     &captures_tried,
                 );
+
+                // update the correction history for incorrect evals when not in
+                // check and the best move isn't a capture
+                if !in_check && !board.is_capture(mv) && score <= eval {
+                    self.thread_data
+                        .update_correction_history(board, depth, score - eval);
+                }
 
                 // remove this position from the history
                 self.search_history.pop();
@@ -960,18 +970,29 @@ impl Search {
         // after all moves have been searched, alpha is either unchanged
         // (this position is bad) or raised (new pv from this node)
         // add the score and the new best move to the TT
+        let tt_flag = if best_score > old_alpha {
+            Exact
+        } else {
+            UpperBound
+        };
         tt.set(
             board.hash(),
             best_move,
             depth,
             score_into_tt(best_score, ply),
-            if best_score > old_alpha {
-                Exact
-            } else {
-                UpperBound
-            },
+            tt_flag,
             pv_node,
         );
+
+        // update correction history for incorrect static evals when not in check
+        // and the best move isn't a capture
+        if !in_check
+            && !board.is_capture(best_move)
+            && (tt_flag == UpperBound && best_score >= eval)
+        {
+            self.thread_data
+                .update_correction_history(board, depth, best_score - eval);
+        }
 
         if alpha == old_alpha {
             // no move was found from this position, clear the PV
@@ -1065,6 +1086,8 @@ impl Search {
         {
             static_eval = tt_score;
         }
+
+        static_eval = self.thread_data.corrected_eval(board, static_eval);
 
         // if the static eval is above beta, then the opponent won't play into this position
         if static_eval >= beta {

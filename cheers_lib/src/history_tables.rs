@@ -1,6 +1,6 @@
 use std::ops::{Index, IndexMut};
 
-use crate::moves::Move;
+use crate::{moves::Move, types::Color};
 
 pub const HISTORY_MAX: i16 = 4096;
 
@@ -59,6 +59,27 @@ impl Index<Move> for CounterMoveTable {
 impl IndexMut<Move> for CounterMoveTable {
     fn index_mut(&mut self, mv: Move) -> &mut Self::Output {
         &mut self.0[mv.piece()][mv.to()]
+    }
+}
+
+pub const CORRHIST_TABLE_SIZE: usize = 16_384;
+pub const CORRHIST_TABLE_UNIT: i16 = 256;
+pub const CORRHIST_MAX: i16 = CORRHIST_TABLE_UNIT * 32;
+#[derive(Copy, Clone, Debug)]
+pub struct CorrectionHistoryTable([[i16; CORRHIST_TABLE_SIZE]; 2]);
+
+impl CorrectionHistoryTable {
+    pub fn get(&self, color: Color, pawn_hash: u64) -> i16 {
+        self.0[color as usize][pawn_hash as usize % CORRHIST_TABLE_SIZE]
+    }
+    pub fn get_mut(&mut self, color: Color, pawn_hash: u64) -> &mut i16 {
+        &mut self.0[color as usize][pawn_hash as usize % CORRHIST_TABLE_SIZE]
+    }
+}
+
+impl Default for CorrectionHistoryTable {
+    fn default() -> Self {
+        Self([[0; CORRHIST_TABLE_SIZE]; 2])
     }
 }
 
