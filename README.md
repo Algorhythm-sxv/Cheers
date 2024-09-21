@@ -33,3 +33,8 @@ An example for Linux:
 $ export RUSTFLAGS=-Ctarget-cpu=native
 $ cargo b --profile production
 ```
+
+## Acknowledgements
+Minuskelvin and Analog Hors for allowing me onto their OpenBench instance, which provided invaluable testing without which Cheers would never have gotten this far.
+
+The Chess Programming Discord, who answered many questions while I was still learning the ropes
