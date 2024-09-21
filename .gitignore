@@ -3,3 +3,4 @@
 /.cargo
 /test_binaries
 **.txt
+**.xcf
