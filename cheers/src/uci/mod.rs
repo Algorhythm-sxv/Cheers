@@ -19,7 +19,7 @@ uci_options![
     NmpDepth(Spin<i8> { default: NMP_DEPTH, min: 1, max: 10 }),
     NmpConstReduction(Spin<i8> { default: NMP_CONST_REDUCTION, min: 1, max: 10 }),
     NmpLinearDivisor(Spin<i8> { default: NMP_LINEAR_DIVISOR, min: 1, max: 10 }),
-    SeePruningDepth(Spin<i8> { default: SEE_PRUNING_DEPTH, min: 1, max: 10 }),
+    SeePruningDepth(Spin<i8> { default: SEE_PRUNING_DEPTH, min: 1, max: 20 }),
     SeeCaptureMargin(Spin<i16> { default: SEE_CAPTURE_MARGIN, min: -200, max: 200 }),
     SeeQuietMargin(Spin<i16> { default: SEE_QUIET_MARGIN, min: -100, max: 100 }),
     PvsFulldepth(Spin<i8> { default: PVS_FULLDEPTH, min: 1, max: 5 }),
@@ -27,12 +27,12 @@ uci_options![
     FpMargin1(Spin<i16> { default: FP_MARGIN_1, min: 0, max: 300 }),
     FpMargin2(Spin<i16> { default: FP_MARGIN_2, min: 0, max: 700 }),
     FpMargin3(Spin<i16> { default: FP_MARGIN_3, min: 500, max: 1000 }),
-    RfpDepth(Spin<i8> { default: RFP_DEPTH, min: 0, max: 15 }),
+    RfpDepth(Spin<i8> { default: RFP_DEPTH, min: 0, max: 20 }),
     RfpMargin(Spin<i16> { default: RFP_MARGIN, min: 0, max: 300 }),
     RfpImprovingMargin(Spin<i16> { default: RFP_IMPROVING_MARGIN, min: -100, max: 100 }),
-    LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 10 }),
+    LmpDepth(Spin<i8> { default: LMP_DEPTH, min: 0, max: 20 }),
     HistoryLmrDivisor(Spin<i16> { default: HISTORY_LMR_DIVISOR, min: 0, max: 8192 }),
-    IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 10 }),
+    IirDepth(Spin<i8> { default: IIR_DEPTH, min: 2, max: 20 }),
 ];
 
 pub enum UciCommand {
