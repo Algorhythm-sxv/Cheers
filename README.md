@@ -1,146 +1,35 @@
-# Cheers - a UCI chess engine written in Rust
+# Cheers, a lighthearted UCI chess engine in Rust
 
-Cheers is not a complete chess program and should be used in conjunction with a UCI frontend e.g. [Cute Chess](https://cutechess.com/).
+<div align="center">
 
-## Options
-Currently supported options are:
-- **Hash**: 
-  `Default: 32, Minimum: 1, Maximum: 32768`\
-  Transposition table size in megabytes.
-- **Threads**
-  `Default: 1, Minimum: 1, Maximum: 256`\
-  The number of thread to search with.
-- **NmpDepth**:
-  `Default: 1, Minimum: 1, Maximum: 10`\
-  The depth above which Null Move Pruning is applied.
-- **NmpConstReduction**:
-  `Default: 3, Minimum: 1, Maximum: 10`\
-  The constant reduction to apply to all Null Move Pruning.
-- **NmpLinearDivisor**:
-  `Default: 3, Minimum: 1, Maximum: 10`\
-  The divisor applied to the depth in Null Move Pruning. The general formula is `reduction = NmpConstReduction + (depth / NmpLinearDivisor)`.
-- **SeePruningDepth**:
-  `Default: 6, Minimum: 1, Maximum: 10`\
-  The depth below which SEE Pruning is applied.
-- **SeeCaptureMargin**:
-  `Default: -30, Minimum: -200, Maximum: 200`\
-  The margin around `beta` where SEE Pruning is accepted for captures.
-- **SeeQuietMargin**:
-  `Default: -98, Minimum: -100, Maximum: -100`\
-  The margin around `beta` where SEE Pruning is accepted for quiet moves.
-- **PvsFullDepth**:
-  `Default: 2, Minimum: 1, Maximum: 5`\
-  The depth at which all moves are searched without reductions.
-- **DeltaPruningMargin**:
-  `Default: 91, Miniimum: 0, Maximum: 300`\
-  The margin around `beta` where Delta Pruning is accepted.
-- **FpMargin1**:
-  `Default: 162, Minimum: 0, Maximum: 300`\
-  The margin around `alpha` where Futility Pruning is accepted at depth 1.
-- **FpMargin2**:
-  `Default: 320, Minimum: 0, Maximum: 700`\
-  The margin around `alpha` where Futility Pruning is accepted at depth 2.
-- **FpMargin3**:
-  `Default: 706, Minimum: 500, Maximum: 1000`\
-  The margin around `alpha` where Futility Pruning is accepted at depth 3.
-- **RfpMargin**:
-  `Default: 140, Minimum: 0, Maximum: 300`\
-  The margin around `beta` where Reverse Futility Pruning is accepted.
-- **LmpDepth**:
-  `Default: 2, Minimum: 0, Maximum: 10`\
-  The depth at or below which Late Move Pruning is applied 
-- **LmpMargin**:
-  `Default: 6, Minimum: 1, Maximum: 15`\
-  The quadratic coefficient with depth. After `LmpMargin * depth*depth` moves pruning can be applied.
-- **IirDepth**:
-  `Default: 6, Minimum: 2, Maximum: 10`\
-  The depth above which Internal Iterative Reduction is applied.
-## Features (in no particular order)
+  ![Cheers logo](logo.png)
 
-### General
-- Magic Bitboard board representation
-- Legal move generation
+  [![Release](https://img.shields.io/github/v/release/Algorhythm-sxv/Cheers)](https://github.com/Algorhythm-sxv/Cheers/releases/latest)
+  [![Commits](https://img.shields.io/github/commits-since/Algorhythm-sxv/Cheers/latest
+)](https://github.com/Algorhythm-sxv/Cheers/commits/master)
 
-### Search
-- Multithreading with Lazy SMP
-- Iterative Deeping
-- Transposition Table
-- Aspiration Windows
-- Principal Variation Alpha-Beta search
-- Null Move Pruning
-- Late Move Reduction
-- Late Move Pruning
-- Futility Pruning
-- Reverse Futility Pruning
-- Internal Iterative Reduction
-- Static Exchange Evaluation Pruning
-- Mate Distance Pruning
+</div>
 
-### Quiescence Search
-- Transposition Table
-- Delta Pruning
-- Static Exchange Evaluation Pruning
+Cheers is a free and open source chess engine utilising the UCI protocol, and should be used with a compatible GUI like Cute Chess or a command-line test runner like `cutechess-cli`.
 
-### Move Ordering
-- Hash move from transposition table
-- MVV-LVA ordering on captures
-- Queen promotions
-- Killer Move Heuristic
-- Counter Move Heuristic
-- History Heuristic
+Cheers is not very notable as chess engines go, but serves as an example of a strong chess engine using a 'hand-crafted' evaluation function, as opposed to a neural network evaluation.
 
-## Evaluation
-Cheers currently uses a hand-crafted evaluation function with Texel-tuned parameters. NNUE is planned for the future.
-### General
-- Tapered Evaluation
-- Pawn Hash Table
+## Building Cheers
+Prebuilt binaries for x86 Windows and Linux are available in the **Releases** tab, if these are incompatible with your system you can build Cheers from source on any platform with a Rust compiler.
 
-### Pawns
-- Material
-- Piece-Square Tables
-- Doubled Pawn
-- Isolated Pawn
-- Connected Pawn
-- Phalanx Pawn
-- Passed Pawn Piece-Square Table
-- Passed Pawn Distance to Friendly King
-- Passed Pawn Distance from Enemy King
+```
+git clone https://github.com/Algorhythm-sxv/Cheers
+cd Cheers
+cargo b -r
+```
 
-### Knights
-- Material
-- Piece-Square Tables
-- Mobility
-- Knight behind Pawn
-- Knight Threats
-- Knight on (defended) Outpost
+### Maximising performance
+The performance of the resulting binary can be slightly optimised by enabling native CPU code generation and using the `production` cargo profile.
 
-### Bishops
-- Material
-- Piece-Square Tables
-- Mobility
-- Bishop behind Pawn
-- Bishop on (defended) Outpost
-- Bishop Pair
-- Bishop Threats
+Enabling native CPU code generation involves setting the `RUSTFLAGS` environment variable, which will depend on your system. The `production` profile can be selected with the `--profile` option to `cargo build`.
 
-### Rooks
-- Material
-- Piece-Square Tables
-- Mobility
-- Rook on (semi) open file
-- Rook on Queen File
-- Rook Threats
-
-### Queens
-- Material
-- Piece-Square Tables
-- Mobility
-- Risk of Discovered Attack
-
-### Kings
-- Piece-Square Tables
-- Mobility
-- Virtual Mobility
-- King on (semi) open file
-- King Ring Attacks
-- Risk of Discoverd Attack
+An example for Linux:
+```
+$ export RUSTFLAGS=-Ctarget-cpu=native
+$ cargo b --profile production
+```
